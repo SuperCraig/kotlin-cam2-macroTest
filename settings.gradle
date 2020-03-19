@@ -1,0 +1,2 @@
+rootProject.name='cargiCamera2'
+include ':app'
