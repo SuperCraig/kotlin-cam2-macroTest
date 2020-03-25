@@ -1,10 +1,10 @@
-package com.thesimplycoder.imagegallery.service
+package com.example.imagegallery.service
 
 import android.content.Context
 import android.database.Cursor
 import android.net.Uri
 import android.provider.MediaStore
-import com.thesimplycoder.imagegallery.model.ImageGalleryUiModel
+import com.example.imagegallery.model.ImageGalleryUiModel
 
 class MediaHelper {
     companion object {

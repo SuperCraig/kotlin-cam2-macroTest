@@ -15,10 +15,10 @@ import android.media.ImageReader
 import android.os.*
 import android.provider.MediaStore
 import android.util.Log
-import android.util.Range
 import android.util.Size
 import android.util.SparseIntArray
 import android.view.*
+import android.widget.ImageView
 import android.widget.SeekBar
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -30,6 +30,9 @@ import com.example.cargicamera2.services.showToast
 import com.example.cargicamera2.ui.AutoFitTextureView
 import com.example.cargicamera2.ui.ErrorDialog
 import com.example.cargicamera2.ui.FocusView
+import com.example.imagegallery.model.ImageGalleryUiModel
+import com.example.imagegallery.service.MediaHelper
+import com.example.lib.TransParencySeekBar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.Closeable
@@ -45,7 +48,6 @@ import java.util.concurrent.TimeoutException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
-
 
 class Camera2BasicFragment : Fragment(), View.OnClickListener,
     ActivityCompat.OnRequestPermissionsResultCallback {
@@ -295,55 +297,51 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        view.findViewById<View>(R.id.picture).setOnClickListener(this)
-        view.findViewById<View>(R.id.info).setOnClickListener(this)
+        view.findViewById<View>(R.id.btnPicture).setOnClickListener(this)
+        view.findViewById<View>(R.id.btnManual).setOnClickListener(this)
+        view.findViewById<View>(R.id.btnAuto).setOnClickListener(this)
         view.findViewById<View>(R.id.btnContrast).setOnClickListener(this)
         view.findViewById<View>(R.id.btnRefreshRate).setOnClickListener(this)
         view.findViewById<View>(R.id.btnColorTemperature).setOnClickListener(this)
-        view.findViewById<View>(R.id.gallery).setOnClickListener(this)
+        view.findViewById<View>(R.id.btnPhotoBox).setOnClickListener(this)
+        view.findViewById<View>(R.id.btnRecordBar).setOnClickListener(this)
+        view.findViewById<View>(R.id.btnSetting).setOnClickListener(this)
 
-        val isoSeekBar: SeekBar = view.findViewById(R.id.isoSeekBar)
-        isoSeekBar.setOnSeekBarChangeListener(object :
-            SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(
-                seek: SeekBar,
-                progress: Int, fromUser: Boolean
-            ) {
-                val range = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)
-                val max1 = range!!.upper //10000
-                val min1 = range.lower //100
-                val iso: Int = progress * (max1 - min1) / 100 + min1
-                previewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, iso)
-                unlockFocus()
-            }
+        val isoCustomSeekBar: TransParencySeekBar = view.findViewById(R.id.isoCustomSeekBar)
+        isoCustomSeekBar.setOnTouchListener { _, _ ->
+            var progress = isoCustomSeekBar.progress
+            val range = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)
+            val max1 = range!!.upper //10000
+            val min1 = range.lower //100
+            val iso: Int = progress * (max1 - min1) / 100 + min1
+            previewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, iso)
+            unlockFocus()
 
-            override fun onStartTrackingTouch(seek: SeekBar) {
-                // write custom code for progress is started
-            }
+            isoCustomSeekBar.text = iso.toString()
+            false
+        }
 
-            override fun onStopTrackingTouch(seek: SeekBar) {
-                // write custom code for progress is stopped
+        val tvCustomSeekBar: TransParencySeekBar = view.findViewById(R.id.tvCustomSeekBar)
+        tvCustomSeekBar.setOnTouchListener{_, _ ->
+            var progress = tvCustomSeekBar.progress
+            val range = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
+            val max = range!!.upper
+            val min = range.lower
+            val ae: Long = progress * (max - min) / 100 + min
+            previewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, ae)
+            unlockFocus()
 
-            }
-        })
+            tvCustomSeekBar.text = ae.toString()
+            false
+        }
 
-        val tvSeekBar:SeekBar = view.findViewById(R.id.tvSeekBar)
-        tvSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener{
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                val range = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
-                val max = range!!.upper
-                val min = range.lower
-                val ae: Long = progress * (max - min) / 100 + min
-                previewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, ae)
-                unlockFocus()
-            }
+        var imageGalleryUiModelList:MutableMap<String, ArrayList<ImageGalleryUiModel>> = mutableMapOf()
 
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {
-            }
-
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {
-            }
-        })
+        imageGalleryUiModelList = MediaHelper.getImageGallery(this.context!!)
+        var imageList:ArrayList<ImageGalleryUiModel> = imageGalleryUiModelList["Android Custom Camera"]!!
+        var imageView: ImageView = view.findViewById(R.id.btnPhotoBox)
+        file = File(imageList[0].imageUri)
+        imageView.setImageBitmap(BitmapFactory.decodeFile(file.absolutePath))
 
         val stamp = view.findViewById<View>(R.id.android)
         stamp.setOnClickListener(this)
@@ -376,9 +374,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     override fun onClick(view: View) {
         when (view.id) {
-            R.id.picture -> {
+            R.id.btnPicture -> {
                 // Disable click listener to prevent multiple requests simultaneously in flight
-                view.findViewById<View>(R.id.picture).isEnabled = false
+                view.findViewById<View>(R.id.btnPicture).isEnabled = false
 
                 // Perform I/O heavy operations in a different scope
                 lifecycleScope.launch(Dispatchers.IO) {
@@ -401,10 +399,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                     }
                 }
-                view.findViewById<View>(R.id.picture)
-                    .post { view.findViewById<View>(R.id.picture).isEnabled = true }
+                view.findViewById<View>(R.id.btnPicture)
+                    .post { view.findViewById<View>(R.id.btnPicture).isEnabled = true }
             }
-            R.id.info -> {
+            R.id.btnAuto -> {
                 if (activity != null) {
                     AlertDialog.Builder(activity)
                         .setMessage(R.string.intro_message)
@@ -424,8 +422,27 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 openCamera(textureView.width, textureView.height)
             }
-            R.id.gallery -> {
+            R.id.btnManual ->{
+
+            }
+            R.id.btnPhotoBox -> {
                 pickPictureFromGallery()
+            }
+            R.id.btnRecordBar ->{
+                val fragment = HistoryFragment()
+                val fragmentManager = activity!!.supportFragmentManager
+                val fragmentTransaction = fragmentManager.beginTransaction()
+                fragmentTransaction.replace(R.id.container, fragment)
+                fragmentTransaction.addToBackStack(null)
+                fragmentTransaction.commit()
+            }
+            R.id.btnSetting ->{
+                val fragment = SettingFragment()
+                val fragmentManager = activity!!.supportFragmentManager
+                val fragmentTransaction = fragmentManager.beginTransaction()
+                fragmentTransaction.replace(R.id.container, fragment)
+                fragmentTransaction.addToBackStack(null)
+                fragmentTransaction.commit()
             }
         }
     }

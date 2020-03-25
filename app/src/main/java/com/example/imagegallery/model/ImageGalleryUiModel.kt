@@ -1,3 +1,3 @@
-package com.thesimplycoder.imagegallery.model
+package com.example.imagegallery.model
 
 data class ImageGalleryUiModel(val imageUri: String, var isChecked: Boolean = false)
