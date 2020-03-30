@@ -1,2 +1,2 @@
 rootProject.name='cargiCamera2'
-include ':app', ':customSeekBarLib'
+include ':app', ':customSeekBarLib', ':easy_toggle'

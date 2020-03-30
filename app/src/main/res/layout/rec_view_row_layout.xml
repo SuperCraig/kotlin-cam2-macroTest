@@ -1,6 +1,157 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
-    xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent"
-    android:layout_height="match_parent">
+<layout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools">
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+    <data>
+        <variable
+            name="itemData"
+            type="com.example.recyclerswipe.model.DataItem" />
+    </data>
+
+    <androidx.cardview.widget.CardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:cardElevation="4dp"
+        app:cardPreventCornerOverlap="true"
+        app:cardUseCompatPadding="true">
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <RelativeLayout
+                android:id="@+id/view_background"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="#FF5722">
+
+                <ImageView
+                    android:id="@+id/delete_icon"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_alignParentEnd="true"
+                    android:layout_centerVertical="true"
+                    android:layout_marginEnd="8dp"
+                    android:contentDescription="@string/app_name"
+                    android:src="@drawable/ic_delete"/>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_centerVertical="true"
+                    android:layout_marginEnd="8dp"
+                    android:layout_toStartOf="@+id/delete_icon"
+                    android:text="Delete"
+                    android:textColor="#FFFF"
+                    android:textAppearance="@style/Base.TextAppearance.AppCompat.Medium"/>
+            </RelativeLayout>
+
+            <RelativeLayout
+                android:id="@+id/view_foreground"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@android:color/white"
+                android:padding="8dp">
+
+                <TextView
+                    android:id="@+id/date"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:paddingEnd="8dp"
+                    android:paddingStart="8dp"
+                    android:textAppearance="@style/TextAppearance.AppCompat.Title"
+                    android:textColor="#3b3b3b"
+                    android:text="Date"/>
+
+                <TextView
+                    android:id="@+id/txt_contrast"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_below="@+id/date"
+                    android:ellipsize="end"
+                    android:maxLines="2"
+                    android:paddingEnd="8dp"
+                    android:paddingStart="8dp"
+                    android:text="Contrast"
+                    android:textAppearance="@style/TextAppearance.AppCompat.Medium"
+                    android:textColor="#787878"
+                    tools:text="Contrast"/>
+
+                <TextView
+                    android:id="@+id/contrast"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_below="@+id/txt_contrast"
+                    android:ellipsize="end"
+                    android:maxLines="2"
+                    android:paddingEnd="8dp"
+                    android:paddingStart="8dp"
+                    android:textAppearance="@style/TextAppearance.AppCompat.Medium"
+                    android:textColor="#787878"
+                    android:text="0"/>
+
+                <TextView
+                    android:id="@+id/txt_refresh_rate"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_below="@+id/date"
+                    android:layout_toEndOf="@+id/txt_contrast"
+                    android:ellipsize="end"
+                    android:maxLines="2"
+                    android:paddingEnd="8dp"
+                    android:paddingStart="8dp"
+                    android:layout_marginStart="20dp"
+                    android:text="Refresh rate"
+                    android:textAppearance="@style/TextAppearance.AppCompat.Medium"
+                    android:textColor="#787878"/>
+
+                <TextView
+                    android:id="@+id/refresh_rate"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_below="@+id/txt_refresh_rate"
+                    android:layout_alignStart="@+id/txt_refresh_rate"
+                    android:ellipsize="end"
+                    android:maxLines="2"
+                    android:paddingEnd="8dp"
+                    android:paddingStart="8dp"
+                    android:textAppearance="@style/TextAppearance.AppCompat.Medium"
+                    android:textColor="#787878"
+                    android:text="0"/>
+
+                <TextView
+                    android:id="@+id/txt_color_temperature"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_below="@+id/date"
+                    android:layout_toEndOf="@+id/txt_refresh_rate"
+                    android:ellipsize="end"
+                    android:maxLines="2"
+                    android:paddingEnd="8dp"
+                    android:paddingStart="8dp"
+                    android:layout_marginStart="20dp"
+                    android:text="Refresh rate"
+                    android:textAppearance="@style/TextAppearance.AppCompat.Medium"
+                    android:textColor="#787878"/>
+
+                <TextView
+                    android:id="@+id/color_temperature"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_below="@+id/txt_color_temperature"
+                    android:layout_alignStart="@+id/txt_color_temperature"
+                    android:ellipsize="end"
+                    android:maxLines="2"
+                    android:paddingEnd="8dp"
+                    android:paddingStart="8dp"
+                    android:textAppearance="@style/TextAppearance.AppCompat.Medium"
+                    android:textColor="#787878"
+                    android:text="0"/>
+
+            </RelativeLayout>
+
+        </FrameLayout>
+    </androidx.cardview.widget.CardView>
+</layout>

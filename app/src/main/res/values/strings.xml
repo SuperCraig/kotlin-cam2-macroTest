@@ -15,4 +15,12 @@
         ]]>
     </string>
     <string name="gallery">Gallery</string>
+    <string name="setting_grid">Grid</string>
+    <string name="setting_sound">Sound</string>
+    <string name="setting_mbi_cloud_sync">MBI-Cloud sync</string>
+    <string name="setting_image_format">Image Format</string>
+    <string name="setting_language">Language</string>
+    <string name="setting_tell_a_friend">Tell a friend about Performance</string>
+    <string name="setting_feedback">Feedback</string>
+    <string name="setting_about">About</string>
 </resources>

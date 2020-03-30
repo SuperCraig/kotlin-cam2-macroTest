@@ -32,7 +32,7 @@ import com.example.cargicamera2.ui.ErrorDialog
 import com.example.cargicamera2.ui.FocusView
 import com.example.imagegallery.model.ImageGalleryUiModel
 import com.example.imagegallery.service.MediaHelper
-import com.example.lib.TransParencySeekBar
+import com.example.lib.CustomSeekBar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.Closeable
@@ -307,7 +307,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         view.findViewById<View>(R.id.btnRecordBar).setOnClickListener(this)
         view.findViewById<View>(R.id.btnSetting).setOnClickListener(this)
 
-        val isoCustomSeekBar: TransParencySeekBar = view.findViewById(R.id.isoCustomSeekBar)
+        val isoCustomSeekBar: CustomSeekBar = view.findViewById(R.id.isoCustomSeekBar)
         isoCustomSeekBar.setOnTouchListener { _, _ ->
             var progress = isoCustomSeekBar.progress
             val range = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)
@@ -321,7 +321,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             false
         }
 
-        val tvCustomSeekBar: TransParencySeekBar = view.findViewById(R.id.tvCustomSeekBar)
+        val tvCustomSeekBar: CustomSeekBar = view.findViewById(R.id.tvCustomSeekBar)
         tvCustomSeekBar.setOnTouchListener{_, _ ->
             var progress = tvCustomSeekBar.progress
             val range = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
@@ -338,7 +338,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         var imageGalleryUiModelList:MutableMap<String, ArrayList<ImageGalleryUiModel>> = mutableMapOf()
 
         imageGalleryUiModelList = MediaHelper.getImageGallery(this.context!!)
-        var imageList:ArrayList<ImageGalleryUiModel> = imageGalleryUiModelList["Android Custom Camera"]!!
+        imageGalleryUiModelList.forEach {
+            Log.i("Camera2Fragment", it.key + ": " + it.value)
+        }
+
+        var imageList:ArrayList<ImageGalleryUiModel> = imageGalleryUiModelList["Camera"]!!
         var imageView: ImageView = view.findViewById(R.id.btnPhotoBox)
         file = File(imageList[0].imageUri)
         imageView.setImageBitmap(BitmapFactory.decodeFile(file.absolutePath))
@@ -491,7 +495,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     }
 
     private fun requestCameraPermission() {
-        if (PermissionsFragment.hasPermissions(requireContext())) {
+        if (PermissionsFragment.hasPermissions(this.context!!)) {
 
         } else {
             requestPermissions(PERMISSIONS_REQUIRED, PERMISSIONS_REQUEST_CODE)

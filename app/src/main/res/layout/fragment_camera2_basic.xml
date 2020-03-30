@@ -77,32 +77,35 @@
         android:layout_alignParentBottom="true"
         android:background="@color/colorPrimaryDark">
 
-        <com.example.lib.TransParencySeekBar
+        <com.example.lib.CustomSeekBar
             android:id="@+id/isoCustomSeekBar"
             android:layout_width="90dp"
             android:layout_height="20dp"
             android:layout_marginTop="10dp"
             android:layout_marginStart="15dp"
+            app:tb_text ="0"
             app:tb_textBackgroundColor="@color/colorPrimaryDark"
             app:tb_textSize="10"
             />
 
-        <com.example.lib.TransParencySeekBar
+        <com.example.lib.CustomSeekBar
             android:id="@+id/tvCustomSeekBar"
             android:layout_width="90dp"
             android:layout_height="20dp"
             android:layout_marginTop="10dp"
             android:layout_gravity="center_horizontal"
+            app:tb_text ="0"
             app:tb_textBackgroundColor="@color/colorPrimaryDark"
             app:tb_textSize="10"/>
 
-        <com.example.lib.TransParencySeekBar
+        <com.example.lib.CustomSeekBar
             android:id="@+id/avCustomSeekBar"
             android:layout_width="90dp"
             android:layout_height="20dp"
             android:layout_marginTop="10dp"
             android:layout_marginEnd="15dp"
             android:layout_gravity="end"
+            app:tb_text ="0"
             app:tb_textBackgroundColor="@color/colorPrimaryDark"
             app:tb_textSize="10"/>
 
