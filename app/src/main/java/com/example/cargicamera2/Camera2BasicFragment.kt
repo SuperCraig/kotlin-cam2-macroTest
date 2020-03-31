@@ -18,11 +18,13 @@ import android.util.Log
 import android.util.Size
 import android.util.SparseIntArray
 import android.view.*
+import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.SeekBar
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.FragmentTransaction
 import androidx.lifecycle.lifecycleScope
 import com.example.cargicamera2.extensions.OrientationLiveData
 import com.example.cargicamera2.fragments.PermissionsFragment
@@ -173,6 +175,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     /** Live data listener for changes in the device orientation relative to the camera */
     private lateinit var relativeOrientation: OrientationLiveData
 
+    private var isAutoEnable: Boolean = false
+    private var isManualEnable: Boolean = false
+    private var isContrastEnable: Boolean = false
+    private var isColorTemperatureEnable: Boolean = false
+    private var isRefreshRateEnable: Boolean = false
+
     /**
      * [CameraDevice.StateCallback] is called when [CameraDevice] changes its state.
      */
@@ -194,25 +202,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             onDisconnected(cameraDevice)
             this@Camera2BasicFragment.activity?.finish()
         }
-
     }
 
-    private fun takeDng(image: Image, result: CaptureResult) {
-        image?.let {
-            if (image.format == ImageFormat.RAW_SENSOR) {
-                val dngCreator = DngCreator(characteristics, result)
-                try {
-                    val output = createFile("dng")
-                    FileOutputStream(output).use {
-                        dngCreator.writeImage(it, image)
-                    }
-
-                } catch (exc: IOException) {
-                    Log.e(TAG, "Unable to write DNG image to file", exc)
-                }
-            }
-        }
-    }
 
     /**
      * This a callback object for the [ImageReader]. "onImageAvailable" will be called when a
@@ -407,6 +398,15 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     .post { view.findViewById<View>(R.id.btnPicture).isEnabled = true }
             }
             R.id.btnAuto -> {
+                val btnAuto = view.findViewById<ImageButton>(R.id.btnAuto)
+                isAutoEnable = !isAutoEnable
+
+                if(isAutoEnable){
+                    btnAuto.setBackgroundResource(R.drawable.ic_auto_selection)
+                }else{
+                    btnAuto.setBackgroundResource(R.drawable.ic_auto)
+                }
+
                 if (activity != null) {
                     AlertDialog.Builder(activity)
                         .setMessage(R.string.intro_message)
@@ -415,19 +415,50 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 }
             }
             R.id.btnContrast -> {
+                val btnContrast = view.findViewById<ImageView>(R.id.btnContrast)
+                isContrastEnable = !isContrastEnable
 
-                openCamera(textureView.width, textureView.height)
+                if(isContrastEnable){
+                    btnContrast.setBackgroundResource(R.drawable.ic_contrast_selection)
+                }else{
+                    btnContrast.setBackgroundResource(R.drawable.ic_contrast)
+                }
+
+//                openCamera(textureView.width, textureView.height)
             }
             R.id.btnRefreshRate -> {
+                val btnRefreshRate = view.findViewById<ImageView>(R.id.btnRefreshRate)
+                isRefreshRateEnable = !isRefreshRateEnable
 
-                openCamera(textureView.width, textureView.height)
+                if(isRefreshRateEnable){
+                    btnRefreshRate.setBackgroundResource(R.drawable.ic_refresh_rate_selection)
+                }else{
+                    btnRefreshRate.setBackgroundResource(R.drawable.ic_refresh_rate)
+                }
+
+//                openCamera(textureView.width, textureView.height)
             }
             R.id.btnColorTemperature -> {
+                val btnColorTemperature = view.findViewById<ImageView>(R.id.btnColorTemperature)
+                isColorTemperatureEnable = !isColorTemperatureEnable
 
-                openCamera(textureView.width, textureView.height)
+                if(isColorTemperatureEnable){
+                    btnColorTemperature.setBackgroundResource(R.drawable.ic_color_temperature_selection)
+                }else{
+                    btnColorTemperature.setBackgroundResource(R.drawable.ic_color_temperature)
+                }
+
+//                openCamera(textureView.width, textureView.height)
             }
             R.id.btnManual ->{
+                val btnManual = view.findViewById<ImageButton>(R.id.btnManual)
+                isManualEnable = !isManualEnable
 
+                if(isManualEnable){
+                    btnManual.setBackgroundResource(R.drawable.ic_manual_selection)
+                }else{
+                    btnManual.setBackgroundResource(R.drawable.ic_manual)
+                }
             }
             R.id.btnPhotoBox -> {
                 pickPictureFromGallery()
@@ -436,16 +467,17 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 val fragment = HistoryFragment()
                 val fragmentManager = activity!!.supportFragmentManager
                 val fragmentTransaction = fragmentManager.beginTransaction()
-                fragmentTransaction.replace(R.id.container, fragment)
-                fragmentTransaction.addToBackStack(null)
+                fragmentTransaction.setTransition(FragmentTransaction.TRANSIT_FRAGMENT_OPEN)
+                fragmentTransaction.add(R.id.container, fragment, "HistoryFragment")
+                fragmentTransaction.addToBackStack("Camera2BasicFragment")
                 fragmentTransaction.commit()
             }
             R.id.btnSetting ->{
                 val fragment = SettingFragment()
                 val fragmentManager = activity!!.supportFragmentManager
                 val fragmentTransaction = fragmentManager.beginTransaction()
-                fragmentTransaction.replace(R.id.container, fragment)
-                fragmentTransaction.addToBackStack(null)
+                fragmentTransaction.add(R.id.container, fragment, "SettingFragment")
+                fragmentTransaction.addToBackStack("Camera2BasicFragment")
                 fragmentTransaction.commit()
             }
         }

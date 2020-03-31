@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
-
-</PreferenceScreen>
+<paths>
+    <files-path name="my_files" path="." />
+    <cache-path name="my_cache" path="." />
+    <external-path name="my_external_path" path="/DCIM/" />
+    <external-files-path name="external_files_path" path="." />
+    <external-cache-path name="name" path="." />
+    <root-path name="root-path" path="." />
+</paths>

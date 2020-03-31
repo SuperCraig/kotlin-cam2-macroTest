@@ -62,7 +62,7 @@ class EasyToggle: View {
 
     val STATE_OFF = 0
     val STATE_ON = 1
-    private var currentState = STATE_OFF
+    var currentState = STATE_OFF
     private var lastState = STATE_OFF
     private var hasToggled = false
     private var isTouchOutOfRange = false
@@ -388,7 +388,7 @@ class EasyToggle: View {
         reset()
     }
 
-    private fun reset() {
+    fun reset() {
         lastState = currentState
         hasToggled = false
         buttonMoveValue = 0f
@@ -433,7 +433,7 @@ class EasyToggle: View {
         onToggledListener?.invoke(currentState == STATE_ON)
     }
 
-    private fun toggleImmediately() {
+    fun toggleImmediately() {
         bgColorFraction = 1f
         bgTopExtensionValue = if (currentState == STATE_OFF) 1f else 0f
         buttonExtensionValue = 0f

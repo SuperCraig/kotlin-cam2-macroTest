@@ -12,6 +12,7 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -77,40 +78,25 @@ class HistoryFragment : Fragment(), RecyclerItemTouchHelper.RecyclerItemTouchHel
         }
 
         btn_download.setOnClickListener {
-            takeScreenshotOfView(it, it.width, it.height)
+            takeScreenshot()
+        }
+
+        btn_delete_all.setOnClickListener {
+
         }
     }
 
-    private fun takeScreenshotOfView(view: View, width: Int, height: Int): Bitmap{
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        val bgDrawable = view.background
-        if(bgDrawable != null){
-            bgDrawable.draw(canvas)
-        }else{
-            canvas.drawColor(Color.WHITE)
-        }
-        view.draw(canvas)
-        return bitmap
-    }
-
-    private fun getScreenShot(view: View): Bitmap {
-        val returnedBitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(returnedBitmap)
-        val bgDrawable = view.background
-        if (bgDrawable != null) bgDrawable.draw(canvas)
-        else canvas.drawColor(Color.WHITE)
-        view.draw(canvas)
-        return returnedBitmap
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
     }
 
     private fun takeScreenshot() {
-        val now = Date()
-        android.text.format.DateFormat.format("yyyy-MM-dd_hh:mm:ss", now)
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+        val currentDateTime: String = dateFormat.format(Date()) // Find todays date
 
         try {
             // image naming and path  to include sd card  appending name you choose for file
-            val mPath = Environment.getExternalStorageDirectory().toString() + "/" + now + ".jpeg"
+            val mPath = Environment.getExternalStorageDirectory().toString() + "/DCIM/" + currentDateTime + ".jpeg"
 
             // create bitmap screen capture
             val window = activity!!.window
@@ -127,11 +113,7 @@ class HistoryFragment : Fragment(), RecyclerItemTouchHelper.RecyclerItemTouchHel
             outputStream.flush()
             outputStream.close()
 
-            //setting screenshot in imageview
-            val filePath = imageFile.path
-
-            val ssbitmap = BitmapFactory.decodeFile(imageFile.absolutePath)
-            sharePath = filePath
+            sharePath = currentDateTime + ".jpeg"
 
         } catch (e: Throwable) {
             // Several error may come out with file handling or DOM
@@ -142,11 +124,14 @@ class HistoryFragment : Fragment(), RecyclerItemTouchHelper.RecyclerItemTouchHel
 
     private fun share(sharePath: String) {
         try{
-            Log.d("ffff", sharePath)
+            Log.d("HistoryFragment: ", sharePath)
+            val tmpFile = File(Environment.getExternalStorageDirectory().toString(), "/DCIM/"+sharePath)
             val file = File(sharePath)
-            val uri = Uri.fromFile(file)
+            val uri = FileProvider.getUriForFile(this.context!!, "com.example.cargicamera2", tmpFile)
+            Log.d("Uri: ", uri.toString())
             val intent = Intent(Intent.ACTION_SEND)
             intent.type = "image/*"
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             intent.putExtra(Intent.EXTRA_STREAM, uri)
             startActivity(intent)
         }catch (e: Exception){
