@@ -2,21 +2,25 @@ package com.example.cargicamera2
 
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Canvas
 import android.graphics.Color
-import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.example.cargicamera2.room.History
+import com.example.cargicamera2.room.HistoryAdapter
+import com.example.cargicamera2.room.HistoryViewModel
+import com.example.cargicamera2.room.RoomRecyclerItemTouchHelper
 import com.example.recyclerswipe.adapter.RecViewAdapter
 import com.example.recyclerswipe.model.DataItem
 import com.example.recyclerswipe.uiUtils.RecyclerItemTouchHelper
@@ -28,11 +32,14 @@ import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.collections.ArrayList
 
-class HistoryFragment : Fragment(), RecyclerItemTouchHelper.RecyclerItemTouchHelperListener{
+class HistoryFragment : Fragment(), RoomRecyclerItemTouchHelper.RecyclerItemTouchHelperListener{
     private var mDataItem = ArrayList<DataItem>()
     private var mAdapter: RecViewAdapter?= null
 
     private var sharePath = "no"
+
+    private lateinit var historyViewModel: HistoryViewModel
+    private lateinit var adapter: HistoryAdapter
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -46,11 +53,28 @@ class HistoryFragment : Fragment(), RecyclerItemTouchHelper.RecyclerItemTouchHel
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        mAdapter = RecViewAdapter(this.context!!, setDataItem(14))
-        recycler_view.layoutManager = LinearLayoutManager(this.context)
-        recycler_view.adapter = mAdapter
+        adapter = HistoryAdapter()
+        historyViewModel = ViewModelProvider(this).get(HistoryViewModel::class.java)
+        historyViewModel.getAllNotes().observe(this.viewLifecycleOwner, androidx.lifecycle.Observer { it ->
+            adapter.submitList(it)
+            it.forEach {
+                Log.d("Contrast: ", it.contrast.toString())
+                Log.d("Refresh Rate: ", it.refreshRate.toString())
+                Log.d("Color Temperature: ", it.colorTemperature.toString())
+            }
+        })
 
-        val itemTouchHelperCallback = RecyclerItemTouchHelper(0, ItemTouchHelper.LEFT, this)
+
+//        mAdapter = RecViewAdapter(this.context!!, setDataItem(historyViewModel.getAllNotes()))        //old version itemList 20200406
+        recycler_view.layoutManager = LinearLayoutManager(this.context)
+        recycler_view.setHasFixedSize(true)     //20200406 Craig
+
+//        recycler_view.adapter = mAdapter
+        recycler_view.adapter = adapter
+
+
+//        val itemTouchHelperCallback = RecyclerItemTouchHelper(0, ItemTouchHelper.LEFT, this)        //old version itemList 20200406
+        val itemTouchHelperCallback = RoomRecyclerItemTouchHelper(0, ItemTouchHelper.LEFT, this)
         ItemTouchHelper(itemTouchHelperCallback).attachToRecyclerView(recycler_view)
 
         object: ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT){
@@ -63,7 +87,7 @@ class HistoryFragment : Fragment(), RecyclerItemTouchHelper.RecyclerItemTouchHel
             }
 
             override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
-                TODO("Not yet implemented")
+
             }
         }
 
@@ -82,7 +106,9 @@ class HistoryFragment : Fragment(), RecyclerItemTouchHelper.RecyclerItemTouchHel
         }
 
         btn_delete_all.setOnClickListener {
-
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+            val currentDateTime: String = dateFormat.format(Date()) // Find todays date
+            historyViewModel.insert(History(currentDateTime,17000, 20020, "Warm White"))
         }
     }
 
@@ -139,37 +165,56 @@ class HistoryFragment : Fragment(), RecyclerItemTouchHelper.RecyclerItemTouchHel
         }
     }
 
-    private fun setDataItem(size: Int): ArrayList<DataItem>{
+    private fun setDataItem(histories: LiveData<List<History>>): ArrayList<DataItem>{
         val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
         val currentDateTime: String = dateFormat.format(Date()) // Find todays date
 
-        for (i in 1..size){
+        val listHistory = histories.value
+
+        for (i in 1..listHistory!!.size){
             val dataItem = DataItem()
             dataItem.date = currentDateTime
-            dataItem.title = "Title: " + i
-            dataItem.contrast = 5000
-            dataItem.refreshRate = 3840
-            dataItem.colorTemperature = "Day White"
+            dataItem.title = listHistory[i].id.toString()
+            dataItem.contrast = listHistory[i].contrast
+            dataItem.refreshRate = listHistory[i].refreshRate
+            dataItem.colorTemperature = listHistory[i].colorTemperature
             mDataItem.add(dataItem)
         }
         return mDataItem
     }
 
     override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int, position: Int) {
-        if(viewHolder is RecViewAdapter.RecViewHolder){
-            val name = mDataItem[viewHolder.adapterPosition].title
+//        if(viewHolder is RecViewAdapter.RecViewHolder){           //old version itemList 20200406
+//            val name = mDataItem[viewHolder.adapterPosition].title
+//
+//            val deleteItem = mDataItem[viewHolder.adapterPosition]
+//            val delteIndex = viewHolder.adapterPosition
+//
+//            mAdapter?.removeItem(viewHolder.adapterPosition)
+//
+//            var snackbar = Snackbar.make(coordinator_layout!!, name!! + " removed from history!", Snackbar.LENGTH_LONG)
+//            snackbar.setAction("UNDO"){
+//                mAdapter?.restoreItem(deleteItem, delteIndex)
+//            }
+//            snackbar.setActionTextColor(Color.YELLOW)
+//            snackbar.show()
+//        }
 
-            val deleteItem = mDataItem[viewHolder.adapterPosition]
-            val delteIndex = viewHolder.adapterPosition
+        val history: History = adapter.getHistoryAt(viewHolder.adapterPosition)
+        historyViewModel.delete(history)
+        Toast.makeText(context, "Note Deleted", Toast.LENGTH_SHORT).show()
 
-            mAdapter?.removeItem(viewHolder.adapterPosition)
+        val name = history.id
 
-            var snackbar = Snackbar.make(coordinator_layout!!, name!! + " removed from history!", Snackbar.LENGTH_LONG)
-            snackbar.setAction("UNDO"){
-                mAdapter?.restoreItem(deleteItem, delteIndex)
-            }
-            snackbar.setActionTextColor(Color.YELLOW)
-            snackbar.show()
+        var snackbar = Snackbar.make(coordinator_layout!!, name!!.toString() + " removed from history!", Snackbar.LENGTH_LONG)
+        snackbar.setAction("UNDO"){
+            historyViewModel.insert(history)
         }
+        snackbar.setActionTextColor(Color.YELLOW)
+        snackbar.show()
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
     }
 }

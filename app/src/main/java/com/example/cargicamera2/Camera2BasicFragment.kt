@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.*
@@ -12,6 +13,7 @@ import android.hardware.camera2.*
 import android.media.ExifInterface
 import android.media.Image
 import android.media.ImageReader
+import android.opengl.Visibility
 import android.os.*
 import android.provider.MediaStore
 import android.util.Log
@@ -20,14 +22,17 @@ import android.util.SparseIntArray
 import android.view.*
 import android.widget.ImageButton
 import android.widget.ImageView
-import android.widget.SeekBar
+import android.widget.ProgressBar
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentTransaction
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import com.example.cargicamera2.extensions.OrientationLiveData
 import com.example.cargicamera2.fragments.PermissionsFragment
+import com.example.cargicamera2.room.History
+import com.example.cargicamera2.room.HistoryViewModel
 import com.example.cargicamera2.services.showToast
 import com.example.cargicamera2.ui.AutoFitTextureView
 import com.example.cargicamera2.ui.ErrorDialog
@@ -41,6 +46,7 @@ import java.io.Closeable
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.lang.Exception
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ArrayBlockingQueue
@@ -50,6 +56,8 @@ import java.util.concurrent.TimeoutException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
+import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 class Camera2BasicFragment : Fragment(), View.OnClickListener,
     ActivityCompat.OnRequestPermissionsResultCallback {
@@ -175,11 +183,20 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     /** Live data listener for changes in the device orientation relative to the camera */
     private lateinit var relativeOrientation: OrientationLiveData
 
+    private lateinit var settings: SharedPreferences
+    private var exposureTime: Long = 0
+    private var sensorSensitivity: Int = 0
     private var isAutoEnable: Boolean = false
     private var isManualEnable: Boolean = false
     private var isContrastEnable: Boolean = false
     private var isColorTemperatureEnable: Boolean = false
     private var isRefreshRateEnable: Boolean = false
+
+    private var progressbarShutter: ProgressBar ?= null
+
+    private var fingerSpacing: Float = 0f
+    private var zoomLevel: Float = 0f
+    private var zoom: Rect? = null
 
     /**
      * [CameraDevice.StateCallback] is called when [CameraDevice] changes its state.
@@ -298,7 +315,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         view.findViewById<View>(R.id.btnRecordBar).setOnClickListener(this)
         view.findViewById<View>(R.id.btnSetting).setOnClickListener(this)
 
+        readData()          //read shared preferneces data & apply
+
         val isoCustomSeekBar: CustomSeekBar = view.findViewById(R.id.isoCustomSeekBar)
+        isoCustomSeekBar.text = sensorSensitivity.toString()
         isoCustomSeekBar.setOnTouchListener { _, _ ->
             var progress = isoCustomSeekBar.progress
             val range = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)
@@ -308,11 +328,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             previewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, iso)
             unlockFocus()
 
+            sensorSensitivity = iso
             isoCustomSeekBar.text = iso.toString()
+            saveData()      //save shared preferences
             false
         }
 
         val tvCustomSeekBar: CustomSeekBar = view.findViewById(R.id.tvCustomSeekBar)
+        tvCustomSeekBar.text = exposureTime.toString()
         tvCustomSeekBar.setOnTouchListener{_, _ ->
             var progress = tvCustomSeekBar.progress
             val range = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
@@ -322,7 +345,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             previewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, ae)
             unlockFocus()
 
+            exposureTime = ae
             tvCustomSeekBar.text = ae.toString()
+            saveData()      //save shared preferences
             false
         }
 
@@ -332,6 +357,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         imageGalleryUiModelList.forEach {
             Log.i("Camera2Fragment", it.key + ": " + it.value)
         }
+
+        progressbarShutter = view.findViewById(R.id.progressBar_shutter)
 
         var imageList:ArrayList<ImageGalleryUiModel> = imageGalleryUiModelList["Camera"]!!
         var imageView: ImageView = view.findViewById(R.id.btnPhotoBox)
@@ -345,11 +372,58 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         focus = view.findViewById(R.id.focus_view)
         textureView = view.findViewById(R.id.texture)
 
-        textureView.setOnTouchListener { v, event ->
 
-            focus.showFocus(event.x.toInt(), event.y.toInt())
-            return@setOnTouchListener true
+        textureView.setOnTouchListener { v, event ->
+            try{
+//                focus.showFocus(event.x.toInt(), event.y.toInt())
+
+                var maxZoom = characteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM)
+                var rect: Rect? = characteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE)
+//                rect ?: return@setOnTouchListener true
+
+                var currentFingerSpacing: Float
+
+                if (event.pointerCount > 1){
+                    currentFingerSpacing = getFingerSpacing(event)
+                    var delta: Float = 0.05f
+                    if (fingerSpacing != 0f){
+                        if (currentFingerSpacing > fingerSpacing){
+                            if((maxZoom!! - zoomLevel) <= delta)
+                                delta = maxZoom - zoomLevel
+
+                            zoomLevel += delta
+                        }
+                        else if (currentFingerSpacing < fingerSpacing){
+                            if ((zoomLevel - delta) < 1f)
+                                delta = zoomLevel - 1f
+
+                            zoomLevel -= delta
+                        }
+                        var ratio: Float = (1 / zoomLevel).toFloat()
+                        Log.d("Camera2Fragment", ratio.toString())
+                        var croppedWidth = rect!!.width() - (rect.width() * ratio).roundToInt()
+                        var croppedHeight = rect.height() - (rect.height() * ratio).roundToInt()
+                        zoom = Rect(croppedWidth/2, croppedHeight/2, rect.width() - croppedWidth/2, rect.height() - croppedHeight/2)
+                        Log.d("Camera2Fragment", "Rect: " + zoom.toString())
+                        previewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, zoom)
+                        unlockFocus()
+                    }
+                    fingerSpacing = currentFingerSpacing
+                }else{
+                    return@setOnTouchListener true
+                }
+                return@setOnTouchListener true
+            }catch (e: Exception){
+                Log.d(TAG, e.toString())
+                return@setOnTouchListener true
+            }
         }
+    }
+
+    private fun getFingerSpacing(event: MotionEvent): Float{
+        var x: Float = event.getX(0) - event.getX(1)
+        var y: Float = event.getY(0) - event.getY(1)
+        return sqrt((x * x + y * y).toDouble()).toFloat()
     }
 
     override fun onResume() {
@@ -371,6 +445,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         when (view.id) {
             R.id.btnPicture -> {
                 // Disable click listener to prevent multiple requests simultaneously in flight
+                progressbarShutter?.max = 100
+                progressbarShutter?.progress = 0
+                progressbarShutter?.visibility = ProgressBar.VISIBLE
+
                 view.findViewById<View>(R.id.btnPicture).isEnabled = false
 
                 // Perform I/O heavy operations in a different scope
@@ -396,6 +474,17 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 }
                 view.findViewById<View>(R.id.btnPicture)
                     .post { view.findViewById<View>(R.id.btnPicture).isEnabled = true }
+
+                imageReaderHandler.postDelayed({
+                    progressbarShutter?.max = 100
+                    progressbarShutter?.progress = 100
+                    progressbarShutter?.visibility = ProgressBar.INVISIBLE
+
+                    var historyViewModel = ViewModelProvider(this).get(HistoryViewModel::class.java)
+                    val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+                    val currentDateTime: String = dateFormat.format(Date()) // Find todays date
+                    historyViewModel.insert(History(currentDateTime, 20000, 20202020, "Warm Red"))
+                }, 3000)
             }
             R.id.btnAuto -> {
                 val btnAuto = view.findViewById<ImageButton>(R.id.btnAuto)
@@ -482,7 +571,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             }
         }
     }
-
 
     override fun onPause() {
         super.onPause()
@@ -755,6 +843,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                 previewRequest,
                                 captureCallback, backgroundHandler
                             )
+
+                            if (sensorSensitivity != 0) previewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, sensorSensitivity)     //20200331 Craig return last state
+                            if (exposureTime.toInt() != 0)  previewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, exposureTime)
+
+                            unlockFocus()
                         } catch (e: CameraAccessException) {
                             Log.e(TAG, e.toString())
                         }
@@ -798,6 +891,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER,
                 CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_START
             )
+
             // Tell #captureCallback to wait for the precapture sequence to be set.
             state = STATE_WAITING_PRECAPTURE
             captureSession?.capture(
@@ -1013,7 +1107,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                             // Build the result and resume progress
 
-                            //takeDng(image, result)
                             cont.resume(
                                 CombinedCaptureResult(
                                     image, result, 6, imageReader.imageFormat
@@ -1118,6 +1211,21 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         startActivityForResult(pickImageIntent, 1)
     }
 
+    private fun saveData(){
+        settings = context!!.getSharedPreferences(PREF_NAME, PRIVATE_MODE)
+        settings.edit()
+            .putInt(SENSOR_SENSITIVITY, sensorSensitivity)
+            .putLong(EXPOSURE_TIME, exposureTime)
+            .apply()
+    }
+
+    private fun readData(){
+        settings = context!!.getSharedPreferences(PREF_NAME, PRIVATE_MODE)
+        sensorSensitivity = settings.getInt(SENSOR_SENSITIVITY, 0)
+        exposureTime = settings.getLong(EXPOSURE_TIME, 0)
+    }
+
+
     companion object {
         /**
          * Conversion from screen rotation to JPEG orientation.
@@ -1134,42 +1242,48 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         /**
          * Camera state: Showing camera preview.
          */
-        private val STATE_PREVIEW = 0
+        private const val STATE_PREVIEW = 0
 
         /**
          * Camera state: Waiting for the focus to be locked.
          */
-        private val STATE_WAITING_LOCK = 1
+        private const val STATE_WAITING_LOCK = 1
 
         /**
          * Camera state: Waiting for the exposure to be precapture state.
          */
-        private val STATE_WAITING_PRECAPTURE = 2
+        private const val STATE_WAITING_PRECAPTURE = 2
 
         /**
          * Camera state: Waiting for the exposure state to be something other than precapture.
          */
-        private val STATE_WAITING_NON_PRECAPTURE = 3
+        private const val STATE_WAITING_NON_PRECAPTURE = 3
 
         /**
          * Camera state: Picture was taken.
          */
-        private val STATE_PICTURE_TAKEN = 4
+        private const val STATE_PICTURE_TAKEN = 4
 
         /**
          * Max preview width that is guaranteed by Camera2 API
          */
-        private val MAX_PREVIEW_WIDTH = 1920
+        private const val MAX_PREVIEW_WIDTH = 1920
 
         /**
          * Max preview height that is guaranteed by Camera2 API
          */
-        private val MAX_PREVIEW_HEIGHT = 1080
+        private const val MAX_PREVIEW_HEIGHT = 1080
 
         private const val IMAGE_BUFFER_SIZE = 3
 
         /** Maximum time allowed to wait for the result of an image capture */
         private const val IMAGE_CAPTURE_TIMEOUT_MILLIS: Long = 5000
+
+        private const val PRIVATE_MODE = 0
+        private const val PREF_NAME = "Camera2Fragment"
+        private const val APERTURE = "APERTURE"
+        private const val EXPOSURE_TIME = "EXPOSURE_TIME"
+        private const val SENSOR_SENSITIVITY = "SENSOR_SENSITIVITY"
 
         @JvmField
         val REQUEST_CAMERA_PERMISSION = 1
