@@ -152,7 +152,6 @@ class HistoryFragment : Fragment(), RoomRecyclerItemTouchHelper.RecyclerItemTouc
         try{
             Log.d("HistoryFragment: ", sharePath)
             val tmpFile = File(Environment.getExternalStorageDirectory().toString(), "/DCIM/"+sharePath)
-            val file = File(sharePath)
             val uri = FileProvider.getUriForFile(this.context!!, "com.example.cargicamera2", tmpFile)
             Log.d("Uri: ", uri.toString())
             val intent = Intent(Intent.ACTION_SEND)

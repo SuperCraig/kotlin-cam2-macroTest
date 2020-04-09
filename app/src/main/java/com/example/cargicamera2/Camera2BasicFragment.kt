@@ -550,7 +550,15 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 }
             }
             R.id.btnPhotoBox -> {
-                pickPictureFromGallery()
+//                pickPictureFromGallery()
+
+                val fragment = PhotoboxFragment()
+                val fragmentManager = activity!!.supportFragmentManager
+                val fragmentTransaction = fragmentManager.beginTransaction()
+                fragmentTransaction.setTransition(FragmentTransaction.TRANSIT_FRAGMENT_OPEN)
+                fragmentTransaction.add(R.id.container, fragment, "PhotoboxFragment")
+                fragmentTransaction.addToBackStack("Camera2BasicFragment")
+                fragmentTransaction.commit()
             }
             R.id.btnRecordBar ->{
                 val fragment = HistoryFragment()
@@ -672,13 +680,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 // For still image captures, we use the largest available size.
                 val largest = Collections.max(
-                    Arrays.asList(*map.getOutputSizes(ImageFormat.JPEG)),
+                    listOf(*map.getOutputSizes(RAW_FORMAT)),
                     CompareSizesByArea()
                 )
 
                 imageReader = ImageReader.newInstance(
                     largest.width, largest.height,
-                    ImageFormat.JPEG, /*maxImages*/ IMAGE_BUFFER_SIZE
+                    RAW_FORMAT, /*maxImages*/ IMAGE_BUFFER_SIZE
                 )
 
                 // Find out if we need to swap dimension to get the preview size relative to sensor
@@ -1109,7 +1117,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                             cont.resume(
                                 CombinedCaptureResult(
-                                    image, result, 6, imageReader.imageFormat
+                                    image, result, ExifInterface.ORIENTATION_NORMAL, imageReader.imageFormat
                                 )
                             )
 
@@ -1143,6 +1151,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             // When the format is RAW we use the DngCreator utility library
             ImageFormat.RAW_SENSOR -> {
                 val dngCreator = DngCreator(characteristics, result.metadata)
+                dngCreator.setOrientation(ExifInterface.ORIENTATION_ROTATE_90)
                 try {
                     val output = createFile("dng")
                     FileOutputStream(output).use { dngCreator.writeImage(it, result.image) }
@@ -1156,6 +1165,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     Log.i(TAG, "Buffer size: ${byteArray.size}")
                     Log.i(TAG, "Buffer average: ${aver}")
 
+                    Log.i(TAG,"Dng orientation: "+ result.orientation.toString())
 
                     cont.resume(output)
 
@@ -1203,12 +1213,30 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     }
 
     private fun pickPictureFromGallery() {
-        val pickImageIntent = Intent(
-            Intent.ACTION_PICK,
-            MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-        )
+//        val pickImageIntent = Intent(
+//            Intent.ACTION_PICK,
+//            MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+//        )
+//
+//        startActivityForResult(pickImageIntent, 1)
 
-        startActivityForResult(pickImageIntent, 1)
+        var PICK_IMAGE_MULTIPLE = 1
+        if (Build.VERSION.SDK_INT < 19) {
+            var intent = Intent()
+            intent.type = "image/*"
+            intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            intent.action = Intent.ACTION_GET_CONTENT
+            startActivityForResult(
+                Intent.createChooser(intent, "Select Picture")
+                , PICK_IMAGE_MULTIPLE
+            )
+        } else {
+            var intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
+            intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            intent.addCategory(Intent.CATEGORY_OPENABLE)
+            intent.type = "image/*"
+            startActivityForResult(intent, PICK_IMAGE_MULTIPLE);
+        }
     }
 
     private fun saveData(){
@@ -1274,7 +1302,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
          */
         private const val MAX_PREVIEW_HEIGHT = 1080
 
-        private const val IMAGE_BUFFER_SIZE = 3
+        private const val IMAGE_BUFFER_SIZE = 5
 
         /** Maximum time allowed to wait for the result of an image capture */
         private const val IMAGE_CAPTURE_TIMEOUT_MILLIS: Long = 5000
@@ -1284,6 +1312,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         private const val APERTURE = "APERTURE"
         private const val EXPOSURE_TIME = "EXPOSURE_TIME"
         private const val SENSOR_SENSITIVITY = "SENSOR_SENSITIVITY"
+
+        private const val RAW_FORMAT = ImageFormat.RAW_SENSOR
+        private const val JPEG_FORMAT = ImageFormat.JPEG
 
         @JvmField
         val REQUEST_CAMERA_PERMISSION = 1
