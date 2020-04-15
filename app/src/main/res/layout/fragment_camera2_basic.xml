@@ -7,27 +7,30 @@
     <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_above="@+id/control"
         android:layout_below="@+id/layoutTop"
-        android:layout_alignParentStart="true"
-        android:layout_alignParentEnd="true"
-        android:layout_marginTop="0dp"
-        android:layout_marginBottom="0dp">
+        android:layout_marginTop="0dp">
 
         <com.example.cargicamera2.ui.AutoFitTextureView
             android:id="@+id/texture"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
+        <com.example.cargicamera2.ui.GridLineView
+            android:id="@+id/grid_line"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_alignTop="@+id/texture"
+            android:layout_marginTop="-85dp" />
+
         <androidx.core.widget.ContentLoadingProgressBar
             android:id="@+id/progressBar_shutter"
+            style="@android:style/Widget.ProgressBar.Horizontal"
             android:layout_width="220dp"
             android:layout_height="25dp"
             android:layout_centerHorizontal="true"
             android:layout_centerVertical="true"
-            style="@android:style/Widget.ProgressBar.Horizontal"
             android:progressDrawable="@drawable/myprogressbar"
-            android:visibility="invisible"/>
+            android:visibility="invisible" />
 
     </RelativeLayout>
 
@@ -162,10 +165,11 @@
 
         <ImageView
             android:id="@+id/btnPhotoBox"
-            android:layout_width="50dp"
-            android:layout_height="50dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:layout_gravity="bottom"
             android:layout_marginStart="24dp"
+            android:layout_marginBottom="5dp"
             android:adjustViewBounds="true"
             android:scaleType="fitXY" />
 
@@ -174,6 +178,7 @@
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="5dp"
             android:src="@drawable/ic_record_bar_chart"
             android:background="@color/transparent"
             android:scaleType="centerInside"/>
@@ -183,6 +188,7 @@
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:layout_gravity="end|bottom"
+            android:layout_marginBottom="5dp"
             android:src="@drawable/ic_settings"
             android:background="@color/transparent"
             android:scaleType="centerInside"

@@ -13,6 +13,7 @@
             <option value="$PROJECT_DIR$/app" />
             <option value="$PROJECT_DIR$/customSeekBarLib" />
             <option value="$PROJECT_DIR$/easy_toggle" />
+            <option value="$PROJECT_DIR$/ruler" />
           </set>
         </option>
         <option name="resolveModulePerSourceSet" value="false" />

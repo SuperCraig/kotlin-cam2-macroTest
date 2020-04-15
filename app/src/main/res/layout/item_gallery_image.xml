@@ -12,7 +12,20 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@color/softGray"
-        android:layout_margin="5dp"
+        android:layout_marginTop="5dp"
+        android:layout_marginStart="5dp"
+        android:layout_marginEnd="5dp"
+        android:layout_marginBottom="25dp"
         android:scaleType="centerCrop" />
 
+    <TextView
+        android:id="@+id/ivGalleryTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/transparent"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginStart="5dp"
+        android:textAlignment="center"
+        android:textSize="20dp"
+        android:textColor="@android:color/white"/>
 </com.example.imagegallery.helper.SquareLayout>

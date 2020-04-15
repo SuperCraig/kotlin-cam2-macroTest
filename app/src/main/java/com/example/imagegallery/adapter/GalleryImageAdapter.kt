@@ -51,13 +51,15 @@ class GalleryImageAdapter(private val itemList: List<Image>) : RecyclerView.Adap
             itemView.container.setOnClickListener {
                 listener?.onClick(adapterPosition)
                 if(it.isSelected){
-                    it.setBackgroundResource(R.color.colorPrimary)
+                    it.setBackgroundResource(R.color.colorPrimaryDark)
                     it.isSelected = false
                 }else{
                     it.setBackgroundColor(Color.parseColor("#3547f0"))
                     it.isSelected = true
                 }
             }
+
+            itemView.ivGalleryTitle.text = image.title
         }
     }
 }

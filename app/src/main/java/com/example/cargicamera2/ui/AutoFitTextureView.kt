@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.AttributeSet
 import android.view.TextureView
 import android.view.View
-import java.lang.IllegalArgumentException
 
 class AutoFitTextureView @JvmOverloads constructor(
     context: Context,

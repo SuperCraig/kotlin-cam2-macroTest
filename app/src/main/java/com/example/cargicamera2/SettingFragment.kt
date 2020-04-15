@@ -60,6 +60,41 @@ class SettingFragment : Fragment(){
             isSoundEnable = it
             saveData()
         }
+
+        layout_format.setOnClickListener{
+            Log.i(TAG, "layout_format.setOnClickListener")
+        }
+
+        layout_language.setOnClickListener{
+            Log.i(TAG, "layout_language.setOnClickListener")
+        }
+
+        layout_tell_a_friend.setOnClickListener{
+            Log.i(TAG, "layout_tell_a_friend.setOnClickListener")
+        }
+
+        layout_feedback.setOnClickListener{
+            Log.i(TAG, "layout_feedback.setOnClickListener")
+        }
+
+        layout_about.setOnClickListener{
+            Log.i(TAG, "layout_about.setOnClickListener")
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        Log.i(TAG, "onPause")
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        Log.i(TAG, "onDestroy")
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        Log.i(TAG, "onDestroyView")
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -92,10 +127,11 @@ class SettingFragment : Fragment(){
     }
 
     companion object{
-        private const val PRIVATE_MODE = 0
-        private const val PREF_NAME = "SettingFragment"
-        private const val GRID = "GRID"
-        private const val SOUND = "SOUND"
-        private const val CLOUD_SYNC = "CLOUD_SYNC"
+        private const val TAG = "SettingFragment"
+        const val PRIVATE_MODE = 0
+        const val PREF_NAME = "SettingFragment"
+        const val GRID = "GRID"
+        const val SOUND = "SOUND"
+        const val CLOUD_SYNC = "CLOUD_SYNC"
     }
 }

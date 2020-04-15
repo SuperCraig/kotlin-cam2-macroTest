@@ -7,6 +7,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.FragmentManager
 import androidx.recyclerview.widget.GridLayoutManager
 import com.example.imagegallery.adapter.GalleryImageAdapter
 import com.example.imagegallery.adapter.GalleryImageClickListener
@@ -95,7 +96,8 @@ class PhotoboxFragment : Fragment(), GalleryImageClickListener, View.OnClickList
             Log.d(TAG, "image detail: ${imageList[position]}")
 
 
-            val fragmentTransaction = fragmentManager!!.beginTransaction()
+            val fragmentManager = activity!!.supportFragmentManager
+            val fragmentTransaction = fragmentManager.beginTransaction()
             val galleryFragment = GalleryFullscreenFragment()
             galleryFragment.setArguments(bundle)
             galleryFragment.show(fragmentTransaction, "gallery")
@@ -121,7 +123,8 @@ class PhotoboxFragment : Fragment(), GalleryImageClickListener, View.OnClickList
 
             }
             R.id.btn_camera ->{
-                fragmentManager?.popBackStack()
+                val fragmentManager = activity!!.supportFragmentManager
+                fragmentManager.popBackStack()
             }
             R.id.btnInfo -> {
 

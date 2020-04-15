@@ -2,7 +2,9 @@ package com.example.cargicamera2
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.app.AlertDialog
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothSocket
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -13,9 +15,8 @@ import android.hardware.camera2.*
 import android.media.ExifInterface
 import android.media.Image
 import android.media.ImageReader
-import android.opengl.Visibility
+import android.media.MediaActionSound
 import android.os.*
-import android.provider.MediaStore
 import android.util.Log
 import android.util.Size
 import android.util.SparseIntArray
@@ -37,16 +38,17 @@ import com.example.cargicamera2.services.showToast
 import com.example.cargicamera2.ui.AutoFitTextureView
 import com.example.cargicamera2.ui.ErrorDialog
 import com.example.cargicamera2.ui.FocusView
+import com.example.cargicamera2.ui.GridLineView
 import com.example.imagegallery.model.ImageGalleryUiModel
 import com.example.imagegallery.service.MediaHelper
 import com.example.lib.CustomSeekBar
+import kotlinx.android.synthetic.main.rec_view_row_layout.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.Closeable
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
-import java.lang.Exception
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ArrayBlockingQueue
@@ -56,6 +58,7 @@ import java.util.concurrent.TimeoutException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
+import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
@@ -184,6 +187,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private lateinit var relativeOrientation: OrientationLiveData
 
     private lateinit var settings: SharedPreferences
+    private var aperture: Float = 0f
     private var exposureTime: Long = 0
     private var sensorSensitivity: Int = 0
     private var isAutoEnable: Boolean = false
@@ -192,11 +196,20 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private var isColorTemperatureEnable: Boolean = false
     private var isRefreshRateEnable: Boolean = false
 
+    private var isGridEnable: Boolean = false
+    private var isSoundEnable: Boolean = false
+    private var isCloudSyncEnable: Boolean = false
+
     private var progressbarShutter: ProgressBar ?= null
 
     private var fingerSpacing: Float = 0f
     private var zoomLevel: Float = 0f
     private var zoom: Rect? = null
+
+    private lateinit var gridLineView: GridLineView
+
+    private val mediaActionSound: MediaActionSound = MediaActionSound()
+
 
     /**
      * [CameraDevice.StateCallback] is called when [CameraDevice] changes its state.
@@ -301,7 +314,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
-    ): View? = inflater.inflate(R.layout.fragment_camera2_basic, container, false)
+    ): View? {
+        var view: View = inflater.inflate(R.layout.fragment_camera2_basic, container, false)
+        m_address = arguments?.getString(SplashScreenActivity.EXTRA_ADDRESS).toString()
+        Log.i(TAG,"onCreateView")
+        Log.i(TAG, "Paired address: $m_address")
+        return view
+    }
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -316,9 +335,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         view.findViewById<View>(R.id.btnSetting).setOnClickListener(this)
 
         readData()          //read shared preferneces data & apply
+        readSettingData()
 
         val isoCustomSeekBar: CustomSeekBar = view.findViewById(R.id.isoCustomSeekBar)
-        isoCustomSeekBar.text = sensorSensitivity.toString()
+        isoCustomSeekBar.text = "ISO $sensorSensitivity"
         isoCustomSeekBar.setOnTouchListener { _, _ ->
             var progress = isoCustomSeekBar.progress
             val range = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)
@@ -326,28 +346,49 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             val min1 = range.lower //100
             val iso: Int = progress * (max1 - min1) / 100 + min1
             previewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, iso)
-            unlockFocus()
+//            unlockFocus()
+            captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
 
             sensorSensitivity = iso
-            isoCustomSeekBar.text = iso.toString()
+            isoCustomSeekBar.text = "ISO $iso"
             saveData()      //save shared preferences
             false
         }
 
         val tvCustomSeekBar: CustomSeekBar = view.findViewById(R.id.tvCustomSeekBar)
-        tvCustomSeekBar.text = exposureTime.toString()
+        tvCustomSeekBar.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / exposureTime)}s"
         tvCustomSeekBar.setOnTouchListener{_, _ ->
             var progress = tvCustomSeekBar.progress
             val range = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
             val max = range!!.upper
             val min = range.lower
             val ae: Long = progress * (max - min) / 100 + min
-            previewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, ae)
-            unlockFocus()
+            previewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, ae)      //shutter speed = 1 / (10^9 / ae) sec.
+//            unlockFocus()
 
+            captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
             exposureTime = ae
-            tvCustomSeekBar.text = ae.toString()
+
+            tvCustomSeekBar.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / ae)}s"
             saveData()      //save shared preferences
+            false
+        }
+
+        val avCustomSeekBar: CustomSeekBar = view.findViewById(R.id.avCustomSeekBar)
+        avCustomSeekBar.text = "F$aperture"
+        avCustomSeekBar.setOnTouchListener{_, _ ->
+            val apertures = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES)
+            val apertureScale = avCustomSeekBar.maxProgress / (apertures?.size ?: 1)
+            val apertureIndex = avCustomSeekBar.progress/apertureScale
+
+            if(apertureIndex < apertures?.size ?: 1)
+                aperture = apertures?.get(apertureIndex)!!
+
+            previewRequestBuilder.set(CaptureRequest.LENS_APERTURE, aperture)
+            captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
+            this.aperture = aperture!!
+            avCustomSeekBar.text = "F$aperture"
+            saveData()
             false
         }
 
@@ -371,7 +412,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         gradation.setOnClickListener(this)
         focus = view.findViewById(R.id.focus_view)
         textureView = view.findViewById(R.id.texture)
-
 
         textureView.setOnTouchListener { v, event ->
             try{
@@ -400,15 +440,16 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             zoomLevel -= delta
                         }
                         var ratio: Float = (1 / zoomLevel).toFloat()
-                        Log.d("Camera2Fragment", ratio.toString())
                         var croppedWidth = rect!!.width() - (rect.width() * ratio).roundToInt()
                         var croppedHeight = rect.height() - (rect.height() * ratio).roundToInt()
                         zoom = Rect(croppedWidth/2, croppedHeight/2, rect.width() - croppedWidth/2, rect.height() - croppedHeight/2)
-                        Log.d("Camera2Fragment", "Rect: " + zoom.toString())
                         previewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, zoom)
-                        unlockFocus()
+
+//                        unlockFocus()
+                        captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
                     }
                     fingerSpacing = currentFingerSpacing
+
                 }else{
                     return@setOnTouchListener true
                 }
@@ -439,6 +480,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         } else {
             textureView.surfaceTextureListener = surfaceTextureListener
         }
+
+        Log.i(TAG, "onResume")
     }
 
     override fun onClick(view: View) {
@@ -491,26 +534,26 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 isAutoEnable = !isAutoEnable
 
                 if(isAutoEnable){
-                    btnAuto.setBackgroundResource(R.drawable.ic_auto_selection)
+                    btnAuto.setImageResource(R.drawable.ic_auto_selection)
                 }else{
-                    btnAuto.setBackgroundResource(R.drawable.ic_auto)
+                    btnAuto.setImageResource(R.drawable.ic_auto)
                 }
 
-                if (activity != null) {
-                    AlertDialog.Builder(activity)
-                        .setMessage(R.string.intro_message)
-                        .setPositiveButton(android.R.string.ok, null)
-                        .show()
-                }
+//                if (activity != null) {
+//                    AlertDialog.Builder(activity)
+//                        .setMessage(R.string.intro_message)
+//                        .setPositiveButton(android.R.string.ok, null)
+//                        .show()
+//                }
             }
             R.id.btnContrast -> {
                 val btnContrast = view.findViewById<ImageView>(R.id.btnContrast)
                 isContrastEnable = !isContrastEnable
 
                 if(isContrastEnable){
-                    btnContrast.setBackgroundResource(R.drawable.ic_contrast_selection)
+                    btnContrast.setImageResource(R.drawable.ic_contrast_selection)
                 }else{
-                    btnContrast.setBackgroundResource(R.drawable.ic_contrast)
+                    btnContrast.setImageResource(R.drawable.ic_contrast)
                 }
 
 //                openCamera(textureView.width, textureView.height)
@@ -532,9 +575,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 isColorTemperatureEnable = !isColorTemperatureEnable
 
                 if(isColorTemperatureEnable){
-                    btnColorTemperature.setBackgroundResource(R.drawable.ic_color_temperature_selection)
+                    btnColorTemperature.setImageResource(R.drawable.ic_color_temperature_selection)
                 }else{
-                    btnColorTemperature.setBackgroundResource(R.drawable.ic_color_temperature)
+                    btnColorTemperature.setImageResource(R.drawable.ic_color_temperature)
                 }
 
 //                openCamera(textureView.width, textureView.height)
@@ -573,6 +616,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 val fragment = SettingFragment()
                 val fragmentManager = activity!!.supportFragmentManager
                 val fragmentTransaction = fragmentManager.beginTransaction()
+                fragmentTransaction.setTransition(FragmentTransaction.TRANSIT_FRAGMENT_OPEN)
                 fragmentTransaction.add(R.id.container, fragment, "SettingFragment")
                 fragmentTransaction.addToBackStack("Camera2BasicFragment")
                 fragmentTransaction.commit()
@@ -582,6 +626,17 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     override fun onPause() {
         super.onPause()
+        Log.i(TAG, "onPause")
+    }
+
+    override fun onStop() {
+        super.onStop()
+        Log.i(TAG, "onStop")
+    }
+
+    override fun onStart() {
+        super.onStart()
+        Log.i(TAG, "onStart")
     }
 
     override fun onDestroy() {
@@ -757,7 +812,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         val rotation = activity!!.windowManager.defaultDisplay.rotation
         val matrix = Matrix()
         val viewRect = RectF(0f, 0f, viewWidth.toFloat(), viewHeight.toFloat())
-        val bufferRect = RectF(0f, 0f, previewSize.height.toFloat(), previewSize.width.toFloat())
+        var bufferRect = RectF(0f, 0f, previewSize.height.toFloat(), previewSize.width.toFloat())
+
         val centerX = viewRect.centerX()
         val centerY = viewRect.centerY()
 
@@ -826,7 +882,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
             // Here, we create a CameraCaptureSession for camera preview.
             cameraDevice?.createCaptureSession(
-                Arrays.asList(surface, imageReader?.surface),
+                listOf(surface, imageReader?.surface),
                 object : CameraCaptureSession.StateCallback() {
 
                     override fun onConfigured(cameraCaptureSession: CameraCaptureSession) {
@@ -854,8 +910,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                             if (sensorSensitivity != 0) previewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, sensorSensitivity)     //20200331 Craig return last state
                             if (exposureTime.toInt() != 0)  previewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, exposureTime)
+                            if (aperture.toInt() != 0)  previewRequestBuilder.set(CaptureRequest.LENS_APERTURE, aperture)
 
-                            unlockFocus()
+//                            unlockFocus()
+                            captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
                         } catch (e: CameraAccessException) {
                             Log.e(TAG, e.toString())
                         }
@@ -874,17 +932,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     private fun setAutoFlash(requestBuilder: CaptureRequest.Builder) {
         if (flashSupported) {
-            //requestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
-            //        CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH)
+            requestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
+                    CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH)
 
             requestBuilder.set(
                 CaptureRequest.CONTROL_AE_MODE,
                 CaptureRequest.CONTROL_AE_MODE_OFF
             )
-
-            Log.i(TAG, "Aperture: " + requestBuilder.get(CaptureRequest.LENS_APERTURE))
-            Log.i(TAG, "ISO: " + requestBuilder.get(CaptureRequest.SENSOR_SENSITIVITY))
-            Log.i(TAG, "Exposure: " + requestBuilder.get(CaptureRequest.SENSOR_EXPOSURE_TIME))
         }
     }
 
@@ -951,7 +1005,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 ) {
                     activity!!.showToast("Saved: $file")
                     Log.d(TAG, file.toString())
-                    unlockFocus()
+//                    unlockFocus()
                 }
             }
 
@@ -993,7 +1047,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         } catch (e: CameraAccessException) {
             Log.e(TAG, e.toString())
         }
-
     }
 
     /**
@@ -1045,25 +1098,21 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         //captureRequest.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_OFF)
         captureRequest.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
 
-//        captureRequest.set(CaptureRequest.SENSOR_SENSITIVITY, 500)
-//        captureRequest.set(CaptureRequest.SENSOR_EXPOSURE_TIME, 25000000)
-
-        var apertures = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES)
-        for (aperture in apertures!!) {
-            Log.i(TAG, "Available aperture: " + aperture)
-        }
-        Log.i(
-            TAG,
-            "ISO: " + characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)
-        )
-        Log.i(
-            TAG,
-            "Exposure: " + characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
-        )
-
         captureSession.capture(
             captureRequest.build(),
             object : CameraCaptureSession.CaptureCallback() {
+                override fun onCaptureStarted(
+                    session: CameraCaptureSession,
+                    request: CaptureRequest,
+                    timestamp: Long,
+                    frameNumber: Long
+                ) {
+                    super.onCaptureStarted(session, request, timestamp, frameNumber)
+                    if(isSoundEnable) {
+                        cameraHandler.post{ mediaActionSound.play(MediaActionSound.SHUTTER_CLICK) }
+                    }
+                }
+
                 override fun onCaptureCompleted(
                     session: CameraCaptureSession,
                     request: CaptureRequest,
@@ -1098,8 +1147,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             // Unset the image reader listener
                             imageReaderHandler.removeCallbacks(timeoutRunnable)
                             imageReader.setOnImageAvailableListener(null, null)
-
-                            Log.i(TAG, "Image Queue Size: " + imageQueue.size)
 
 
                             // Clear the queue of images, if there are left
@@ -1151,7 +1198,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             // When the format is RAW we use the DngCreator utility library
             ImageFormat.RAW_SENSOR -> {
                 val dngCreator = DngCreator(characteristics, result.metadata)
-                dngCreator.setOrientation(ExifInterface.ORIENTATION_ROTATE_90)
+                dngCreator.setOrientation(ExifInterface.ORIENTATION_ROTATE_90)      //rotate picture
                 try {
                     val output = createFile("dng")
                     FileOutputStream(output).use { dngCreator.writeImage(it, result.image) }
@@ -1166,6 +1213,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     Log.i(TAG, "Buffer average: ${aver}")
 
                     Log.i(TAG,"Dng orientation: "+ result.orientation.toString())
+
+                    Log.i(TAG, output.canonicalPath)
+                    var exif = ExifInterface(output.canonicalPath)
+                    exif.setAttribute(ExifInterface.TAG_APERTURE_VALUE, exposureTime.toString())
+                    exif.setAttribute(ExifInterface.TAG_RW2_ISO, sensorSensitivity.toString())
+                    exif.setAttribute(ExifInterface.TAG_DATETIME, date.toString())
+                    exif.saveAttributes()
 
                     cont.resume(output)
 
@@ -1244,6 +1298,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         settings.edit()
             .putInt(SENSOR_SENSITIVITY, sensorSensitivity)
             .putLong(EXPOSURE_TIME, exposureTime)
+            .putFloat(APERTURE, aperture)
             .apply()
     }
 
@@ -1251,8 +1306,82 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         settings = context!!.getSharedPreferences(PREF_NAME, PRIVATE_MODE)
         sensorSensitivity = settings.getInt(SENSOR_SENSITIVITY, 0)
         exposureTime = settings.getLong(EXPOSURE_TIME, 0)
+        aperture = settings.getFloat(APERTURE, 0f)
     }
 
+    fun readSettingData(){
+        settings = context!!.getSharedPreferences(
+            SettingFragment.PREF_NAME,
+            SettingFragment.PRIVATE_MODE
+        )
+        isGridEnable = settings.getBoolean(SettingFragment.GRID, false)
+        isSoundEnable = settings.getBoolean(SettingFragment.SOUND, false)
+        isCloudSyncEnable = settings.getBoolean(SettingFragment.CLOUD_SYNC, false)
+
+        gridLineView = view!!.findViewById(R.id.grid_line)
+
+        if(isGridEnable) {
+            gridLineView.visibility = View.VISIBLE
+        } else {
+            gridLineView.visibility = View.INVISIBLE
+        }
+    }
+
+    private fun sendCommand(input: String){
+        if (m_bluetoothSocket != null){
+            try {
+                m_bluetoothSocket!!.outputStream.write(input.toByteArray())
+            }catch (e: IOException) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private fun disconnect(){
+        if (m_bluetoothSocket != null) {
+            try {
+                m_bluetoothSocket!!.close()
+                m_bluetoothSocket = null
+                m_isConnected = false
+            } catch (e: IOException) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private class ConnectToDevice (c: Context): AsyncTask<Void, Void, String>() {
+        private var connectSuccess: Boolean = true
+        private val context: Context = c
+
+        override fun onPreExecute() {
+            super.onPreExecute()
+        }
+
+        override fun doInBackground(vararg params: Void?): String? {
+            try {
+                if (m_bluetoothSocket == null || !m_isConnected) {
+                    m_bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+                    val device: BluetoothDevice = m_bluetoothAdapter.getRemoteDevice(m_address)
+                    m_bluetoothSocket = device.createInsecureRfcommSocketToServiceRecord(m_myUUID)
+                    BluetoothAdapter.getDefaultAdapter().cancelDiscovery()
+                    m_bluetoothSocket!!.connect()
+                }
+            } catch (e: IOException) {
+                connectSuccess = false
+                e.printStackTrace()
+            }
+            return null
+        }
+
+        override fun onPostExecute(result: String?) {
+            super.onPostExecute(result)
+            if(!connectSuccess) {
+                Log.i("data", "couldn't connect")
+            } else {
+                m_isConnected = true
+            }
+        }
+    }
 
     companion object {
         /**
@@ -1315,6 +1444,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
         private const val RAW_FORMAT = ImageFormat.RAW_SENSOR
         private const val JPEG_FORMAT = ImageFormat.JPEG
+
+        var m_myUUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+        var m_bluetoothSocket: BluetoothSocket? = null
+        lateinit var m_bluetoothAdapter: BluetoothAdapter
+        var m_isConnected: Boolean = false
+        lateinit var m_address: String
 
         @JvmField
         val REQUEST_CAMERA_PERMISSION = 1
@@ -1394,9 +1529,5 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             Manifest.permission.WRITE_EXTERNAL_STORAGE,
             Manifest.permission.READ_EXTERNAL_STORAGE
         )
-
-
-        @JvmStatic
-        fun newInstance(): Camera2BasicFragment = Camera2BasicFragment()
     }
 }

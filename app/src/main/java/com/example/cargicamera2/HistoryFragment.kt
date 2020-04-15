@@ -92,7 +92,8 @@ class HistoryFragment : Fragment(), RoomRecyclerItemTouchHelper.RecyclerItemTouc
         }
 
         btn_camera.setOnClickListener {
-            fragmentManager?.popBackStack()
+            val fragmentManager = activity!!.supportFragmentManager
+            fragmentManager.popBackStack()
         }
 
         btn_share.setOnClickListener {
@@ -109,6 +110,8 @@ class HistoryFragment : Fragment(), RoomRecyclerItemTouchHelper.RecyclerItemTouc
             val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
             val currentDateTime: String = dateFormat.format(Date()) // Find todays date
             historyViewModel.insert(History(currentDateTime,17000, 20020, "Warm White"))
+
+//            historyViewModel.deleteAllHistories()
         }
     }
 

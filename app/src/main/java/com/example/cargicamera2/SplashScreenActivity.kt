@@ -1,27 +1,44 @@
 package com.example.cargicamera2
 
 import android.Manifest
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
-import android.os.PersistableBundle
+import android.os.Looper
+import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.example.cargicamera2.fragments.PermissionsFragment
 
 
-class SplashScreenActivity :AppCompatActivity(),
-    ActivityCompat.OnRequestPermissionsResultCallback{
+class SplashScreenActivity : AppCompatActivity(),
+    ActivityCompat.OnRequestPermissionsResultCallback {
     private var mDelayHandler: Handler? = null
-    private val SPLASH_TIME_OUT:Long = 3000
+    private val SPLASH_TIME_OUT: Long = 3000
 
-    internal val mRunnable: Runnable = Runnable {
+    lateinit var mainHandler: Handler
+    private var isSplashDone: Boolean = false
+
+    private var m_bluetoothAdapter: BluetoothAdapter? = null
+    private lateinit var m_paireDevices: Set<BluetoothDevice>
+    private val REQUEST_ENABLE_BLUETOOTH = 1
+    private lateinit var deviceList:ArrayList<BluetoothDevice>
+
+    private val mRunnable: Runnable = Runnable {
         if (!isFinishing) {
-            val intent = Intent(applicationContext, MainActivity::class.java)
-            startActivity(intent)
-            finish()
+            isSplashDone = true
+            if (checkRequiredPermissions()) {
+                val intent = Intent(applicationContext, MainActivity::class.java)
+                val position = 0
+                val device: BluetoothDevice = deviceList[position]
+                val address = device.address
+                intent.putExtra(EXTRA_ADDRESS, address)
+                startActivity(intent)
+                finish()
+            }
         }
     }
 
@@ -32,12 +49,18 @@ class SplashScreenActivity :AppCompatActivity(),
         mDelayHandler = Handler()
         mDelayHandler!!.postDelayed(mRunnable, SPLASH_TIME_OUT)
 
-        val permission = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
-        if (permission != PackageManager.PERMISSION_GRANTED) {
-            requestCameraPermission()
+        mainHandler = Handler(Looper.getMainLooper())
+
+        m_bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+        if (m_bluetoothAdapter == null) {
             return
         }
+        if (!m_bluetoothAdapter!!.isEnabled) {
+            val enableBluetoothIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+            startActivityForResult(enableBluetoothIntent, REQUEST_ENABLE_BLUETOOTH)
+        }
 
+        pairedDeviceList()
     }
 
     public override fun onDestroy() {
@@ -49,21 +72,72 @@ class SplashScreenActivity :AppCompatActivity(),
         super.onDestroy()
     }
 
-    private fun requestCameraPermission() {
-        if (PermissionsFragment.hasPermissions(this)) {
-            return
-        } else {
-            requestPermissions(
-                PERMISSIONS_REQUIRED,
-                PERMISSIONS_REQUEST_CODE
-            )
+    override fun onPause(){
+        super.onPause()
+        mainHandler.removeCallbacks(checkPermission)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        mainHandler.post(checkPermission)
+    }
+
+    private val checkPermission = Runnable {
+        if(checkRequiredPermissions() and isSplashDone){
+            val intent = Intent(applicationContext, MainActivity::class.java)
+            val position = 0
+            val device: BluetoothDevice = deviceList[position]
+            val address = device.address
+            intent.putExtra(EXTRA_ADDRESS, address)
+            startActivity(intent)
+            finish()
         }
+    }
+
+    private fun checkRequiredPermissions(): Boolean {
+        val deniedPermissions = mutableListOf<String>()
+        for (permission in PERMISSIONS_REQUIRED) {
+            if (ContextCompat.checkSelfPermission(
+                    this,
+                    permission
+                ) == PackageManager.PERMISSION_DENIED
+            ) {
+                deniedPermissions.add(permission)
+            }
+        }
+        if (deniedPermissions.isEmpty().not()) {
+            requestPermissions(deniedPermissions.toTypedArray(), Companion.REQUEST_PERMISSION_CODE)
+        }
+        return deniedPermissions.isEmpty()
+    }
+
+
+    private fun pairedDeviceList() {
+        m_paireDevices = m_bluetoothAdapter!!.bondedDevices
+        val list: ArrayList<BluetoothDevice> = ArrayList()
+
+        if (!m_paireDevices.isEmpty()) {
+            for (device: BluetoothDevice in m_paireDevices) {
+                list.add(device)
+                Log.i("device", "$device")
+            }
+        }
+
+        deviceList = list
     }
 
     private val PERMISSIONS_REQUEST_CODE = 10
     private val PERMISSIONS_REQUIRED = arrayOf(
         Manifest.permission.CAMERA,
         Manifest.permission.WRITE_EXTERNAL_STORAGE,
-        Manifest.permission.READ_EXTERNAL_STORAGE
+        Manifest.permission.READ_EXTERNAL_STORAGE,
+        Manifest.permission.BLUETOOTH,
+        Manifest.permission.BLUETOOTH_ADMIN
     )
+
+    companion object {
+        private const val REQUEST_PERMISSION_CODE: Int = 1
+
+        val EXTRA_ADDRESS: String = "Device_address"
+    }
 }
