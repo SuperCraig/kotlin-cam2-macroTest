@@ -3,7 +3,9 @@ package com.example.imagegallery.service
 import android.content.Context
 import android.database.Cursor
 import android.net.Uri
+import android.os.Build
 import android.provider.MediaStore
+import androidx.annotation.RequiresApi
 import com.example.imagegallery.model.ImageGalleryUiModel
 
 class MediaHelper {

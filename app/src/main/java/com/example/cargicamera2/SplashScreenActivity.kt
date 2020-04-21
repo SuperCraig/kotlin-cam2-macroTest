@@ -32,10 +32,16 @@ class SplashScreenActivity : AppCompatActivity(),
             isSplashDone = true
             if (checkRequiredPermissions()) {
                 val intent = Intent(applicationContext, MainActivity::class.java)
-                val position = 0
-                val device: BluetoothDevice = deviceList[position]
-                val address = device.address
-                intent.putExtra(EXTRA_ADDRESS, address)
+
+                if(deviceList.size > 0){
+                    val position = 0
+                    val device: BluetoothDevice = deviceList[position]
+                    val address = device.address
+                    intent.putExtra(EXTRA_ADDRESS, address)
+                }else{
+                    intent.putExtra(EXTRA_ADDRESS, "")
+                }
+
                 startActivity(intent)
                 finish()
             }
@@ -85,10 +91,15 @@ class SplashScreenActivity : AppCompatActivity(),
     private val checkPermission = Runnable {
         if(checkRequiredPermissions() and isSplashDone){
             val intent = Intent(applicationContext, MainActivity::class.java)
-            val position = 0
-            val device: BluetoothDevice = deviceList[position]
-            val address = device.address
-            intent.putExtra(EXTRA_ADDRESS, address)
+
+            if(deviceList.size > 0){
+                val position = deviceList.size ?: 0
+                val device: BluetoothDevice = deviceList[position]
+                val address = device.address
+                intent.putExtra(EXTRA_ADDRESS, address)
+            }else{
+                intent.putExtra(EXTRA_ADDRESS, "")
+            }
             startActivity(intent)
             finish()
         }
@@ -136,6 +147,7 @@ class SplashScreenActivity : AppCompatActivity(),
     )
 
     companion object {
+        private const val TAG = "SplashScreenActivity"
         private const val REQUEST_PERMISSION_CODE: Int = 1
 
         val EXTRA_ADDRESS: String = "Device_address"

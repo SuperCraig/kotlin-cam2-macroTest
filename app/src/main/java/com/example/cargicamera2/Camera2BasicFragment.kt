@@ -12,10 +12,7 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.*
 import android.hardware.camera2.*
-import android.media.ExifInterface
-import android.media.Image
-import android.media.ImageReader
-import android.media.MediaActionSound
+import android.media.*
 import android.os.*
 import android.util.Log
 import android.util.Size
@@ -30,6 +27,7 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentTransaction
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import com.example.cargicamera2.extensions.MBITSP2020
 import com.example.cargicamera2.extensions.OrientationLiveData
 import com.example.cargicamera2.fragments.PermissionsFragment
 import com.example.cargicamera2.room.History
@@ -39,16 +37,14 @@ import com.example.cargicamera2.ui.AutoFitTextureView
 import com.example.cargicamera2.ui.ErrorDialog
 import com.example.cargicamera2.ui.FocusView
 import com.example.cargicamera2.ui.GridLineView
+import com.example.extensions.canny
 import com.example.imagegallery.model.ImageGalleryUiModel
 import com.example.imagegallery.service.MediaHelper
 import com.example.lib.CustomSeekBar
-import kotlinx.android.synthetic.main.rec_view_row_layout.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.io.Closeable
-import java.io.File
-import java.io.FileOutputStream
-import java.io.IOException
+import org.opencv.core.Mat
+import java.io.*
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ArrayBlockingQueue
@@ -83,6 +79,54 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
         override fun onSurfaceTextureUpdated(texture: SurfaceTexture) = Unit
 
+    }
+
+    private val surfaceTextureTouchListener = View.OnTouchListener { v, event ->
+        try{
+//                focus.showFocus(event.x.toInt(), event.y.toInt())
+
+            val maxZoom = characteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM)
+            val rect: Rect? = characteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE)
+//                rect ?: return@setOnTouchListener true
+
+            val currentFingerSpacing: Float
+
+            if (event.pointerCount > 1){
+                currentFingerSpacing = getFingerSpacing(event)
+                var delta: Float = 0.05f
+                if (fingerSpacing != 0f){
+                    if (currentFingerSpacing > fingerSpacing){
+                        if((maxZoom!! - zoomLevel) <= delta)
+                            delta = maxZoom - zoomLevel
+
+                        zoomLevel += delta
+                    }
+                    else if (currentFingerSpacing < fingerSpacing){
+                        if ((zoomLevel - delta) < 1f)
+                            delta = zoomLevel - 1f
+
+                        zoomLevel -= delta
+                    }
+                    val ratio: Float = (1 / zoomLevel).toFloat()
+                    val croppedWidth = rect!!.width() - (rect.width() * ratio).roundToInt()
+                    val croppedHeight = rect.height() - (rect.height() * ratio).roundToInt()
+                    zoom = Rect(croppedWidth/2, croppedHeight/2, rect.width() - croppedWidth/2, rect.height() - croppedHeight/2)
+
+                    previewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, zoom)
+
+//                        unlockFocus()
+                    captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
+                }
+                fingerSpacing = currentFingerSpacing
+
+            }else{
+                return@OnTouchListener true
+            }
+            return@OnTouchListener true
+        }catch (e: Exception){
+            Log.d(TAG, e.toString())
+            return@OnTouchListener true
+        }
     }
 
     /**
@@ -136,7 +180,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     /**
      * An [ImageReader] that handles still image capture.
      */
-    private lateinit var imageReader: ImageReader
+    private lateinit var mImageReader: ImageReader
+
+    private var mRawImageReader: ImageReader? = null
 
     /**
      * This is the output file for our picture.
@@ -308,6 +354,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             process(result)
         }
 
+        override fun onCaptureSequenceAborted(session: CameraCaptureSession, sequenceId: Int) {
+            super.onCaptureSequenceAborted(session, sequenceId)
+            Log.i(TAG, "onCaptureSequenceAborted")
+        }
+
     }
 
     override fun onCreateView(
@@ -340,7 +391,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         val isoCustomSeekBar: CustomSeekBar = view.findViewById(R.id.isoCustomSeekBar)
         isoCustomSeekBar.text = "ISO $sensorSensitivity"
         isoCustomSeekBar.setOnTouchListener { _, _ ->
-            var progress = isoCustomSeekBar.progress
+            val progress = isoCustomSeekBar.progress
             val range = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)
             val max1 = range!!.upper //10000
             val min1 = range.lower //100
@@ -358,7 +409,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         val tvCustomSeekBar: CustomSeekBar = view.findViewById(R.id.tvCustomSeekBar)
         tvCustomSeekBar.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / exposureTime)}s"
         tvCustomSeekBar.setOnTouchListener{_, _ ->
-            var progress = tvCustomSeekBar.progress
+            val progress = tvCustomSeekBar.progress
             val range = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
             val max = range!!.upper
             val min = range.lower
@@ -386,79 +437,41 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
             previewRequestBuilder.set(CaptureRequest.LENS_APERTURE, aperture)
             captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
-            this.aperture = aperture!!
+            this.aperture = aperture
             avCustomSeekBar.text = "F$aperture"
             saveData()
             false
         }
 
-        var imageGalleryUiModelList:MutableMap<String, ArrayList<ImageGalleryUiModel>> = mutableMapOf()
+        val imageView: ImageView = view.findViewById(R.id.btnPhotoBox)
+        try {
+            val imageGalleryUiModelList: MutableMap<String, ArrayList<ImageGalleryUiModel>> =
+                MediaHelper.getImageGallery(this.context!!)
+            imageGalleryUiModelList.forEach {
+                Log.i("Camera2Fragment", it.key + ": " + it.value)
+            }
 
-        imageGalleryUiModelList = MediaHelper.getImageGallery(this.context!!)
-        imageGalleryUiModelList.forEach {
-            Log.i("Camera2Fragment", it.key + ": " + it.value)
+            val imageList:ArrayList<ImageGalleryUiModel> = imageGalleryUiModelList["Camera"]!!
+            file = File(imageList[0].imageUri)
+            imageView.setImageBitmap(BitmapFactory.decodeFile(file.absolutePath))
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
 
         progressbarShutter = view.findViewById(R.id.progressBar_shutter)
 
-        var imageList:ArrayList<ImageGalleryUiModel> = imageGalleryUiModelList["Camera"]!!
-        var imageView: ImageView = view.findViewById(R.id.btnPhotoBox)
-        file = File(imageList[0].imageUri)
-        imageView.setImageBitmap(BitmapFactory.decodeFile(file.absolutePath))
-
         val stamp = view.findViewById<View>(R.id.android)
         stamp.setOnClickListener(this)
+
         val gradation = view.findViewById<View>(R.id.gradation)
         gradation.setOnClickListener(this)
+
         focus = view.findViewById(R.id.focus_view)
         textureView = view.findViewById(R.id.texture)
 
-        textureView.setOnTouchListener { v, event ->
-            try{
-//                focus.showFocus(event.x.toInt(), event.y.toInt())
+        textureView.setOnTouchListener(surfaceTextureTouchListener)
 
-                var maxZoom = characteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM)
-                var rect: Rect? = characteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE)
-//                rect ?: return@setOnTouchListener true
-
-                var currentFingerSpacing: Float
-
-                if (event.pointerCount > 1){
-                    currentFingerSpacing = getFingerSpacing(event)
-                    var delta: Float = 0.05f
-                    if (fingerSpacing != 0f){
-                        if (currentFingerSpacing > fingerSpacing){
-                            if((maxZoom!! - zoomLevel) <= delta)
-                                delta = maxZoom - zoomLevel
-
-                            zoomLevel += delta
-                        }
-                        else if (currentFingerSpacing < fingerSpacing){
-                            if ((zoomLevel - delta) < 1f)
-                                delta = zoomLevel - 1f
-
-                            zoomLevel -= delta
-                        }
-                        var ratio: Float = (1 / zoomLevel).toFloat()
-                        var croppedWidth = rect!!.width() - (rect.width() * ratio).roundToInt()
-                        var croppedHeight = rect.height() - (rect.height() * ratio).roundToInt()
-                        zoom = Rect(croppedWidth/2, croppedHeight/2, rect.width() - croppedWidth/2, rect.height() - croppedHeight/2)
-                        previewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, zoom)
-
-//                        unlockFocus()
-                        captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
-                    }
-                    fingerSpacing = currentFingerSpacing
-
-                }else{
-                    return@setOnTouchListener true
-                }
-                return@setOnTouchListener true
-            }catch (e: Exception){
-                Log.d(TAG, e.toString())
-                return@setOnTouchListener true
-            }
-        }
+        ConnectToDevice(context!!).execute()        // connect to bluetooth device
     }
 
     private fun getFingerSpacing(event: MotionEvent): Float{
@@ -496,7 +509,26 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 // Perform I/O heavy operations in a different scope
                 lifecycleScope.launch(Dispatchers.IO) {
-                    takePhoto().use { result ->
+                    mRawImageReader?.let {
+                        takePhoto(it).use { result ->
+                            Log.d(TAG, "Result received: $result")
+
+                            // Save the result to disk
+                            val output = saveResult(result)
+                            Log.d(TAG, "Image saved: ${output.absolutePath}")
+
+                            MediaScannerConnection.scanFile(
+                                context, arrayOf(output.path),
+                                arrayOf("image/", "image/x-adobe-dng")
+                            ) { path, _ ->
+                                Log.i(TAG, "onScanCompleted : $path")
+                            }
+                        }
+                    }
+                }
+
+                lifecycleScope.launch(Dispatchers.IO) {
+                    takePhoto(mImageReader).use { result ->
                         Log.d(TAG, "Result received: $result")
 
                         // Save the result to disk
@@ -504,7 +536,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         Log.d(TAG, "Image saved: ${output.absolutePath}")
 
                         // If the result is a JPEG file, update EXIF metadata with orientation info
-                        if (output.extension == "jpg") {
+                        if (output.name.contains("jpg")) {
                             val exif = ExifInterface(output.absolutePath)
                             exif.setAttribute(
                                 ExifInterface.TAG_ORIENTATION, result.orientation.toString()
@@ -513,10 +545,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             Log.d(TAG, "EXIF metadata saved: ${output.absolutePath}")
                         }
 
+                        MediaScannerConnection.scanFile(context, arrayOf(output.path),
+                            arrayOf("image/jpeg")) { path, _ ->
+                            Log.i(TAG, "onScanCompleted : $path")
+                        }
                     }
                 }
-                view.findViewById<View>(R.id.btnPicture)
-                    .post { view.findViewById<View>(R.id.btnPicture).isEnabled = true }
+
+                Log.i(TAG, "SENSOR_INFO_COLOR_FILTER_ARRANGEMENT: " + characteristics.get(CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT))
 
                 imageReaderHandler.postDelayed({
                     progressbarShutter?.max = 100
@@ -527,6 +563,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
                     val currentDateTime: String = dateFormat.format(Date()) // Find todays date
                     historyViewModel.insert(History(currentDateTime, 20000, 20202020, "Warm Red"))
+
+                    view.findViewById<View>(R.id.btnPicture)
+                        .post { view.findViewById<View>(R.id.btnPicture).isEnabled = true }
                 }, 3000)
             }
             R.id.btnAuto -> {
@@ -580,6 +619,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     btnColorTemperature.setImageResource(R.drawable.ic_color_temperature)
                 }
 
+                sendCommand(MBITSP2020().composeCommand())
 //                openCamera(textureView.width, textureView.height)
             }
             R.id.btnManual ->{
@@ -643,6 +683,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         super.onDestroy()
         cameraThread.quitSafely()
         imageReaderThread.quitSafely()
+        disconnect()
     }
 
     /**
@@ -733,16 +774,39 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP
                 ) ?: continue
 
-                // For still image captures, we use the largest available size.
-                val largest = Collections.max(
-                    listOf(*map.getOutputSizes(RAW_FORMAT)),
-                    CompareSizesByArea()
-                )
 
-                imageReader = ImageReader.newInstance(
-                    largest.width, largest.height,
-                    RAW_FORMAT, /*maxImages*/ IMAGE_BUFFER_SIZE
-                )
+                // For still image captures, we use the largest available size.
+
+                val capabilities: IntArray? = characteristics.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES)
+
+                val largestRawImageSize: Size?
+                if (capabilities?.contains(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_RAW)!!){
+                    Log.i(TAG, "This device does support Raw")
+
+                    largestRawImageSize = Collections.max(
+                        listOf(*map.getOutputSizes(RAW_FORMAT)),
+                        CompareSizesByArea())
+
+                    mRawImageReader = ImageReader.newInstance(
+                        largestRawImageSize.width,
+                        largestRawImageSize.height,
+                        RAW_FORMAT,
+                        IMAGE_BUFFER_SIZE)
+                }else{
+                    Log.i(TAG, "This device doesn't support Raw")
+
+                    largestRawImageSize = null
+                    mRawImageReader = null
+                }
+
+                val largestImageSize = Collections.max(
+                    listOf(*map.getOutputSizes(JPEG_FORMAT)),
+                    CompareSizesByArea())
+
+                mImageReader = ImageReader.newInstance(
+                    largestImageSize.width,
+                    largestImageSize.height,
+                    JPEG_FORMAT, IMAGE_BUFFER_SIZE)
 
                 // Find out if we need to swap dimension to get the preview size relative to sensor
                 // coordinate.
@@ -764,12 +828,23 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 // Danger, W.R.! Attempting to use too large a preview size could  exceed the camera
                 // bus' bandwidth limitation, resulting in gorgeous previews but the storage of
                 // garbage capture data.
-                previewSize = chooseOptimalSize(
-                    map.getOutputSizes(SurfaceTexture::class.java),
-                    rotatedPreviewWidth, rotatedPreviewHeight,
-                    maxPreviewWidth, maxPreviewHeight,
-                    largest
-                )
+
+                previewSize = if(largestRawImageSize != null) {
+                    chooseOptimalSize(
+                        map.getOutputSizes(SurfaceTexture::class.java),
+                        rotatedPreviewWidth, rotatedPreviewHeight,
+                        maxPreviewWidth, maxPreviewHeight,
+                        largestRawImageSize
+                    )
+                } else {
+                    chooseOptimalSize(
+                        map.getOutputSizes(SurfaceTexture::class.java),
+                        rotatedPreviewWidth, rotatedPreviewHeight,
+                        maxPreviewWidth, maxPreviewHeight,
+                        largestImageSize
+                    )
+                }
+
 
                 // We fit the aspect ratio of TextureView to the size of preview we picked.
                 if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
@@ -796,7 +871,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             ErrorDialog.newInstance(getString(R.string.camera_error))
                 .show(childFragmentManager, FRAGMENT_DIALOG)
         }
-
     }
 
     /**
@@ -880,9 +954,15 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             )
             previewRequestBuilder.addTarget(surface)
 
+            val outputs = if(mRawImageReader == null) {
+                listOf(surface, mImageReader.surface)
+            } else {
+                listOf(surface, mImageReader.surface, mRawImageReader!!.surface)
+            }
+
             // Here, we create a CameraCaptureSession for camera preview.
             cameraDevice?.createCaptureSession(
-                listOf(surface, imageReader?.surface),
+                outputs,
                 object : CameraCaptureSession.StateCallback() {
 
                     override fun onConfigured(cameraCaptureSession: CameraCaptureSession) {
@@ -911,6 +991,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             if (sensorSensitivity != 0) previewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, sensorSensitivity)     //20200331 Craig return last state
                             if (exposureTime.toInt() != 0)  previewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, exposureTime)
                             if (aperture.toInt() != 0)  previewRequestBuilder.set(CaptureRequest.LENS_APERTURE, aperture)
+                            if (zoom != null)   previewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, zoom)
 
 //                            unlockFocus()
                             captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
@@ -956,7 +1037,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
             // Tell #captureCallback to wait for the precapture sequence to be set.
             state = STATE_WAITING_PRECAPTURE
-            captureSession?.capture(
+            captureSession.capture(
                 previewRequestBuilder.build(), captureCallback,
                 backgroundHandler
             )
@@ -978,7 +1059,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             val captureBuilder = cameraDevice?.createCaptureRequest(
                 CameraDevice.TEMPLATE_STILL_CAPTURE
             )?.apply {
-                addTarget(imageReader?.surface!!)
+                addTarget(mImageReader.surface)
+
+                mImageReader.let {
+                    addTarget(it.surface)
+                }
 
                 // Sensor orientation is 90 for most devices, or 270 for some devices (eg. Nexus 5X)
                 // We have to take that into account and rotate JPEG properly.
@@ -986,7 +1071,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 // For devices with orientation of 270, we need to rotate the JPEG 180 degrees.
                 set(
                     CaptureRequest.JPEG_ORIENTATION,
-                    (ORIENTATIONS.get(rotation) + sensorOrientation + 270) % 360
+                    sensorToDeviceRotation(characteristics, rotation)
                 )
 
                 // Use the same AE and AF modes as the preview.
@@ -1009,7 +1094,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 }
             }
 
-            captureSession?.apply {
+            captureSession.apply {
                 stopRepeating()
                 abortCaptures()
                 capture(captureBuilder?.build()!!, captureCallback, null)
@@ -1034,13 +1119,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
             setAutoFlash(previewRequestBuilder)
 
-            captureSession?.capture(
+            captureSession.capture(
                 previewRequestBuilder.build(), captureCallback,
                 backgroundHandler
             )
             // After this, the camera will go back to the normal state of preview.
             state = STATE_PREVIEW
-            captureSession?.setRepeatingRequest(
+            captureSession.setRepeatingRequest(
                 previewRequest, captureCallback,
                 backgroundHandler
             )
@@ -1061,7 +1146,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             )
             // Tell #captureCallback to wait for the lock.
             state = STATE_WAITING_LOCK
-            captureSession?.capture(
+            captureSession.capture(
                 previewRequestBuilder.build(), captureCallback,
                 backgroundHandler
             )
@@ -1075,7 +1160,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
      * template. It performs synchronization between the [CaptureResult] and the [Image] resulting
      * from the single capture, and outputs a [CombinedCaptureResult] object.
      */
-    private suspend fun takePhoto():
+    private suspend fun takePhoto(imageReader: ImageReader):
             CombinedCaptureResult = suspendCoroutine { cont ->
 
         // Flush any images left in the image reader
@@ -1091,12 +1176,21 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             imageQueue.add(image)
         }, imageReaderHandler)
 
-        val captureRequest = captureSession.device.createCaptureRequest(
-            CameraDevice.TEMPLATE_STILL_CAPTURE
-        ).apply { addTarget(imageReader.surface) }
+        val captureRequest = captureSession.device.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE)
+        if(mRawImageReader != null) captureRequest.addTarget(mRawImageReader!!.surface)
+        captureRequest.addTarget(mImageReader.surface)
+
+        val rotation = activity!!.windowManager.defaultDisplay.rotation
 
         //captureRequest.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_OFF)
         captureRequest.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
+        captureRequest.set(CaptureRequest.SCALER_CROP_REGION, zoom)
+        if (sensorSensitivity != 0) captureRequest.set(CaptureRequest.SENSOR_SENSITIVITY, sensorSensitivity)     //20200331 Craig return last state
+        if (exposureTime.toInt() != 0)  captureRequest.set(CaptureRequest.SENSOR_EXPOSURE_TIME, exposureTime)
+        if (aperture.toInt() != 0)  captureRequest.set(CaptureRequest.LENS_APERTURE, aperture)
+
+        captureRequest.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation));
+        Log.i(TAG, "takePhoto, rotation: $rotation")
 
         captureSession.capture(
             captureRequest.build(),
@@ -1154,13 +1248,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                 imageQueue.take().close()
                             }
 
-//                        // Compute EXIF orientation metadata
-//                        val rotation = relativeOrientation.value ?: 0
-//                        val mirrored = characteristics.get(CameraCharacteristics.LENS_FACING) ==
-//                                CameraCharacteristics.LENS_FACING_FRONT
-//                        val exifOrientation = computeExifOrientation(rotation, mirrored)
-
-                            // Build the result and resume progress
 
                             cont.resume(
                                 CombinedCaptureResult(
@@ -1177,6 +1264,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         )
     }
 
+
     /** Helper function used to save a [CombinedCaptureResult] into a [File] */
     private suspend fun saveResult(result: CombinedCaptureResult): File = suspendCoroutine { cont ->
         when (result.format) {
@@ -1185,9 +1273,17 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             ImageFormat.JPEG, ImageFormat.DEPTH_JPEG -> {
                 val buffer = result.image.planes[0].buffer
                 val bytes = ByteArray(buffer.remaining()).apply { buffer.get(this) }
+
                 try {
                     val output = createFile("jpg")
-                    FileOutputStream(output).use { it.write(bytes) }
+//                    FileOutputStream(output).use { it.write(bytes) }
+
+                    val temp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size).rotate(90f)
+                    temp.compress(Bitmap.CompressFormat.JPEG, 100, FileOutputStream(output))
+
+                    calculateColorTemp(bytes)
+                    calculateRefreshRate(bytes)
+
                     cont.resume(output)
                 } catch (exc: IOException) {
                     Log.e(TAG, "Unable to write JPEG image to file", exc)
@@ -1214,13 +1310,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                     Log.i(TAG,"Dng orientation: "+ result.orientation.toString())
 
-                    Log.i(TAG, output.canonicalPath)
-                    var exif = ExifInterface(output.canonicalPath)
-                    exif.setAttribute(ExifInterface.TAG_APERTURE_VALUE, exposureTime.toString())
-                    exif.setAttribute(ExifInterface.TAG_RW2_ISO, sensorSensitivity.toString())
-                    exif.setAttribute(ExifInterface.TAG_DATETIME, date.toString())
-                    exif.saveAttributes()
-
                     cont.resume(output)
 
                 } catch (exc: IOException) {
@@ -1238,6 +1327,18 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         }
     }
 
+    private fun sensorToDeviceRotation(cameraCharacteristics: CameraCharacteristics, deviceOrientation: Int): Int {
+        val sensorOrientation = cameraCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION)
+
+        var deviceOrientation = ORIENTATIONS.get(deviceOrientation)
+
+        if(cameraCharacteristics.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_FRONT){
+            deviceOrientation = -deviceOrientation
+        }
+
+        return ((sensorOrientation?.minus(deviceOrientation) ?: 0) + 360) % 360
+    }
+
     private fun average(byteArray: ByteArray): Double {
         var sum: Double = 0.0
         var count: Int = 0
@@ -1250,6 +1351,36 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             ++count
         }
         return if (count == 0) Double.NaN else sum / (count / 2)
+    }
+
+    private fun calculateRefreshRate(bytes: ByteArray) {
+        val temp  = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        val bitmap = temp.rotate(90f)
+        val mat = Mat()
+        val canny = mat.canny(bitmap) { it.compress(Bitmap.CompressFormat.JPEG, 80, FileOutputStream(createFile("jpg")))}
+    }
+
+    private fun calculateColorTemp(bytes: ByteArray) {
+        val temp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        val bitmap = temp.rotate(90f)
+        val argb = bitmap.getPixel(bitmap.width / 2, bitmap.height / 2)
+        var red = Color.red(argb)
+        var green = Color.green(argb)
+        var blue = Color.blue(argb)
+        var n: Double = ((0.23881) * red + (0.25499) * green - (0.58291) * blue) / ((0.11109) * red - (0.85406) * green + (0.52289) * blue)
+        var CCT = 449 * n.pow(3) + 3525 * n.pow(2) + 6823.3 * n + 5520.33
+        Log.i(TAG, "CCT: $CCT")
+
+//        bitmap.compress(Bitmap.CompressFormat.PNG, 85, FileOutputStream(file))
+    }
+
+    private fun calculateContrast(bytes: ByteArray) {
+
+    }
+
+    fun Bitmap.rotate(degree: Float): Bitmap {
+        val matrix = Matrix().apply { postRotate(degree) }
+        return Bitmap.createBitmap(this, 0, 0, width, height, matrix, true)
     }
 
     private fun createFile(extension: String): File {
@@ -1327,11 +1458,26 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         }
     }
 
-    private fun sendCommand(input: String){
+    private fun sendCommand(bytes: ByteArray){
         if (m_bluetoothSocket != null){
             try {
-                m_bluetoothSocket!!.outputStream.write(input.toByteArray())
+                m_bluetoothSocket!!.outputStream.write(bytes)
+                Log.i(TAG, "Bluetooth is sent data")
             }catch (e: IOException) {
+                e.printStackTrace()
+                disconnect()
+                ConnectToDevice(context!!).execute()
+            }
+        }
+    }
+
+    private fun readCommand() {
+        if (m_bluetoothSocket != null) {
+            try {
+                val bytes: ByteArray = ByteArray(0)
+                m_bluetoothSocket!!.inputStream.read(bytes)
+
+            } catch (e: IOException) {
                 e.printStackTrace()
             }
         }
@@ -1343,6 +1489,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 m_bluetoothSocket!!.close()
                 m_bluetoothSocket = null
                 m_isConnected = false
+                Log.i(TAG, "Bluetooth is disconnected")
             } catch (e: IOException) {
                 e.printStackTrace()
             }
@@ -1365,6 +1512,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     m_bluetoothSocket = device.createInsecureRfcommSocketToServiceRecord(m_myUUID)
                     BluetoothAdapter.getDefaultAdapter().cancelDiscovery()
                     m_bluetoothSocket!!.connect()
+                    Log.i(TAG, "Bluetooth is connected")
                 }
             } catch (e: IOException) {
                 connectSuccess = false
@@ -1376,7 +1524,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         override fun onPostExecute(result: String?) {
             super.onPostExecute(result)
             if(!connectSuccess) {
-                Log.i("data", "couldn't connect")
+                Log.i(TAG, "couldn't connect")
             } else {
                 m_isConnected = true
             }
@@ -1388,6 +1536,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
          * Conversion from screen rotation to JPEG orientation.
          */
         private val ORIENTATIONS = SparseIntArray()
+        init {
+            ORIENTATIONS.append(Surface.ROTATION_0, 0)
+            ORIENTATIONS.append(Surface.ROTATION_90, 90)
+            ORIENTATIONS.append(Surface.ROTATION_180, 180)
+            ORIENTATIONS.append(Surface.ROTATION_270, 270)
+        }
 
         private const val FRAGMENT_DIALOG = "dialog"
 
