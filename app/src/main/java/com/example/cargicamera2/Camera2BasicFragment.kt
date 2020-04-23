@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
+import android.content.res.AssetManager
 import android.content.res.Configuration
 import android.graphics.*
 import android.hardware.camera2.*
@@ -37,13 +38,21 @@ import com.example.cargicamera2.ui.AutoFitTextureView
 import com.example.cargicamera2.ui.ErrorDialog
 import com.example.cargicamera2.ui.FocusView
 import com.example.cargicamera2.ui.GridLineView
+import com.example.extensions.adaptiveThreshold
 import com.example.extensions.canny
+import com.example.extensions.toBitmap
+import com.example.extensions.toMat
 import com.example.imagegallery.model.ImageGalleryUiModel
 import com.example.imagegallery.service.MediaHelper
 import com.example.lib.CustomSeekBar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import org.opencv.core.Core
 import org.opencv.core.Mat
+import org.opencv.core.MatOfByte
+import org.opencv.core.Scalar
+import org.opencv.imgcodecs.Imgcodecs
+import org.opencv.imgproc.Imgproc
 import java.io.*
 import java.text.SimpleDateFormat
 import java.util.*
@@ -228,6 +237,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     /** [Handler] corresponding to [imageReaderThread] */
     private val imageReaderHandler = Handler(imageReaderThread.looper)
+
+    private val readCommandThread = HandlerThread("readCommandThread").apply { start() }
+    private val readCommandHandler = Handler(readCommandThread.looper)
 
     /** Live data listener for changes in the device orientation relative to the camera */
     private lateinit var relativeOrientation: OrientationLiveData
@@ -494,6 +506,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             textureView.surfaceTextureListener = surfaceTextureListener
         }
 
+        readCommandHandler.postDelayed(readCommandRunnable, 500)
         Log.i(TAG, "onResume")
     }
 
@@ -595,19 +608,45 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     btnContrast.setImageResource(R.drawable.ic_contrast)
                 }
 
-//                openCamera(textureView.width, textureView.height)
+                sendCommand(MBITSP2020().let{
+                    it.setPattern(MBITSP2020.Pattern.CONTRAST_4)
+                    it.setDisplayWidth(1920)
+                    it.setDisplayHeight(1080)
+                    it.setDisplayStartX(0)
+                    it.setDisplayStartY(0)
+                    it.setModuleWidth(64)
+                    it.setModuleHeight(40)
+                    it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_1, 255.toByte(), 0, 0)
+                    it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_2, 255.toByte(), 255.toByte(), 0)
+                    it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_3, 255.toByte(), 0, 255.toByte())
+                    it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, 255.toByte(), 221.toByte(), 128.toByte())
+                    it.composeCommand()
+                })
             }
             R.id.btnRefreshRate -> {
                 val btnRefreshRate = view.findViewById<ImageView>(R.id.btnRefreshRate)
                 isRefreshRateEnable = !isRefreshRateEnable
 
                 if(isRefreshRateEnable){
-                    btnRefreshRate.setBackgroundResource(R.drawable.ic_refresh_rate_selection)
+                    btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate_selection)
                 }else{
-                    btnRefreshRate.setBackgroundResource(R.drawable.ic_refresh_rate)
+                    btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate)
                 }
 
-//                openCamera(textureView.width, textureView.height)
+                sendCommand(MBITSP2020().let{
+                    it.setPattern(MBITSP2020.Pattern.REFRESH_RATE)
+                    it.setDisplayWidth(1920)
+                    it.setDisplayHeight(1080)
+                    it.setDisplayStartX(0)
+                    it.setDisplayStartY(0)
+                    it.setModuleWidth(64)
+                    it.setModuleHeight(40)
+                    it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_1, 255.toByte(), 0, 0)
+                    it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_2, 255.toByte(), 255.toByte(), 0)
+                    it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_3, 255.toByte(), 0, 255.toByte())
+                    it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, 255.toByte(), 221.toByte(), 128.toByte())
+                    it.composeCommand()
+                })
             }
             R.id.btnColorTemperature -> {
                 val btnColorTemperature = view.findViewById<ImageView>(R.id.btnColorTemperature)
@@ -619,8 +658,20 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     btnColorTemperature.setImageResource(R.drawable.ic_color_temperature)
                 }
 
-                sendCommand(MBITSP2020().composeCommand())
-//                openCamera(textureView.width, textureView.height)
+                sendCommand(MBITSP2020().let{
+                    it.setPattern(MBITSP2020.Pattern.COLOR_TEMPERATURE)
+                    it.setDisplayWidth(1920)
+                    it.setDisplayHeight(1080)
+                    it.setDisplayStartX(0)
+                    it.setDisplayStartY(0)
+                    it.setModuleWidth(64)
+                    it.setModuleHeight(40)
+                    it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_1, 255.toByte(), 0, 0)
+                    it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_2, 255.toByte(), 255.toByte(), 0)
+                    it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_3, 255.toByte(), 0, 255.toByte())
+                    it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, 255.toByte(), 221.toByte(), 128.toByte())
+                    it.composeCommand()
+                })
             }
             R.id.btnManual ->{
                 val btnManual = view.findViewById<ImageButton>(R.id.btnManual)
@@ -671,6 +722,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     override fun onStop() {
         super.onStop()
+        readCommandHandler.removeCallbacks(readCommandRunnable)
         Log.i(TAG, "onStop")
     }
 
@@ -1189,7 +1241,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         if (exposureTime.toInt() != 0)  captureRequest.set(CaptureRequest.SENSOR_EXPOSURE_TIME, exposureTime)
         if (aperture.toInt() != 0)  captureRequest.set(CaptureRequest.LENS_APERTURE, aperture)
 
-        captureRequest.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation));
+        captureRequest.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation))
         Log.i(TAG, "takePhoto, rotation: $rotation")
 
         captureSession.capture(
@@ -1204,6 +1256,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     super.onCaptureStarted(session, request, timestamp, frameNumber)
                     if(isSoundEnable) {
                         cameraHandler.post{ mediaActionSound.play(MediaActionSound.SHUTTER_CLICK) }
+                        Log.i(TAG, "onCaptureStarted")
                     }
                 }
 
@@ -1303,6 +1356,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     val byteArray = ByteArray(byteBuffer.remaining())
                     byteBuffer.get(byteArray)
 
+//                    val mImageMat = Imgcodecs.imdecode(MatOfByte(byteArray), Imgcodecs.CV_LOAD_IMAGE_UNCHANGED)
+
+                    calculateContrast(byteArray)
                     var aver = average(byteArray)
                     Log.i(TAG, "Image size: ${result.image.width} x ${result.image.height}")
                     Log.i(TAG, "Buffer size: ${byteArray.size}")
@@ -1356,8 +1412,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private fun calculateRefreshRate(bytes: ByteArray) {
         val temp  = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
         val bitmap = temp.rotate(90f)
-        val mat = Mat()
-        val canny = mat.canny(bitmap) { it.compress(Bitmap.CompressFormat.JPEG, 80, FileOutputStream(createFile("jpg")))}
+        //val mat = Mat()
+        //val canny = mat.canny(bitmap) { it.compress(Bitmap.CompressFormat.JPEG, 80, FileOutputStream(createFile("jpg")))}
+
+        findLines(bitmap).toBitmap().compress(Bitmap.CompressFormat.JPEG, 80, FileOutputStream(createFile("jpg")))
+
+        Log.i(TAG, "Find circles fin!")
     }
 
     private fun calculateColorTemp(bytes: ByteArray) {
@@ -1381,6 +1441,72 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     fun Bitmap.rotate(degree: Float): Bitmap {
         val matrix = Matrix().apply { postRotate(degree) }
         return Bitmap.createBitmap(this, 0, 0, width, height, matrix, true)
+    }
+
+    private fun findCircles(bitmap: Bitmap): Mat {
+        val image = bitmap.toMat()
+        val hsvImage = Mat()
+        val hueImage = Mat()
+        val circles = Mat()
+
+        Imgproc.medianBlur(image, image, 3)
+        Imgproc.cvtColor(image, hsvImage, Imgproc.COLOR_RGB2HSV)
+
+        val lowerRedHueRange = Mat()
+        val upperRedHueRange = Mat()
+        Core.inRange(hsvImage, Scalar(0.0, 150.0, 100.0), Scalar(10.0, 255.0, 255.0), lowerRedHueRange)
+        Core.inRange(hsvImage, Scalar(160.0, 150.0, 100.0), Scalar(179.0, 255.0, 255.0), upperRedHueRange)
+        Core.addWeighted(lowerRedHueRange, 1.0, upperRedHueRange, 1.0, 0.0, hueImage)
+
+        Imgproc.GaussianBlur(hueImage, hueImage, org.opencv.core.Size(9.0, 9.0), 2.0, 2.0)
+        Imgproc.HoughCircles(hueImage, circles, Imgproc.CV_HOUGH_GRADIENT, 1.0,
+            hueImage.rows() / 8.toDouble(), 100.0, 20.0, 0, 0)
+
+        if (circles.cols() > 0) {
+            for (x in 0 until Math.min(circles.cols(), 5)) {
+                val circleVec = circles.get(0, x) ?: break
+                val center = org.opencv.core.Point(circleVec[0].toInt().toDouble(), circleVec[1].toInt().toDouble())
+                val radius = circleVec[2].toInt()
+
+                Imgproc.circle(image, center, 3, Scalar(0.0, 255.0, 0.0), 5)
+                Imgproc.circle(image, center, radius, Scalar(0.0, 255.0, 0.0), 2)
+            }
+        }
+
+        return image
+    }
+
+    private fun findLines(bitmap: Bitmap): Mat {
+        val image = bitmap.toMat()
+        val edges = Mat()
+        val lines = Mat()
+
+        Imgproc.cvtColor(image, edges, Imgproc.COLOR_BGR2GRAY)
+        Imgproc.GaussianBlur(edges, edges, org.opencv.core.Size(15.0, 15.0), 0.5)
+        Imgproc.erode(edges, edges, Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, org.opencv.core.Size(2.0, 2.0)))
+        Imgproc.dilate(edges, edges, Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, org.opencv.core.Size(2.0, 2.0)))
+        Imgproc.Canny(edges, edges, 100.0, 200.0, 3)
+
+        val threshold = 80
+        val minLineSize = 0.0
+        val linGap = 0.0
+
+        Imgproc.HoughLinesP(edges, lines, 1.0, Math.PI / 180, threshold, minLineSize, linGap)
+
+        if(lines.rows() > 0) {
+            Log.i(TAG, "line count: ${lines.rows()}")
+            for (y in 0 until lines.rows()) {
+                val vec = lines.get(y, 0)
+                val x1 = vec[0]
+                val y1 = vec[1]
+                val x2 = vec[2]
+                val y2 = vec[3]
+                val start = org.opencv.core.Point(x1, y1)
+                val end = org.opencv.core.Point(x2, y2)
+                Imgproc.line(image, start, end, Scalar(255.0, 0.0, 0.0), 3)
+            }
+        }
+        return image
     }
 
     private fun createFile(extension: String): File {
@@ -1420,7 +1546,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
             intent.addCategory(Intent.CATEGORY_OPENABLE)
             intent.type = "image/*"
-            startActivityForResult(intent, PICK_IMAGE_MULTIPLE);
+            startActivityForResult(intent, PICK_IMAGE_MULTIPLE)
         }
     }
 
@@ -1471,16 +1597,23 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         }
     }
 
-    private fun readCommand() {
+    private val readCommandRunnable = Runnable {
+       readCommand()
+    }
+
+    private fun readCommand(){
         if (m_bluetoothSocket != null) {
             try {
-                val bytes: ByteArray = ByteArray(0)
+                val bytes: ByteArray = ByteArray(20)
                 m_bluetoothSocket!!.inputStream.read(bytes)
-
+                Log.i(TAG, "Bluetooth received: ${bytes[0]}")
             } catch (e: IOException) {
                 e.printStackTrace()
+                readCommandHandler.removeCallbacks(readCommandRunnable)
             }
         }
+//        readCommandHandler.postDelayed(readCommandRunnable, 500)
+        Log.i(TAG, "readCommand")
     }
 
     private fun disconnect(){
@@ -1499,10 +1632,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private class ConnectToDevice (c: Context): AsyncTask<Void, Void, String>() {
         private var connectSuccess: Boolean = true
         private val context: Context = c
-
-        override fun onPreExecute() {
-            super.onPreExecute()
-        }
 
         override fun doInBackground(vararg params: Void?): String? {
             try {

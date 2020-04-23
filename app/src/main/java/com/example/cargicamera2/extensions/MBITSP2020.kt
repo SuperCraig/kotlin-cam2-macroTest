@@ -1,7 +1,7 @@
 package com.example.cargicamera2.extensions
 
 class MBITSP2020 {
-    val header = byteArrayOf(
+    private val header = byteArrayOf(
         'M'.toByte(), 'B'.toByte(),
         'I'.toByte(), 'T'.toByte(), 'S'.toByte(), 'P'.toByte(), 2, 0, 2, 0
     )
@@ -26,7 +26,21 @@ class MBITSP2020 {
     private lateinit var grayScale3: ByteArray
     private lateinit var grayScale4: ByteArray
 
-    fun getPattern(): ByteArray {
+    init {
+        pattern = Pattern.CONTRAST_2
+        setDisplayWidth(1920)
+        setDisplayHeight(1080)
+        setDisplayStartX(0)
+        setDisplayStartY(0)
+        setModuleWidth(64)
+        setModuleHeight(40)
+        setGrayScale(GrayScaleSets.GRAY_SCALE_1, 0, 0, 0)
+        setGrayScale(GrayScaleSets.GRAY_SCALE_2, 0, 0, 0)
+        setGrayScale(GrayScaleSets.GRAY_SCALE_3, 0, 0, 0)
+        setGrayScale(GrayScaleSets.GRAY_SCALE_4, 0, 0, 0)
+    }
+
+    private fun getPattern(): ByteArray {
         return when (pattern) {
             Pattern.CONTRAST_2 -> byteArrayOf(0)
             Pattern.CONTRAST_4 -> byteArrayOf(1)
@@ -40,7 +54,7 @@ class MBITSP2020 {
         this.pattern = pattern
     }
 
-    fun getDisplayWidth(): ByteArray {
+    private fun getDisplayWidth(): ByteArray {
         return displayWidth
     }
 
@@ -54,7 +68,7 @@ class MBITSP2020 {
         }
     }
 
-    fun getDisplayHeight(): ByteArray {
+    private fun getDisplayHeight(): ByteArray {
         return displayHeight
     }
 
@@ -68,7 +82,7 @@ class MBITSP2020 {
         }
     }
 
-    fun getDisplayStartX(): ByteArray {
+    private fun getDisplayStartX(): ByteArray {
         return displayStartX
     }
 
@@ -82,7 +96,7 @@ class MBITSP2020 {
         }
     }
 
-    fun getDisplayStartY(): ByteArray {
+    private fun getDisplayStartY(): ByteArray {
         return displayStartY
     }
 
@@ -96,7 +110,7 @@ class MBITSP2020 {
         }
     }
 
-    fun getModuleWidth(): ByteArray {
+    private fun getModuleWidth(): ByteArray {
         return moduleWidth
     }
 
@@ -110,7 +124,7 @@ class MBITSP2020 {
         }
     }
 
-    fun getModuleHeight(): ByteArray {
+    private fun getModuleHeight(): ByteArray {
         return moduleHeight
     }
 
@@ -124,31 +138,31 @@ class MBITSP2020 {
         }
     }
 
-    fun getGraySacle(pattern: Pattern): ByteArray {
+    private fun getGrayScale(pattern: Pattern): ByteArray {
         when (pattern) {
             Pattern.CONTRAST_2 -> {
-                setGrayScale(GrayScaleSets.GRAY_SCALE_1, 0, 0, 0)
-                setGrayScale(GrayScaleSets.GRAY_SCALE_2, 0, 0, 0)
+                setGrayScale(GrayScaleSets.GRAY_SCALE_1, grayScale1[0], grayScale1[1], grayScale1[2])
+                setGrayScale(GrayScaleSets.GRAY_SCALE_2, grayScale2[0], grayScale2[1], grayScale2[2])
                 setGrayScale(GrayScaleSets.GRAY_SCALE_3, 0, 0, 0)
                 setGrayScale(GrayScaleSets.GRAY_SCALE_4, 0, 0, 0)
             }
             Pattern.CONTRAST_4 -> {
-                setGrayScale(GrayScaleSets.GRAY_SCALE_1, 0, 0, 0)
-                setGrayScale(GrayScaleSets.GRAY_SCALE_2, 0, 0, 0)
-                setGrayScale(GrayScaleSets.GRAY_SCALE_3, 0, 0, 0)
-                setGrayScale(GrayScaleSets.GRAY_SCALE_4, 0, 0, 0)
+                setGrayScale(GrayScaleSets.GRAY_SCALE_1, grayScale1[0], grayScale1[1], grayScale1[2])
+                setGrayScale(GrayScaleSets.GRAY_SCALE_2, grayScale2[0], grayScale2[1], grayScale2[2])
+                setGrayScale(GrayScaleSets.GRAY_SCALE_3, grayScale3[0], grayScale3[1], grayScale3[2])
+                setGrayScale(GrayScaleSets.GRAY_SCALE_4, grayScale4[0], grayScale4[1], grayScale4[2])
             }
             Pattern.REFRESH_RATE -> {
-                setGrayScale(GrayScaleSets.GRAY_SCALE_1, 0, 0, 0)
+                setGrayScale(GrayScaleSets.GRAY_SCALE_1, grayScale1[0], grayScale1[1], grayScale1[2])
                 setGrayScale(GrayScaleSets.GRAY_SCALE_2, 0, 0, 0)
                 setGrayScale(GrayScaleSets.GRAY_SCALE_3, 0, 0, 0)
                 setGrayScale(GrayScaleSets.GRAY_SCALE_4, 0, 0, 0)
             }
             Pattern.COLOR_TEMPERATURE -> {
-                setGrayScale(GrayScaleSets.GRAY_SCALE_1, 0, 0, 0)
-                setGrayScale(GrayScaleSets.GRAY_SCALE_2, 0, 0, 0)
-                setGrayScale(GrayScaleSets.GRAY_SCALE_3, 0, 0, 0)
-                setGrayScale(GrayScaleSets.GRAY_SCALE_4, 0, 0, 0)
+                setGrayScale(GrayScaleSets.GRAY_SCALE_1, grayScale1[0], grayScale1[1], grayScale1[2])
+                setGrayScale(GrayScaleSets.GRAY_SCALE_2, grayScale2[0], grayScale2[1], grayScale2[2])
+                setGrayScale(GrayScaleSets.GRAY_SCALE_3, grayScale3[0], grayScale3[1], grayScale3[2])
+                setGrayScale(GrayScaleSets.GRAY_SCALE_4, grayScale4[0], grayScale4[1], grayScale4[2])
             }
         }
         return grayScale1 + grayScale2 + grayScale3 + grayScale4
@@ -164,14 +178,15 @@ class MBITSP2020 {
     }
 
     fun composeCommand(): ByteArray {
-        setPattern(Pattern.CONTRAST_2)
-        setDisplayWidth(1920)
-        setDisplayHeight(1080)
-        setDisplayStartX(19)
-        setDisplayStartY(20)
-        setModuleWidth(64)
-        setModuleHeight(40)
+        return header + getPattern() + getDisplayWidth() + getDisplayHeight() + getDisplayStartX() + getDisplayStartY() + getModuleWidth() + getModuleHeight() + getGrayScale(pattern)
+    }
 
-        return header + getPattern() + getDisplayWidth() + getDisplayHeight() + getDisplayStartX() + getDisplayStartY() + getModuleWidth() + getModuleHeight() + getGraySacle(pattern)
+    fun decomposeCommand(bytes: ByteArray): Boolean {
+        var index = 0
+        for (i in 0..header.size) {
+            if (header[i] != bytes[i]) return false
+            index += 1
+        }
+        return bytes[index + 1] == 0x06.toByte()
     }
 }

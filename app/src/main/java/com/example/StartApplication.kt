@@ -20,12 +20,12 @@ class StartApplication : Application() {
     private fun initOpenCV() {
         val wasEngineInitialized = OpenCVLoader.initDebug()
         if (wasEngineInitialized) {
-            Log.d(TAG, "The OpenCV was sucessfully initialized in debug mode using .so .libs.")
+            Log.d(TAG, "The OpenCV was successfully initialized in debug mode using .so .libs.")
         } else {
             initAsync(OpenCVLoader.OPENCV_VERSION_3_4_0, this, object : LoaderCallbackInterface {
                 override fun onManagerConnected(status: Int) {
                     when (status) {
-                        LoaderCallbackInterface.SUCCESS -> Log.d(TAG, "OpneCV sucessfully started")
+                        LoaderCallbackInterface.SUCCESS -> Log.d(TAG, "OpenCV successfully started")
                         LoaderCallbackInterface.INIT_FAILED -> Log.d(TAG, "Failed to start OpenCV.")
                         LoaderCallbackInterface.MARKET_ERROR -> Log.d(
                             TAG,
@@ -43,7 +43,7 @@ class StartApplication : Application() {
                 }
 
                 override fun onPackageInstall(operation: Int, callback: InstallCallbackInterface?) {
-                    Log.d(TAG, "OpenCV Manager sucessfully installed from Google Play.")
+                    Log.d(TAG, "OpenCV Manager successfully installed from Google Play.")
                 }
             })
         }
