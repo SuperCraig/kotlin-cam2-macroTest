@@ -45,6 +45,8 @@ import com.example.extensions.toMat
 import com.example.imagegallery.model.ImageGalleryUiModel
 import com.example.imagegallery.service.MediaHelper
 import com.example.lib.CustomSeekBar
+import kotlinx.android.synthetic.main.fragment_camera2_basic.*
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.opencv.core.Core
@@ -248,6 +250,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private var aperture: Float = 0f
     private var exposureTime: Long = 0
     private var sensorSensitivity: Int = 0
+
     private var isAutoEnable: Boolean = false
     private var isManualEnable: Boolean = false
     private var isContrastEnable: Boolean = false
@@ -268,7 +271,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     private val mediaActionSound: MediaActionSound = MediaActionSound()
 
-
+    private var shutterTimes = 0
     /**
      * [CameraDevice.StateCallback] is called when [CameraDevice] changes its state.
      */
@@ -470,6 +473,18 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             e.printStackTrace()
         }
 
+        if (isManualEnable) {
+            btnManual.setImageResource(R.drawable.ic_manual_selection)
+            avCustomSeekBar.visibility = View.VISIBLE
+            tvCustomSeekBar.visibility = View.VISIBLE
+            isoCustomSeekBar.visibility = View.VISIBLE
+        } else {
+            btnManual.setImageResource(R.drawable.ic_manual)
+            avCustomSeekBar.visibility = View.INVISIBLE
+            tvCustomSeekBar.visibility = View.INVISIBLE
+            isoCustomSeekBar.visibility = View.INVISIBLE
+        }
+
         progressbarShutter = view.findViewById(R.id.progressBar_shutter)
 
         val stamp = view.findViewById<View>(R.id.android)
@@ -538,6 +553,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             }
                         }
                     }
+
+                    shutterTimes += 1
+                    if (IMAGE_BUFFER_SIZE - shutterTimes <= 1) {
+                        openCamera(textureView.width, textureView.height)
+                        shutterTimes = 0
+                    }
                 }
 
                 lifecycleScope.launch(Dispatchers.IO) {
@@ -562,6 +583,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             arrayOf("image/jpeg")) { path, _ ->
                             Log.i(TAG, "onScanCompleted : $path")
                         }
+                    }
+
+                    shutterTimes += 1
+                    if (IMAGE_BUFFER_SIZE - shutterTimes <= 1) {
+                        openCamera(textureView.width, textureView.height)
+                        shutterTimes = 0
                     }
                 }
 
@@ -678,10 +705,19 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 isManualEnable = !isManualEnable
 
                 if(isManualEnable){
-                    btnManual.setBackgroundResource(R.drawable.ic_manual_selection)
+                    btnManual.setImageResource(R.drawable.ic_manual_selection)
+
+                    tvCustomSeekBar.visibility = View.VISIBLE
+                    avCustomSeekBar.visibility = View.VISIBLE
+                    isoCustomSeekBar.visibility = View.VISIBLE
                 }else{
-                    btnManual.setBackgroundResource(R.drawable.ic_manual)
+                    btnManual.setImageResource(R.drawable.ic_manual)
+
+                    tvCustomSeekBar.visibility = View.INVISIBLE
+                    avCustomSeekBar.visibility = View.INVISIBLE
+                    isoCustomSeekBar.visibility = View.INVISIBLE
                 }
+                saveData()
             }
             R.id.btnPhotoBox -> {
 //                pickPictureFromGallery()
@@ -1222,6 +1258,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
         // Start a new image queue
         val imageQueue = ArrayBlockingQueue<Image>(IMAGE_BUFFER_SIZE)
+
         imageReader.setOnImageAvailableListener({ reader ->
             val image = reader.acquireNextImage()
             Log.d(TAG, "Image available in queue: ${image.timestamp}")
@@ -1283,6 +1320,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                             // Dequeue images while timestamps don't match
                             val image = imageQueue.take()
+
                             // TODO(owahltinez): b/142011420
                             // if (image.timestamp != resultTimestamp) continue
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
@@ -1295,12 +1333,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             imageReaderHandler.removeCallbacks(timeoutRunnable)
                             imageReader.setOnImageAvailableListener(null, null)
 
-
                             // Clear the queue of images, if there are left
                             while (imageQueue.size > 0) {
                                 imageQueue.take().close()
                             }
-
 
                             cont.resume(
                                 CombinedCaptureResult(
@@ -1367,7 +1403,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     Log.i(TAG,"Dng orientation: "+ result.orientation.toString())
 
                     cont.resume(output)
-
                 } catch (exc: IOException) {
                     Log.e(TAG, "Unable to write DNG image to file", exc)
                     cont.resumeWithException(exc)
@@ -1435,7 +1470,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     }
 
     private fun calculateContrast(bytes: ByteArray) {
-
+//        File(createFile("raw").toString()).writeBytes(bytes)
     }
 
     fun Bitmap.rotate(degree: Float): Bitmap {
@@ -1556,6 +1591,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             .putInt(SENSOR_SENSITIVITY, sensorSensitivity)
             .putLong(EXPOSURE_TIME, exposureTime)
             .putFloat(APERTURE, aperture)
+            .putBoolean(MANUAL_ENABLE, isManualEnable)
             .apply()
     }
 
@@ -1564,6 +1600,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         sensorSensitivity = settings.getInt(SENSOR_SENSITIVITY, 0)
         exposureTime = settings.getLong(EXPOSURE_TIME, 0)
         aperture = settings.getFloat(APERTURE, 0f)
+        isManualEnable = settings.getBoolean(MANUAL_ENABLE, false)
     }
 
     fun readSettingData(){
@@ -1714,16 +1751,17 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
          */
         private const val MAX_PREVIEW_HEIGHT = 1080
 
-        private const val IMAGE_BUFFER_SIZE = 5
+        private const val IMAGE_BUFFER_SIZE = 10
 
         /** Maximum time allowed to wait for the result of an image capture */
-        private const val IMAGE_CAPTURE_TIMEOUT_MILLIS: Long = 5000
+        private const val IMAGE_CAPTURE_TIMEOUT_MILLIS: Long = 2000
 
         private const val PRIVATE_MODE = 0
         private const val PREF_NAME = "Camera2Fragment"
         private const val APERTURE = "APERTURE"
         private const val EXPOSURE_TIME = "EXPOSURE_TIME"
         private const val SENSOR_SENSITIVITY = "SENSOR_SENSITIVITY"
+        private const val MANUAL_ENABLE = "MANUAL_ENABLE"
 
         private const val RAW_FORMAT = ImageFormat.RAW_SENSOR
         private const val JPEG_FORMAT = ImageFormat.JPEG
