@@ -44,6 +44,8 @@ class PhotoboxFragment : Fragment(), GalleryImageClickListener, View.OnClickList
     private var currentPosition = 0
     private var positionList: ArrayList<Int> = ArrayList<Int>()
 
+    private var lastIndex = 0
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -98,12 +100,14 @@ class PhotoboxFragment : Fragment(), GalleryImageClickListener, View.OnClickList
     override fun onClick(position: Int) {
         // handle click of image
         if(isMultiSelectable){
-            if(position in positionList)
+            if (position in positionList && position < imageList.size)
                 positionList.remove(position)
-            else
+            else if (position < imageList.size)
                 positionList.add(position)
         }else{
             currentPosition = position
+            if (lastIndex == position)
+                imageList[lastIndex].isSelected = false
 
             val bundle = Bundle()
             bundle.putSerializable("images", imageList)
@@ -115,6 +119,8 @@ class PhotoboxFragment : Fragment(), GalleryImageClickListener, View.OnClickList
             val galleryFragment = GalleryFullscreenFragment()
             galleryFragment.setArguments(bundle)
             galleryFragment.show(fragmentTransaction, "gallery")
+
+            lastIndex = position
         }
     }
 
@@ -209,12 +215,12 @@ class PhotoboxFragment : Fragment(), GalleryImageClickListener, View.OnClickList
                         }
                     }
                 } else {
-                    if (File(imageList[currentPosition].imageUrl).exists()) {
+                    if (currentPosition < imageList.size && File(imageList[currentPosition].imageUrl).exists()) {
                         context?.contentResolver?.delete(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                             MediaStore.Images.ImageColumns.DATA + "=?", arrayOf(imageList[currentPosition].imageUrl)
                         )
+                        imageList.remove(imageList[currentPosition])
                     }
-                    imageList.remove(imageList[currentPosition])
                 }
 
                 val path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM)
@@ -224,6 +230,7 @@ class PhotoboxFragment : Fragment(), GalleryImageClickListener, View.OnClickList
                     Log.i(TAG, "onScanCompleted : $p")
                 }
 
+//                loadExtenalImages()
                 galleryAdapter.notifyDataSetChanged()
             }
         }

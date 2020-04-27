@@ -109,9 +109,9 @@ class HistoryFragment : Fragment(), RoomRecyclerItemTouchHelper.RecyclerItemTouc
         btn_delete_all.setOnClickListener {
             val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
             val currentDateTime: String = dateFormat.format(Date()) // Find todays date
-            historyViewModel.insert(History(currentDateTime,17000, 20020, "Warm White"))
+//            historyViewModel.insert(History(currentDateTime,17000, 20020, "Warm White"))
 
-//            historyViewModel.deleteAllHistories()
+            historyViewModel.deleteAllHistories()
         }
     }
 

@@ -498,7 +498,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
         textureView.setOnTouchListener(surfaceTextureTouchListener)
 
-        ConnectToDevice(context!!).execute()        // connect to bluetooth device
+        if (m_address.contains(":"))
+            ConnectToDevice(context!!).execute()        // connect to bluetooth device
     }
 
     private fun getFingerSpacing(event: MotionEvent): Float{
@@ -522,12 +523,24 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         }
 
         readCommandHandler.postDelayed(readCommandRunnable, 500)
+
+        if (!btnPicture.isEnabled)
+            btnPicture.isEnabled = true
+
         Log.i(TAG, "onResume")
     }
 
     override fun onClick(view: View) {
         when (view.id) {
             R.id.btnPicture -> {
+                lifecycleScope.launch(Dispatchers.Main) {
+                    if (IMAGE_BUFFER_SIZE - shutterTimes <= 1) {
+                        openCamera(textureView.width, textureView.height)
+                        progressbarShutter?.visibility = View.INVISIBLE
+                        shutterTimes = 0
+                    }
+                }
+
                 // Disable click listener to prevent multiple requests simultaneously in flight
                 progressbarShutter?.max = 100
                 progressbarShutter?.progress = 0
@@ -552,16 +565,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                 Log.i(TAG, "onScanCompleted : $path")
                             }
                         }
+                        shutterTimes += 1
                     }
 
-                    shutterTimes += 1
-                    if (IMAGE_BUFFER_SIZE - shutterTimes <= 1) {
-                        openCamera(textureView.width, textureView.height)
-                        shutterTimes = 0
-                    }
-                }
-
-                lifecycleScope.launch(Dispatchers.IO) {
                     takePhoto(mImageReader).use { result ->
                         Log.d(TAG, "Result received: $result")
 
@@ -584,29 +590,26 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             Log.i(TAG, "onScanCompleted : $path")
                         }
                     }
-
                     shutterTimes += 1
-                    if (IMAGE_BUFFER_SIZE - shutterTimes <= 1) {
-                        openCamera(textureView.width, textureView.height)
-                        shutterTimes = 0
-                    }
-                }
 
-                Log.i(TAG, "SENSOR_INFO_COLOR_FILTER_ARRANGEMENT: " + characteristics.get(CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT))
-
-                imageReaderHandler.postDelayed({
-                    progressbarShutter?.max = 100
-                    progressbarShutter?.progress = 100
-                    progressbarShutter?.visibility = ProgressBar.INVISIBLE
-
-                    var historyViewModel = ViewModelProvider(this).get(HistoryViewModel::class.java)
+                    var historyViewModel = ViewModelProvider(this@Camera2BasicFragment).get(HistoryViewModel::class.java)
                     val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
                     val currentDateTime: String = dateFormat.format(Date()) // Find todays date
                     historyViewModel.insert(History(currentDateTime, 20000, 20202020, "Warm Red"))
 
-                    view.findViewById<View>(R.id.btnPicture)
-                        .post { view.findViewById<View>(R.id.btnPicture).isEnabled = true }
-                }, 3000)
+                    view.findViewById<View>(R.id.btnPicture).isEnabled = true
+                }
+
+
+                Log.i(TAG, "SENSOR_INFO_COLOR_FILTER_ARRANGEMENT: " + characteristics.get(CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT))
+                cameraHandler.postDelayed({
+                    view.post {
+                        if (!btnPicture.isEnabled)
+                            btnPicture.isEnabled = true
+
+                        progressbarShutter?.visibility = View.INVISIBLE
+                    }
+                }, 5000)
             }
             R.id.btnAuto -> {
                 val btnAuto = view.findViewById<ImageButton>(R.id.btnAuto)
@@ -729,6 +732,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 fragmentTransaction.add(R.id.container, fragment, "PhotoboxFragment")
                 fragmentTransaction.addToBackStack("Camera2BasicFragment")
                 fragmentTransaction.commit()
+                Log.i(TAG, "R.id.btnPhotoBox")
             }
             R.id.btnRecordBar ->{
                 val fragment = HistoryFragment()
@@ -738,6 +742,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 fragmentTransaction.add(R.id.container, fragment, "HistoryFragment")
                 fragmentTransaction.addToBackStack("Camera2BasicFragment")
                 fragmentTransaction.commit()
+                Log.i(TAG, "R.id.btnRecordBar")
             }
             R.id.btnSetting ->{
                 val fragment = SettingFragment()
@@ -747,6 +752,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 fragmentTransaction.add(R.id.container, fragment, "SettingFragment")
                 fragmentTransaction.addToBackStack("Camera2BasicFragment")
                 fragmentTransaction.commit()
+                Log.i(TAG, "R.id.btnSetting")
             }
         }
     }
@@ -1371,8 +1377,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     temp.compress(Bitmap.CompressFormat.JPEG, 100, FileOutputStream(output))
 
                     calculateColorTemp(bytes)
+                    progressbarShutter?.progress = 100 / 3 * 2
                     calculateRefreshRate(bytes)
-
+                    progressbarShutter?.progress = 100 /3 * 3
+                    progressbarShutter?.visibility = View.INVISIBLE
                     cont.resume(output)
                 } catch (exc: IOException) {
                     Log.e(TAG, "Unable to write JPEG image to file", exc)
@@ -1395,10 +1403,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 //                    val mImageMat = Imgcodecs.imdecode(MatOfByte(byteArray), Imgcodecs.CV_LOAD_IMAGE_UNCHANGED)
 
                     calculateContrast(byteArray)
-                    var aver = average(byteArray)
+                    progressbarShutter?.progress = 100 /3 * 1
+
+//                    var aver = average(byteArray)
                     Log.i(TAG, "Image size: ${result.image.width} x ${result.image.height}")
                     Log.i(TAG, "Buffer size: ${byteArray.size}")
-                    Log.i(TAG, "Buffer average: ${aver}")
+//                    Log.i(TAG, "Buffer average: ${aver}")
 
                     Log.i(TAG,"Dng orientation: "+ result.orientation.toString())
 
@@ -1471,6 +1481,26 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     private fun calculateContrast(bytes: ByteArray) {
 //        File(createFile("raw").toString()).writeBytes(bytes)
+//        val rawBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+//        val argb = rawBitmap.getPixel(0, 0)
+//        Log.i(TAG, "red: ${Color.red(argb)}, green: ${Color.green(argb)}, blue: ${Color.blue(argb)}")
+
+        val pixels: IntArray = IntArray(bytes.size / 2)
+        for (i in bytes.indices) {
+            if (i % 2 == 0)
+                pixels[i / 2] += bytes[i] * 256
+            else
+                pixels[i / 2] += bytes[i].toInt()
+        }
+
+        val max = pixels.max()
+        var min = Int.MAX_VALUE
+        for (element in pixels) {
+            if (element in 1 until min)
+                min = element
+        }
+        Log.i(TAG, "Max $max, Min: $min")
+        Log.i(TAG, "contrast ratio: ${max!! / min}")
     }
 
     fun Bitmap.rotate(degree: Float): Bitmap {
@@ -1517,14 +1547,15 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         val lines = Mat()
 
         Imgproc.cvtColor(image, edges, Imgproc.COLOR_BGR2GRAY)
+        Imgproc.blur(edges, edges, org.opencv.core.Size(15.0, 1.0))
         Imgproc.GaussianBlur(edges, edges, org.opencv.core.Size(15.0, 15.0), 0.5)
         Imgproc.erode(edges, edges, Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, org.opencv.core.Size(2.0, 2.0)))
         Imgproc.dilate(edges, edges, Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, org.opencv.core.Size(2.0, 2.0)))
         Imgproc.Canny(edges, edges, 100.0, 200.0, 3)
 
         val threshold = 80
-        val minLineSize = 0.0
-        val linGap = 0.0
+        val minLineSize = 20.0
+        val linGap = 20.0
 
         Imgproc.HoughLinesP(edges, lines, 1.0, Math.PI / 180, threshold, minLineSize, linGap)
 
@@ -1629,7 +1660,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             }catch (e: IOException) {
                 e.printStackTrace()
                 disconnect()
-                ConnectToDevice(context!!).execute()
+
+                if (m_address.contains(":"))
+                    ConnectToDevice(context!!).execute()
             }
         }
     }
