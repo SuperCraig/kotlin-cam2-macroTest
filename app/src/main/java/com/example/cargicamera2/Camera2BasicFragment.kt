@@ -262,6 +262,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private var isSoundEnable: Boolean = false
     private var isCloudSyncEnable: Boolean = false
 
+    private var isJPEGSavedEnable: Boolean = true
+    private var isRAWSavedEnable: Boolean = true
+
     private var progressbarShutter: ProgressBar ?= null
 
     private var fingerSpacing: Float = 0f
@@ -1374,13 +1377,15 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     val output = createFile("jpg")
 //                    FileOutputStream(output).use { it.write(bytes) }
 
-                    val temp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size).rotate(90f)
-                    temp.compress(Bitmap.CompressFormat.JPEG, 100, FileOutputStream(output))
+                    if (isJPEGSavedEnable) {
+                        val temp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size).rotate(90f)
+                        temp.compress(Bitmap.CompressFormat.JPEG, 100, FileOutputStream(output))
+                    }
 
                     calculateColorTemp(bytes)
                     progressbarShutter?.progress = 100 / 3 * 2
                     calculateRefreshRate(bytes)
-                    progressbarShutter?.progress = 100 /3 * 3
+                    progressbarShutter?.progress = 100 / 3 * 3
                     progressbarShutter?.visibility = View.INVISIBLE
                     cont.resume(output)
                 } catch (exc: IOException) {
@@ -1395,14 +1400,16 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 dngCreator.setOrientation(ExifInterface.ORIENTATION_ROTATE_90)      //rotate picture
                 try {
                     val output = createFile("dng")
-                    FileOutputStream(output).use { dngCreator.writeImage(it, result.image) }
+
+                    if (isRAWSavedEnable)
+                        FileOutputStream(output).use { dngCreator.writeImage(it, result.image) }
 
                     val byteBuffer = result.image.planes[0].buffer
                     val byteArray = ByteArray(byteBuffer.remaining())
                     byteBuffer.get(byteArray)
 
                     calculateContrast(result.image.width, result.image.height, byteArray)
-                    progressbarShutter?.progress = 100 /3 * 1
+                    progressbarShutter?.progress = 100 / 3 * 1
 
 //                    var aver = average(byteArray)
                     Log.i(TAG, "Image size: ${result.image.width} x ${result.image.height}")
@@ -1460,7 +1467,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         //val mat = Mat()
         //val canny = mat.canny(bitmap) { it.compress(Bitmap.CompressFormat.JPEG, 80, FileOutputStream(createFile("jpg")))}
 
-        findLines(bitmap).toBitmap().compress(Bitmap.CompressFormat.JPEG, 80, FileOutputStream(createFile("jpg")))
+        if (isJPEGSavedEnable)
+            findLines(bitmap).toBitmap().compress(Bitmap.CompressFormat.JPEG, 80, FileOutputStream(createFile("jpg")))
 
         Log.i(TAG, "Find circles fin!")
     }
@@ -1468,22 +1476,38 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private fun calculateColorTemp(bytes: ByteArray) {
         val temp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
         val bitmap = temp.rotate(90f)
-        val argb = bitmap.getPixel(bitmap.width / 2, bitmap.height / 2)
-        var red = Color.red(argb)
-        var green = Color.green(argb)
-        var blue = Color.blue(argb)
-        var n: Double = ((0.23881) * red + (0.25499) * green - (0.58291) * blue) / ((0.11109) * red - (0.85406) * green + (0.52289) * blue)
-        var CCT = 449 * n.pow(3) + 3525 * n.pow(2) + 6823.3 * n + 5520.33
-        Log.i(TAG, "CCT: $CCT")
+        var count = 0
+        var red: Float = 0f
+        var green: Float = 0f
+        var blue: Float = 0f
+        for (j in 0 until bitmap.height) {
+            for (i in 0 until bitmap.width) {
+                val argb = bitmap.getPixel(i, j)
+                red += Color.red(argb)
+                green += Color.green(argb)
+                blue += Color.blue(argb)
+                count += 1
+            }
+        }
+        red /= count
+        green /= count
+        blue /= count
+        val n: Double = ((0.23881) * red + (0.25499) * green - (0.58291) * blue) / ((0.11109) * red - (0.85406) * green + (0.52289) * blue)
+        val CCT = 449 * n.pow(3) + 3525 * n.pow(2) + 6823.3 * n + 5520.33
 
+        Log.i(TAG, "CCT: $CCT")
+        Log.i(TAG, "Red: $red, Green: $green, Blue: $blue")
+        if (red > green && red > blue)
+            Log.i(TAG, "Warm color temperature")
+        else if (abs(red - green) < (0.1 * 256) && (red - blue) < (0.1 * 256))
+            Log.i(TAG, "Normal color temperature")
+        else if (blue > red && blue > green)
+            Log.i(TAG, "Cold color temperature")
 //        bitmap.compress(Bitmap.CompressFormat.PNG, 85, FileOutputStream(file))
     }
 
     private fun calculateContrast(width: Int, height: Int, bytes: ByteArray) {
-        File(createFile("raw").toString()).writeBytes(bytes)
-//        val rawBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-//        val argb = rawBitmap.getPixel(0, 0)
-//        Log.i(TAG, "red: ${Color.red(argb)}, green: ${Color.green(argb)}, blue: ${Color.blue(argb)}")
+//        File(createFile("raw").toString()).writeBytes(bytes)
 
         val pixels: IntArray = IntArray(bytes.size / 2)
         for (i in bytes.indices) {
@@ -1495,10 +1519,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         }
 
         Log.i(TAG, "Pixels max: ${pixels.max()}, Pixels min: ${pixels.min()}")
-//        val rChannel = IntArray(width * height)
-//        val gChannel = IntArray(width * height)
-//        val bChannel = IntArray(width * height)
-        val yChannel = IntArray(width * height)
+        val rChannel = IntArray(width * height)
+        val gChannel = IntArray(width * height)
+        val bChannel = IntArray(width * height)
+//        val yChannel = IntArray(width * height)
 
         var min_r = Int.MAX_VALUE
         var min_g = Int.MAX_VALUE
@@ -1510,19 +1534,19 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         Log.i(TAG, "Pixels size: ${pixels.size}")
         Log.i(TAG, "Img Width: $width, Height: $height")
         Log.i(TAG, "White balance")
-        for (j in 0 until height) {
+        for (j in 0 until height) {         //for finding max & min RGB for white balance
             for (i in 0 until width) {
                 if (abs(i - j) % 2 == 0) {
-                    if (pixels[(i + 0) + (j + 0) * width] < min_g && pixels[(i + 0) + (j + 0) * width] != 0) min_g = pixels[(i + 0) + (j + 0) * width]
-                    if (pixels[(i + 0) + (j + 0) * width] > max_g) max_g = pixels[(i + 0) + (j + 0) * width]
+                    if (pixels[i + j * width] < min_g && pixels[i + j * width] != 0) min_g = pixels[i + j * width]
+                    if (pixels[i + j * width] > max_g) max_g = pixels[i + j * width]
                 }
-                if (j % 2 == 0 && i % 2 == 1) {
-                    if (pixels[(i + 0) + (j + 0) * width] < min_b && pixels[(i + 0) + (j + 0) * width] != 0) min_b = pixels[(i + 0) + (j + 0) * width]
-                    if (pixels[(i + 0) + (j + 0) * width] > max_b) max_b = pixels[(i + 0) + (j + 0) * width]
+                else if (i % 2 == 0 && j % 2 == 1 ) {
+                    if (pixels[i + j * width] < min_b && pixels[i + j * width] != 0) min_b = pixels[i + j * width]
+                    if (pixels[i + j * width] > max_b) max_b = pixels[i + j * width]
                 }
-                if (i % 2 == 0 && j % 2 == 1) {
-                    if (pixels[(i + 0) + (j + 0) * width] < min_r && pixels[(i + 0) + (j + 0) * width] != 0) min_r = pixels[(i + 0) + (j + 0) * width]
-                    if (pixels[(i + 0) + (j + 0) * width] > max_r) max_r = pixels[(i + 0) + (j + 0) * width]
+                else if (i % 2 == 1 && j % 2 == 0) {
+                    if (pixels[i + j * width] < min_r && pixels[i + j * width] != 0) min_r = pixels[i + j * width]
+                    if (pixels[i + j * width] > max_r) max_r = pixels[i + j * width]
                 }
             }
         }
@@ -1530,61 +1554,99 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         Log.i(TAG, "Min r: $min_r, Min g: $min_g, Min b: $min_b")
         Log.i(TAG, "Max r: $max_r, Max g: $max_g, Max b: $max_b")
         Log.i(TAG, "Demosiac")
-        for (j in 0 until height - 1) {
-            for (i in 0 until width - 1) {
-                var r = 0
+        for (j in 0 until height) {
+            for (i in 0 until width) {
+                var r: Int
                 var g = 0
-                var b = 0
+                var b: Int
                 if (abs(i - j) % 2 == 0) {
-                    g =  pixels[(i + 0) + (j + 0) * width]
-                } else if (j - 1 >= 0) {
-                    g = (pixels[i + (j + 0) * width] + pixels[(i + 1) + (j + 0) * width] + pixels[(i + 0) + (j + 1) * width] + pixels[(i + 0) + (j - 1) * width]) / 4
+                    g =  pixels[i + j * width]
                 } else {
-                    g = (pixels[i + (j + 0) * width] + pixels[(i + 1) + (j + 0) * width] + pixels[(i + 0) + (j + 1) * width]) / 3
-                }
-
-                if (j % 2 == 0 && i % 2 == 1) {
-                    b = pixels[(i + 0) + (j + 0) * width]
-                } else {
-                    if (i % 2 == 0 && j % 2 == 1 && (i - 1) >= 0 && (j - 1) >= 0)
-                        b = (pixels[(i - 1) + (j - 1) * width] + pixels[(i - 1) + (j + 1) * width] + pixels[(i + 1) + (j - 1)* width] + pixels[(i + 1) + (j + 1) * width]) / 4
-                    else
-                        b = pixels[(i + 1) + (j + 1) * width]
-
-                    if (abs(i - j) % 2 == 0 && i % 2 == 0 && (i - 1) >= 0)
-                        b = (pixels[(i - 1) + (j + 0) * width] + pixels[(i + 1) + (j + 0) * width]) / 2
-                    else
-                        b = pixels[(i + 1) + (j + 0) * width]
-
-                    if (abs(i - j) % 2 == 0 && i % 2 == 1 && (j - 1) >= 0)
-                        b = (pixels[(i + 0) + (j - 1) * width] + pixels[(i + 0) + (j + 1) * width]) / 2
-                    else
-                        b = pixels[(i + 0) + (j + 1) * width]
+                    var count = 0
+                    if ((i - 1) >= 0) {
+                        g += pixels[(i - 1) + j * width]
+                        count ++
+                    }
+                    if ((i + 1) < width) {
+                        g += pixels[(i + 1) + j * width]
+                        count ++
+                    }
+                    if ((j - 1) >= 0) {
+                        g += pixels[i + (j - 1) * width]
+                        count ++
+                    }
+                    if ((j + 1) < height) {
+                        g += pixels[i + (j + 1) * width]
+                        count ++
+                    }
+                    g /= count
                 }
 
                 if (i % 2 == 0 && j % 2 == 1) {
-                    r = pixels[(i + 0) + (j + 0) * width]
+                    b = pixels[i + j * width]
                 } else {
-                    if (j % 2 == 0  && i % 2 == 1 && (i - 1) >= 0 && (j - 1) >= 0)
-                        r = (pixels[(i - 1) + (j - 1) * width] + pixels[(i - 1) + (j + 1) * width] + pixels[(i + 1) + (j - 1) * width] + pixels[(i + 1) + (j + 1) * width]) / 4
-                    else
-                        r = pixels[(i + 1) + (j + 1) * width]
-
-                    if (abs(i - j) % 2 == 0 && i % 2 == 1 && (i - 1) >= 0)
-                        r = (pixels[(i - 1) + (j + 0) * width] + pixels[(i + 1) + (j + 0) * width]) / 2
-                    else
-                        r = pixels[(i + 1) + (j + 0) * width]
-
-                    if (abs(i - j) % 2 == 0 && i % 2 == 0 && (j - 1) >= 0)
-                        r = (pixels[(i + 0) + (j - 1) * width] + pixels[(i + 0) + (j + 1) * width]) / 2
-                    else
-                        r = pixels[(i + 0) + (j + 1) * width]
+                    if (j % 2 == 1) {
+                        if ((i + 1) < width)
+                            b = (pixels[(i - 1) + j * width] + pixels[(i + 1) + j * width]) /2
+                        else
+                            b = pixels[(i - 1) + j * width]
+                    } else {
+                        if (j == 0) {
+                            if (i % 2 == 0)
+                                b = pixels[i + (j + 1) * width]
+                            else
+                                if ((i + 1) < width)
+                                    b = (pixels[(i - 1) + (j + 1) * width] + pixels[(i + 1) + (j + 1) * width]) / 2
+                                else
+                                    b = pixels[(i - 1) + (j + 1) * width]
+                        } else {
+                            if (i % 2 == 0)
+                                b = (pixels[i + (j - 1) * width] + pixels[i + (j + 1) * width]) / 2
+                            else
+                                if ((i + 1) < width)
+                                    b = (pixels[(i - 1) + (j - 1) * width] + pixels[(i + 1) + (j - 1) * width] + pixels[(i - 1) + (j + 1) * width] + pixels[(i + 1) + (j + 1) * width]) / 4
+                                else
+                                    b = (pixels[(i - 1) + (j - 1) * width] + pixels[(i - 1) + (j + 1) * width]) / 2
+                        }
+                    }
                 }
 
-//                rChannel[i + j * width] = (r - min_r) * 65535 / (max_r - min_r)
-//                gChannel[i + j * width] = (g - min_g) * 65535 / (max_g - min_g)
-//                bChannel[i + j * width] = (b - min_b) * 65535 / (max_b - min_b)
-                yChannel[i + j * width] = ((r * 299) + (g * 578) + (b * 114)) / 1000
+                if (i % 2 == 1 && j % 2 == 0) {
+                    r = pixels[i + j * width]
+                } else {
+                    if (i % 2 == 1) {
+                        if ((j + 1) < height)
+                            r = (pixels[i + (j - 1) * width] + pixels[i + (j + 1) * width]) / 2
+                        else
+                            r = pixels[i + (j - 1) * width]
+                    } else {
+                        if (i == 0) {
+                            if (j % 2 == 0)
+                                r = pixels[(i + 1) + j * width]
+                            else
+                                if ((j + 1) < height)
+                                    r = (pixels[(i + 1) + (j - 1) * width] + pixels[(i + 1) + (j + 1) * width]) / 2
+                                else
+                                    r = pixels[(i + 1) + (j - 1) * width]
+                        } else {
+                            if (j % 2 == 0)
+                                r = (pixels[(i - 1) + j * width] + pixels[(i + 1) + j * height]) / 2
+                            else
+                                if ((j + 1) < height)
+                                    r = (pixels[(i - 1) + (j - 1) * width] + pixels[(i + 1) + (j - 1) * width] + pixels[(i - 1) + (j + 1) * width] + pixels[(i + 1) + (j + 1) * width]) / 4
+                                else
+                                    r = (pixels[(i - 1) + (j - 1) * width] + pixels[(i + 1) + (j - 1) * width]) / 2
+                        }
+                    }
+                }
+
+                rChannel[i + j * width] = r
+                gChannel[i + j * width] = g
+                bChannel[i + j * width] = b
+//                r = (r - min_r) * 65535 / (max_r - min_r)
+//                g = (g - min_g) * 65535 / (max_g - min_g)
+//                b = (b - min_b) * 65535 / (max_b - min_b)
+//                yChannel[i + j * width] = ((r * 299) + (g * 578) + (b * 114)) / 1000
             }
         }
 
@@ -1597,9 +1659,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         Log.i(TAG, "Max $max, Min: $min")
 //        Log.i(TAG, "contrast ratio: ${max!! / min}")
 
-//        Log.i(TAG, "(0, 0) r: ${rChannel[0]}, g: ${gChannel[0]}, b: ${bChannel[0]}")
-//        Log.i(TAG, "(w/2, h/2) r: ${rChannel[(width * height) / 2]}, g: ${gChannel[(width * height) / 2]}, b: ${bChannel[(width * height) / 2]}")
-        Log.i(TAG, "(0, 0) Intensity: ${yChannel[0]}, (w/2, h/2) Intensity: ${yChannel[(width * height) / 2]}")
+        Log.i(TAG, "(0, 0) mR: ${pixels[1]}, mG: ${pixels[0]}, mB: ${pixels[width]}")
+        Log.i(TAG, "(0, 0) r: ${rChannel[3023 * width]}, g: ${gChannel[3023 * width]}, b: ${bChannel[3023 * width]}")
+        Log.i(TAG, "(w/2, h/2) r: ${rChannel[(width * height) / 2]}, g: ${gChannel[(width * height) / 2]}, b: ${bChannel[(width * height) / 2]}")
+//        Log.i(TAG, "(0, 0) Intensity: ${yChannel[0]}, (w/2, h/2) Intensity: ${yChannel[(width * height) / 2]}")
     }
 
     fun Bitmap.rotate(degree: Float): Bitmap {
@@ -1646,8 +1709,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         val lines = Mat()
 
         Imgproc.cvtColor(image, edges, Imgproc.COLOR_BGR2GRAY)
-        Imgproc.blur(edges, edges, org.opencv.core.Size(15.0, 1.0))
-        Imgproc.GaussianBlur(edges, edges, org.opencv.core.Size(15.0, 15.0), 0.5)
+        Imgproc.blur(edges, edges, org.opencv.core.Size(3.0, 3.0))
+        Imgproc.threshold(edges, edges, 127.0, 255.0, Imgproc.THRESH_BINARY_INV)
         Imgproc.erode(edges, edges, Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, org.opencv.core.Size(2.0, 2.0)))
         Imgproc.dilate(edges, edges, Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, org.opencv.core.Size(2.0, 2.0)))
         Imgproc.Canny(edges, edges, 100.0, 200.0, 3)
@@ -1668,10 +1731,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 val y2 = vec[3]
                 val start = org.opencv.core.Point(x1, y1)
                 val end = org.opencv.core.Point(x2, y2)
-                Imgproc.line(image, start, end, Scalar(255.0, 0.0, 0.0), 3)
+                Imgproc.line(edges, start, end, Scalar(255.0, 0.0, 0.0), 3)
             }
         }
-        return image
+        return edges
     }
 
     private fun createFile(extension: String): File {

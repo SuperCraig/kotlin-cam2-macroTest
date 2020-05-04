@@ -50,13 +50,13 @@ class GalleryImageAdapter(private val itemList: List<Image>) : RecyclerView.Adap
             // adding click or tap handler for our image layout
             itemView.container.setOnClickListener {
                 listener?.onClick(adapterPosition)
-                if(it.isSelected){
-                    it.setBackgroundResource(R.color.colorPrimaryDark)
-                    it.isSelected = false
-                }else{
-                    it.setBackgroundColor(Color.parseColor("#3547f0"))
-                    it.isSelected = true
-                }
+//                if(it.isSelected){
+//                    it.setBackgroundResource(R.color.colorPrimaryDark)
+//                    it.isSelected = false
+//                }else{
+//                    it.setBackgroundColor(Color.parseColor("#3547f0"))
+//                    it.isSelected = true
+//                }
             }
 
             itemView.ivGalleryTitle.text = image.title

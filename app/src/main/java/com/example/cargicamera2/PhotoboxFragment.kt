@@ -1,5 +1,6 @@
 package com.example.cargicamera2
 
+import android.graphics.Color
 import android.media.ExifInterface
 import android.media.MediaScannerConnection
 import android.net.Uri
@@ -12,6 +13,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.core.net.toUri
+import androidx.core.view.get
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
 import androidx.recyclerview.widget.GridLayoutManager
@@ -43,8 +45,6 @@ class PhotoboxFragment : Fragment(), GalleryImageClickListener, View.OnClickList
 
     private var currentPosition = 0
     private var positionList: ArrayList<Int> = ArrayList<Int>()
-
-    private var lastIndex = 0
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -100,14 +100,18 @@ class PhotoboxFragment : Fragment(), GalleryImageClickListener, View.OnClickList
     override fun onClick(position: Int) {
         // handle click of image
         if(isMultiSelectable){
-            if (position in positionList && position < imageList.size)
+            if (position in positionList && position < imageList.size) {
                 positionList.remove(position)
-            else if (position < imageList.size)
+                imageList[position].isSelected = false
+                recyclerView.get(position).setBackgroundResource(R.color.colorPrimaryDark)
+            }
+            else if (position < imageList.size) {
                 positionList.add(position)
+                imageList[position].isSelected = true
+                recyclerView.get(position).setBackgroundColor(Color.parseColor("#3547f0"))
+            }
         }else{
             currentPosition = position
-            if (lastIndex == position)
-                imageList[lastIndex].isSelected = false
 
             val bundle = Bundle()
             bundle.putSerializable("images", imageList)
@@ -119,8 +123,6 @@ class PhotoboxFragment : Fragment(), GalleryImageClickListener, View.OnClickList
             val galleryFragment = GalleryFullscreenFragment()
             galleryFragment.setArguments(bundle)
             galleryFragment.show(fragmentTransaction, "gallery")
-
-            lastIndex = position
         }
     }
 
@@ -231,6 +233,9 @@ class PhotoboxFragment : Fragment(), GalleryImageClickListener, View.OnClickList
                 }
 
 //                loadExtenalImages()
+                positionList.clear()
+                isMultiSelectable = false
+                btnSelect.setImageResource(R.drawable.ic_select)
                 galleryAdapter.notifyDataSetChanged()
             }
         }
