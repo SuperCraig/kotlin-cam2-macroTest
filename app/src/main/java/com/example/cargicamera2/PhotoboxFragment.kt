@@ -12,8 +12,10 @@ import android.util.Log.*
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.core.net.toUri
 import androidx.core.view.get
+import androidx.core.view.size
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
 import androidx.recyclerview.widget.GridLayoutManager
@@ -43,7 +45,7 @@ class PhotoboxFragment : Fragment(), GalleryImageClickListener, View.OnClickList
 
     private var originalDistance = 0.0
 
-    private var currentPosition = 0
+    private var currentPosition: Int? = null
     private var positionList: ArrayList<Int> = ArrayList<Int>()
 
     override fun onCreateView(
@@ -65,50 +67,49 @@ class PhotoboxFragment : Fragment(), GalleryImageClickListener, View.OnClickList
         btn_share.setOnClickListener(this)
         btn_delete_trash.setOnClickListener(this)
 
+//        imageGalleryUiModelList = MediaHelper.getImageGallery(this.context!!)
+
         // init adapter
-        galleryAdapter = GalleryImageAdapter(imageList)
-        galleryAdapter.listener = this
+//        galleryAdapter = GalleryImageAdapter(imageList)
+//        galleryAdapter.listener = this
+
+        // load images
+        loadExtenalImages()
 
         // init recyclerview
         recyclerView.layoutManager = GridLayoutManager(this.context, SPAN_COUNT)
         recyclerView.adapter = galleryAdapter
-
-        imageGalleryUiModelList = MediaHelper.getImageGallery(this.context!!)
-        if(imageGalleryUiModelList.isNotEmpty()){
-            imageGalleryUiModelList.forEach{
-//                i(TAG, it.key + ": " + it.value)
-            }
-        }else{
-//            i(TAG, "imageGalleryUiModelList is empty")
-        }
-
-        // load images
-        //loadImages()
-        loadExtenalImages()
     }
 
     private fun loadExtenalImages(){
+        imageGalleryUiModelList = MediaHelper.getImageGallery(this.context!!)
+
         if(imageList.size > 0) imageList.clear()
 
         val imageList: ArrayList<ImageGalleryUiModel>? = imageGalleryUiModelList["CraigCam2"]
         imageList?.forEach{
             this.imageList.add(Image(it.imageUri, it.imageUri.substring(it.imageUri.length-10, it.imageUri.length), false))
         }
+
+        galleryAdapter = GalleryImageAdapter(this.imageList)
+        galleryAdapter.listener = this
         galleryAdapter.notifyDataSetChanged()
     }
 
     override fun onClick(position: Int) {
+        Log.i(TAG, "Clicked position: $position")
+
         // handle click of image
         if(isMultiSelectable){
             if (position in positionList && position < imageList.size) {
                 positionList.remove(position)
                 imageList[position].isSelected = false
-                recyclerView.get(position).setBackgroundResource(R.color.colorPrimaryDark)
+                recyclerView.layoutManager?.findViewByPosition(position)?.setBackgroundResource(R.color.colorPrimaryDark)
             }
             else if (position < imageList.size) {
                 positionList.add(position)
                 imageList[position].isSelected = true
-                recyclerView.get(position).setBackgroundColor(Color.parseColor("#3547f0"))
+                recyclerView.layoutManager?.findViewByPosition(position)?.setBackgroundColor(Color.parseColor(("#3547f0")))
             }
         }else{
             currentPosition = position
@@ -121,7 +122,7 @@ class PhotoboxFragment : Fragment(), GalleryImageClickListener, View.OnClickList
             val fragmentManager = activity!!.supportFragmentManager
             val fragmentTransaction = fragmentManager.beginTransaction()
             val galleryFragment = GalleryFullscreenFragment()
-            galleryFragment.setArguments(bundle)
+            galleryFragment.arguments = bundle
             galleryFragment.show(fragmentTransaction, "gallery")
         }
     }
@@ -149,28 +150,42 @@ class PhotoboxFragment : Fragment(), GalleryImageClickListener, View.OnClickList
                 val fragmentManager = activity!!.supportFragmentManager
                 fragmentManager.popBackStack()
             }
-            R.id.btnInfo -> {
+            R.id.btnInfo -> {       //show picture information
                 if (isMultiSelectable) {
                     positionList.forEach {
                         if(imageList[it].imageUrl.contains(".dng")) return
-                        val exif = ExifInterface(imageList[it].imageUrl)
-                        val aperture = exif.getAttribute(ExifInterface.TAG_APERTURE_VALUE)
-                        val exposure = exif.getAttribute(ExifInterface.TAG_EXPOSURE_TIME).toDouble()
-                        val iso = exif.getAttribute(ExifInterface.TAG_ISO_SPEED_RATINGS)
-                        val strExposure = "1/${"%.1f".format(1.toDouble() / exposure)}s"
-                        Log.i(TAG, "TAG_APERTURE_VALUE: $aperture, TAG_EXPOSURE_TIME: $strExposure, TAG_ISO_SPEED_RATINGS: $iso")
+                        try {
+                            val exif = ExifInterface(imageList[it].imageUrl)
+                            val aperture = exif.getAttribute(ExifInterface.TAG_APERTURE_VALUE)
+                            val exposure = exif.getAttribute(ExifInterface.TAG_EXPOSURE_TIME).toDouble()
+                            val iso = exif.getAttribute(ExifInterface.TAG_ISO_SPEED_RATINGS)
+                            val strExposure = "1/${"%.1f".format(1.toDouble() / exposure)}s"
+                            Log.i(TAG, "TAG_APERTURE_VALUE: $aperture, TAG_EXPOSURE_TIME: $strExposure, TAG_ISO_SPEED_RATINGS: $iso")
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
                     }
                 } else {
-                    if(imageList[currentPosition].imageUrl.contains(".dng")) return
-                    val exif = ExifInterface(imageList[currentPosition].imageUrl)
-                    val aperture = exif.getAttribute(ExifInterface.TAG_APERTURE_VALUE)
-                    val exposure = exif.getAttribute(ExifInterface.TAG_EXPOSURE_TIME).toDouble()
-                    val iso = exif.getAttribute(ExifInterface.TAG_ISO_SPEED_RATINGS)
-                    val strExposure = "1/${"%.1f".format(1.toDouble() / exposure)}s"
-                    Log.i(TAG, "TAG_APERTURE_VALUE: $aperture, TAG_EXPOSURE_TIME: $strExposure, TAG_ISO_SPEED_RATINGS: $iso")
+                    if (currentPosition != null) {
+                        if(imageList[currentPosition!!].imageUrl.contains(".dng")) return
+                        Toast.makeText(this.context, "Information clicked", Toast.LENGTH_SHORT).show()
+                        try {
+                            val exif = ExifInterface(imageList[currentPosition!!].imageUrl)
+                            val aperture = exif.getAttribute(ExifInterface.TAG_APERTURE_VALUE)
+                            val exposure = exif.getAttribute(ExifInterface.TAG_EXPOSURE_TIME).toDouble()
+                            val iso = exif.getAttribute(ExifInterface.TAG_ISO_SPEED_RATINGS)
+                            val strExposure = "1/${"%.1f".format(1.toDouble() / exposure)}s"
+                            Log.i(TAG, "TAG_APERTURE_VALUE: $aperture, TAG_EXPOSURE_TIME: $strExposure, TAG_ISO_SPEED_RATINGS: $iso")
+                            Toast.makeText(this.context, "TAG_APERTURE_VALUE: $aperture, TAG_EXPOSURE_TIME: $strExposure, TAG_ISO_SPEED_RATINGS: $iso",
+                                Toast.LENGTH_SHORT).show()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+
                 }
             }
-            R.id.btn_download -> {
+            R.id.btn_download -> {      //copy picture to phone album folder
                 val regex = """(.+)/(.+)\.(.+)""".toRegex()
 
                 if (isMultiSelectable) {
@@ -184,13 +199,17 @@ class PhotoboxFragment : Fragment(), GalleryImageClickListener, View.OnClickList
                             true)
                     }
                 } else {
-                    val matchResult = regex.matchEntire(imageList[currentPosition].imageUrl)
-                    val (directory, fileName, extension) = matchResult!!.destructured
+                    if (currentPosition != null) {
+                        val matchResult = regex.matchEntire(imageList[currentPosition!!].imageUrl)
+                        val (directory, fileName, extension) = matchResult!!.destructured
 
-                    File(imageList[currentPosition].imageUrl).copyTo(
-                        File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
-                            "Camera/$fileName.$extension"),
-                        true)
+                        File(imageList[currentPosition!!].imageUrl).copyTo(
+                            File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
+                                "Camera/$fileName.$extension"),
+                            true)
+
+                        currentPosition = null
+                    }
                 }
 
                 val path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM)
@@ -198,14 +217,14 @@ class PhotoboxFragment : Fragment(), GalleryImageClickListener, View.OnClickList
                     Log.i(TAG, "onScanCompleted : $p")
                 }
             }
-            R.id.btn_share -> {
+            R.id.btn_share -> {     //copy picture to application folder
 
             }
-            R.id.btn_delete_trash -> {
+            R.id.btn_delete_trash -> {      //delete select picture
                 if (isMultiSelectable) {
                     positionList.forEach {
                         try {
-                            if (it < positionList.size && File(imageList[it].imageUrl).exists()) {
+                            if (File(imageList[it].imageUrl).exists()) {
                                 context?.contentResolver?.delete(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                                     MediaStore.Images.ImageColumns.DATA + "=?", arrayOf(imageList[it].imageUrl)
                                 )
@@ -217,11 +236,14 @@ class PhotoboxFragment : Fragment(), GalleryImageClickListener, View.OnClickList
                         }
                     }
                 } else {
-                    if (currentPosition < imageList.size && File(imageList[currentPosition].imageUrl).exists()) {
-                        context?.contentResolver?.delete(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                            MediaStore.Images.ImageColumns.DATA + "=?", arrayOf(imageList[currentPosition].imageUrl)
-                        )
-                        imageList.remove(imageList[currentPosition])
+                    if (currentPosition != null) {
+                        if (currentPosition!! < imageList.size && File(imageList[currentPosition!!].imageUrl).exists()) {
+                            context?.contentResolver?.delete(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                                MediaStore.Images.ImageColumns.DATA + "=?", arrayOf(imageList[currentPosition!!].imageUrl)
+                            )
+                            imageList.remove(imageList[currentPosition!!])
+                        }
+                        currentPosition = null
                     }
                 }
 
@@ -232,11 +254,11 @@ class PhotoboxFragment : Fragment(), GalleryImageClickListener, View.OnClickList
                     Log.i(TAG, "onScanCompleted : $p")
                 }
 
-//                loadExtenalImages()
                 positionList.clear()
                 isMultiSelectable = false
                 btnSelect.setImageResource(R.drawable.ic_select)
-                galleryAdapter.notifyDataSetChanged()
+                loadExtenalImages()
+                recyclerView.adapter = galleryAdapter
             }
         }
     }

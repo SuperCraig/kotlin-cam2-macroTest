@@ -30,6 +30,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import com.example.cargicamera2.extensions.MBITSP2020
 import com.example.cargicamera2.extensions.OrientationLiveData
+import com.example.cargicamera2.extensions.getISOList
+import com.example.cargicamera2.extensions.getTvList
 import com.example.cargicamera2.fragments.PermissionsFragment
 import com.example.cargicamera2.room.History
 import com.example.cargicamera2.room.HistoryViewModel
@@ -65,10 +67,7 @@ import java.util.concurrent.TimeoutException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
-import kotlin.math.abs
-import kotlin.math.pow
-import kotlin.math.roundToInt
-import kotlin.math.sqrt
+import kotlin.math.*
 
 class Camera2BasicFragment : Fragment(), View.OnClickListener,
     ActivityCompat.OnRequestPermissionsResultCallback {
@@ -414,7 +413,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             val range = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)
             val max1 = range!!.upper //10000
             val min1 = range.lower //100
-            val iso: Int = progress * (max1 - min1) / 100 + min1
+//            val iso: Int = progress * (max1 - min1) / 100 + min1
+            val isoList = getISOList(min1, max1)
+            val index = progress * (isoList.size - 1) / isoCustomSeekBar.maxProgress
+            val iso = isoList[index]
+
             previewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, iso)
 //            unlockFocus()
             captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
@@ -432,7 +435,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             val range = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
             val max = range!!.upper
             val min = range.lower
-            val ae: Long = progress * (max - min) / 100 + min
+//            val ae: Long = progress * (max - min) / 100 + min
+            val tvList = getTvList(min, max)
+            val index = progress * (tvList.size - 1) / tvCustomSeekBar.maxProgress
+            var ae: Long = (10.0.pow(9) / tvList[index]).roundToLong()
+            if (ae < min) ae = min
+            if (ae > max) ae = max
+            Log.i(TAG, "AE: $ae")
             previewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, ae)      //shutter speed = 1 / (10^9 / ae) sec.
 //            unlockFocus()
 
@@ -613,7 +622,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                         progressbarShutter?.visibility = View.INVISIBLE
                     }
-                }, 5000)
+                }, 10000)
             }
             R.id.btnAuto -> {
                 val btnAuto = view.findViewById<ImageButton>(R.id.btnAuto)
@@ -1467,13 +1476,18 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         //val mat = Mat()
         //val canny = mat.canny(bitmap) { it.compress(Bitmap.CompressFormat.JPEG, 80, FileOutputStream(createFile("jpg")))}
 
-        if (isJPEGSavedEnable)
-            findLines(bitmap).toBitmap().compress(Bitmap.CompressFormat.JPEG, 80, FileOutputStream(createFile("jpg")))
+        val lineObject = findLines(bitmap)
 
+        if (isJPEGSavedEnable)
+            lineObject.mat.toBitmap().compress(Bitmap.CompressFormat.JPEG, 80, FileOutputStream(createFile("jpg")))
+
+        Log.i(TAG, "find lines: ${lineObject.lines}")
+
+        //Do continually shot here
         Log.i(TAG, "Find circles fin!")
     }
 
-    private fun calculateColorTemp(bytes: ByteArray) {
+    private fun calculateColorTemp(bytes: ByteArray): ColorTemperature {
         val temp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
         val bitmap = temp.rotate(90f)
         var count = 0
@@ -1497,16 +1511,30 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
         Log.i(TAG, "CCT: $CCT")
         Log.i(TAG, "Red: $red, Green: $green, Blue: $blue")
-        if (red > green && red > blue)
+
+        var colorTemperature: ColorTemperature = ColorTemperature.None
+        if (red > green && red > blue){
+            colorTemperature = ColorTemperature.WarmColorTemperature
             Log.i(TAG, "Warm color temperature")
-        else if (abs(red - green) < (0.1 * 256) && (red - blue) < (0.1 * 256))
+        }
+        else if (abs(red - green) < (0.1 * 256) && (red - blue) < (0.1 * 256)){
+            colorTemperature = ColorTemperature.NormalColorTemperature
             Log.i(TAG, "Normal color temperature")
-        else if (blue > red && blue > green)
+        }
+        else if (blue > red && blue > green){
+            colorTemperature = ColorTemperature.ColdColorTemperature
             Log.i(TAG, "Cold color temperature")
+        }
+        else{
+            colorTemperature = ColorTemperature.None
+            Log.i(TAG, "No color temperature")
+        }
+
 //        bitmap.compress(Bitmap.CompressFormat.PNG, 85, FileOutputStream(file))
+        return colorTemperature
     }
 
-    private fun calculateContrast(width: Int, height: Int, bytes: ByteArray) {
+    private fun calculateContrast(width: Int, height: Int, bytes: ByteArray): Double? {
 //        File(createFile("raw").toString()).writeBytes(bytes)
 
         val pixels: IntArray = IntArray(bytes.size / 2)
@@ -1651,11 +1679,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         }
 
         val max = pixels.max()
-        var min = Int.MAX_VALUE
-        for (element in pixels) {
-            if (element in 1 until min)
-                min = element
-        }
+        val min = pixels.min()
+
         Log.i(TAG, "Max $max, Min: $min")
 //        Log.i(TAG, "contrast ratio: ${max!! / min}")
 
@@ -1663,6 +1688,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         Log.i(TAG, "(0, 0) r: ${rChannel[3023 * width]}, g: ${gChannel[3023 * width]}, b: ${bChannel[3023 * width]}")
         Log.i(TAG, "(w/2, h/2) r: ${rChannel[(width * height) / 2]}, g: ${gChannel[(width * height) / 2]}, b: ${bChannel[(width * height) / 2]}")
 //        Log.i(TAG, "(0, 0) Intensity: ${yChannel[0]}, (w/2, h/2) Intensity: ${yChannel[(width * height) / 2]}")
+        return if (min != null && max != null) {
+            if (min > 0)
+                (max / min).toDouble()
+            else
+                max.toDouble()
+        } else
+            null
     }
 
     fun Bitmap.rotate(degree: Float): Bitmap {
@@ -1703,7 +1735,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         return image
     }
 
-    private fun findLines(bitmap: Bitmap): Mat {
+    private fun findLines(bitmap: Bitmap): LineObject {
         val image = bitmap.toMat()
         val edges = Mat()
         val lines = Mat()
@@ -1734,7 +1766,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 Imgproc.line(edges, start, end, Scalar(255.0, 0.0, 0.0), 3)
             }
         }
-        return edges
+        return LineObject(edges, lines.rows())
     }
 
     private fun createFile(extension: String): File {
@@ -1967,12 +1999,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         var m_isConnected: Boolean = false
         lateinit var m_address: String
 
-        @JvmField
-        val REQUEST_CAMERA_PERMISSION = 1
-
-        @JvmField
-        val PIC_FILE_NAME = "pic.jpg"
-
+        enum class ColorTemperature {
+            WarmColorTemperature,
+            NormalColorTemperature,
+            ColdColorTemperature,
+            None
+        }
         /**
          * Given `choices` of `Size`s supported by a camera, choose the smallest one that
          * is at least as large as the respective texture view size, and that is at most as large as
@@ -2038,6 +2070,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         ) : Closeable {
             override fun close() = image.close()
         }
+
+        data class LineObject(val mat: Mat, val lines: Int)
 
         private const val PERMISSIONS_REQUEST_CODE = 10
         private val PERMISSIONS_REQUIRED = arrayOf(

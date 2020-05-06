@@ -37,7 +37,6 @@ class GalleryImageAdapter(private val itemList: List<Image>) : RecyclerView.Adap
     inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
 
         fun bind() {
-
             val image = itemList[adapterPosition]
 
             // load image

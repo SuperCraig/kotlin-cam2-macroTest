@@ -7,6 +7,8 @@ import android.hardware.camera2.params.StreamConfigurationMap
 import android.media.MediaRecorder
 import android.util.Size
 import com.example.cargicamera2.CompareSizesByArea
+import kotlin.math.pow
+import kotlin.math.roundToInt
 
 private const val MAX_PREVIEW_WIDTH = 1920
 private const val MAX_PREVIEW_HEIGHT = 1080
@@ -137,4 +139,84 @@ fun CameraCharacteristics.chooseOptimalSize(textureViewWidth: Int,
         notBigEnough.size > 0 -> notBigEnough.asSequence().sortedWith(CompareSizesByArea()).last()
         else -> choices[0]
     }
+}
+
+fun getISOList(min: Int, max: Int): ArrayList<Int> {
+    val isoArray = intArrayOf(
+        50, 64, 80, 100, 125, 160, 200, 250, 320,
+        400, 500, 640, 800, 1600, 3200
+    )
+    val isoList: ArrayList<Int> = ArrayList()
+//        isoList.add(50)
+//        isoList.add(64)     //14
+//        isoList.add(80)     //16
+//        isoList.add(100)    //20
+//        isoList.add(125)    //25
+//        isoList.add(160)    //35
+//        isoList.add(200)    //40
+//        isoList.add(250)    //50
+//        isoList.add(320)    //70
+//        isoList.add(400)    //80
+//        isoList.add(500)    //100
+//        isoList.add(640)    //140
+//        isoList.add(800)    //160
+//        isoList.add(1600)   //800
+//        isoList.add(3200)   //1600
+
+    isoArray.forEach {
+        if (it in min until max + 1)
+            isoList.add(it)
+    }
+    return isoList
+}
+
+fun getTvList(min: Long?, max: Long?): ArrayList<Int> {
+    val tvArray = intArrayOf(
+        24000, 16000, 12000, 8000, 6000, 4000, 3000, 2000, 1500, 1000,
+        750, 500, 350, 250, 180, 125, 90, 60, 50, 45, 30, 20, 15, 10
+    )
+    val tvList: ArrayList<Int> = ArrayList()
+//        tvList.add(24000)
+//        tvList.add(16000)   //8000
+//        tvList.add(12000)   //6000
+//        tvList.add(8000)    //4000
+//        tvList.add(6000)    //2000
+//        tvList.add(4000)    //2000
+//        tvList.add(3000)    //1000
+//        tvList.add(2000)    //1000
+//        tvList.add(1500)    //500
+//        tvList.add(1000)    //500
+//        tvList.add(750)     //250
+//        tvList.add(500)     //250
+//        tvList.add(350)     //150
+//        tvList.add(250)     //100
+//        tvList.add(180)     //70
+//        tvList.add(125)     //55
+//        tvList.add(90)      //35
+//        tvList.add(60)      //30
+//        tvList.add(50)      //30
+//        tvList.add(45)      //15
+//        tvList.add(30)      //15
+//        tvList.add(20)      //10
+//        tvList.add(15)      //5
+//        tvList.add(10)      //5
+//        tvList.add(8)       //2
+//        tvList.add(6)       //2
+//        tvList.add(4)       //2
+//        tvList.add(3)       //0.3
+//        tvList.add(2)       //0.5
+//        tvList.add(1)
+//        tvList.add(2)
+//        tvList.add(4)
+//        tvList.add(8)
+//        tvList.add(10)
+//        tvList.add(15)
+//        tvList.add(30)
+    var max1 = 10.0.pow(9) / min!!
+    var min1 = 10.0.pow(9) / max!!
+    tvArray.forEach {
+        if (it in min1.toInt() until (max1 * 1.1).roundToInt())
+            tvList.add(it)
+    }
+    return tvList
 }
