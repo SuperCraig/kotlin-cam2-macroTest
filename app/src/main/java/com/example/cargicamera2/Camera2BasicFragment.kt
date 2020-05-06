@@ -250,6 +250,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private var aperture: Float = 0f
     private var exposureTime: Long = 0
     private var sensorSensitivity: Int = 0
+    private var apertureProgress:Int = 0
+    private var exposureProgress: Int = 0
+    private var sensorSensitivityProgress: Int = 0
 
     private var isAutoEnable: Boolean = false
     private var isManualEnable: Boolean = false
@@ -403,10 +406,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         view.findViewById<View>(R.id.btnRecordBar).setOnClickListener(this)
         view.findViewById<View>(R.id.btnSetting).setOnClickListener(this)
 
+        var vibrate = context?.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        var vibrationEffect = VibrationEffect.createOneShot(2, VibrationEffect.DEFAULT_AMPLITUDE)
+
         readData()          //read shared preferneces data & apply
         readSettingData()
 
         val isoCustomSeekBar: CustomSeekBar = view.findViewById(R.id.isoCustomSeekBar)
+        isoCustomSeekBar.progress = sensorSensitivityProgress
         isoCustomSeekBar.text = "ISO $sensorSensitivity"
         isoCustomSeekBar.setOnTouchListener { _, _ ->
             val progress = isoCustomSeekBar.progress
@@ -418,17 +425,22 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             val index = progress * (isoList.size - 1) / isoCustomSeekBar.maxProgress
             val iso = isoList[index]
 
+            if (sensorSensitivity != iso)
+                vibrate.vibrate(vibrationEffect)
+
             previewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, iso)
 //            unlockFocus()
             captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
 
             sensorSensitivity = iso
+            sensorSensitivityProgress = progress
             isoCustomSeekBar.text = "ISO $iso"
             saveData()      //save shared preferences
             false
         }
 
         val tvCustomSeekBar: CustomSeekBar = view.findViewById(R.id.tvCustomSeekBar)
+        tvCustomSeekBar.progress = exposureProgress
         tvCustomSeekBar.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / exposureTime)}s"
         tvCustomSeekBar.setOnTouchListener{_, _ ->
             val progress = tvCustomSeekBar.progress
@@ -441,19 +453,23 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             var ae: Long = (10.0.pow(9) / tvList[index]).roundToLong()
             if (ae < min) ae = min
             if (ae > max) ae = max
-            Log.i(TAG, "AE: $ae")
+
+            if (exposureTime != ae)
+                vibrate.vibrate(vibrationEffect)
+
             previewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, ae)      //shutter speed = 1 / (10^9 / ae) sec.
 //            unlockFocus()
-
             captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
-            exposureTime = ae
 
+            exposureTime = ae
+            exposureProgress = progress
             tvCustomSeekBar.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / ae)}s"
             saveData()      //save shared preferences
             false
         }
 
         val avCustomSeekBar: CustomSeekBar = view.findViewById(R.id.avCustomSeekBar)
+        avCustomSeekBar.progress = apertureProgress
         avCustomSeekBar.text = "F$aperture"
         avCustomSeekBar.setOnTouchListener{_, _ ->
             val apertures = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES)
@@ -463,9 +479,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             if(apertureIndex < apertures?.size ?: 1)
                 aperture = apertures?.get(apertureIndex)!!
 
+            if (this.aperture != aperture)
+                vibrate.vibrate(vibrationEffect)
+
             previewRequestBuilder.set(CaptureRequest.LENS_APERTURE, aperture)
             captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
             this.aperture = aperture
+            apertureProgress = avCustomSeekBar.progress
             avCustomSeekBar.text = "F$aperture"
             saveData()
             false
@@ -1817,6 +1837,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             .putLong(EXPOSURE_TIME, exposureTime)
             .putFloat(APERTURE, aperture)
             .putBoolean(MANUAL_ENABLE, isManualEnable)
+            .putInt(APERTURE_PROGRESS, apertureProgress)
+            .putInt(EXPOSURE_PROGRESS, exposureProgress)
+            .putInt(SENSOR_SENSITIVITY_PROGRESS, sensorSensitivityProgress)
             .apply()
     }
 
@@ -1826,6 +1849,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         exposureTime = settings.getLong(EXPOSURE_TIME, 0)
         aperture = settings.getFloat(APERTURE, 0f)
         isManualEnable = settings.getBoolean(MANUAL_ENABLE, false)
+        apertureProgress = settings.getInt(APERTURE_PROGRESS, 0)
+        exposureProgress = settings.getInt(EXPOSURE_PROGRESS, 0)
+        sensorSensitivityProgress = settings.getInt(SENSOR_SENSITIVITY_PROGRESS, 0)
     }
 
     fun readSettingData(){
@@ -1989,6 +2015,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         private const val EXPOSURE_TIME = "EXPOSURE_TIME"
         private const val SENSOR_SENSITIVITY = "SENSOR_SENSITIVITY"
         private const val MANUAL_ENABLE = "MANUAL_ENABLE"
+        private const val APERTURE_PROGRESS = "APERTURE_PROGRESS"
+        private const val EXPOSURE_PROGRESS = "EXPOSURE_PROGRESS"
+        private const val SENSOR_SENSITIVITY_PROGRESS = "SENSOR_SENSITIVITY_PROGRESS"
 
         private const val RAW_FORMAT = ImageFormat.RAW_SENSOR
         private const val JPEG_FORMAT = ImageFormat.JPEG
