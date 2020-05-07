@@ -28,10 +28,7 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentTransaction
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
-import com.example.cargicamera2.extensions.MBITSP2020
-import com.example.cargicamera2.extensions.OrientationLiveData
-import com.example.cargicamera2.extensions.getISOList
-import com.example.cargicamera2.extensions.getTvList
+import com.example.cargicamera2.extensions.*
 import com.example.cargicamera2.fragments.PermissionsFragment
 import com.example.cargicamera2.room.History
 import com.example.cargicamera2.room.HistoryViewModel
@@ -278,6 +275,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private val mediaActionSound: MediaActionSound = MediaActionSound()
 
     private var shutterTimes = 0
+
+    private lateinit var colorTemperature: ColorTemperature
+    private var refreshRate: Int = 0
+    private var contrast: Double? = 0.0
+
     /**
      * [CameraDevice.StateCallback] is called when [CameraDevice] changes its state.
      */
@@ -429,7 +431,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 vibrate.vibrate(vibrationEffect)
 
             previewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, iso)
-//            unlockFocus()
             captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
 
             sensorSensitivity = iso
@@ -458,7 +459,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 vibrate.vibrate(vibrationEffect)
 
             previewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, ae)      //shutter speed = 1 / (10^9 / ae) sec.
-//            unlockFocus()
             captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
 
             exposureTime = ae
@@ -517,6 +517,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             tvCustomSeekBar.visibility = View.INVISIBLE
             isoCustomSeekBar.visibility = View.INVISIBLE
         }
+
+//        if (isAutoEnable)
+//            btnAuto.setImageResource(R.drawable.ic_auto_selection)
+//        else
+//            btnAuto.setImageResource(R.drawable.ic_auto)
 
         progressbarShutter = view.findViewById(R.id.progressBar_shutter)
 
@@ -628,11 +633,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     var historyViewModel = ViewModelProvider(this@Camera2BasicFragment).get(HistoryViewModel::class.java)
                     val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
                     val currentDateTime: String = dateFormat.format(Date()) // Find todays date
-                    historyViewModel.insert(History(currentDateTime, 20000, 20202020, "Warm Red"))
+                    historyViewModel.insert(History(currentDateTime, contrast!!.toInt(), refreshRate, colorTemperature.name))
 
                     view.findViewById<View>(R.id.btnPicture).isEnabled = true
                 }
-
 
                 Log.i(TAG, "SENSOR_INFO_COLOR_FILTER_ARRANGEMENT: " + characteristics.get(CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT))
                 cameraHandler.postDelayed({
@@ -654,12 +658,21 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     btnAuto.setImageResource(R.drawable.ic_auto)
                 }
 
-//                if (activity != null) {
-//                    AlertDialog.Builder(activity)
-//                        .setMessage(R.string.intro_message)
-//                        .setPositiveButton(android.R.string.ok, null)
-//                        .show()
-//                }
+                if (flashSupported)
+                    previewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
+                    CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH)
+                else
+                    previewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
+
+                previewRequestBuilder.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO)
+                captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
+
+                isManualEnable = false
+                avCustomSeekBar.visibility = View.INVISIBLE
+                tvCustomSeekBar.visibility = View.INVISIBLE
+                isoCustomSeekBar.visibility = View.INVISIBLE
+                btnManual.setImageResource(R.drawable.ic_manual)
+                saveData()
             }
             R.id.btnContrast -> {
                 val btnContrast = view.findViewById<ImageView>(R.id.btnContrast)
@@ -753,6 +766,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     avCustomSeekBar.visibility = View.INVISIBLE
                     isoCustomSeekBar.visibility = View.INVISIBLE
                 }
+
+                previewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
+                captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
+
+                isAutoEnable = false
+                btnAuto.setImageResource(R.drawable.ic_auto)
                 saveData()
             }
             R.id.btnPhotoBox -> {
@@ -1122,6 +1141,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
 //                            unlockFocus()
                             captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
+
+                            Log.i(TAG, "CameraCaptureSession.StateCallback")
                         } catch (e: CameraAccessException) {
                             Log.e(TAG, e.toString())
                         }
@@ -1310,8 +1331,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
         val rotation = activity!!.windowManager.defaultDisplay.rotation
 
-        //captureRequest.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_OFF)
-        captureRequest.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
+//        captureRequest.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
         captureRequest.set(CaptureRequest.SCALER_CROP_REGION, zoom)
         if (sensorSensitivity != 0) captureRequest.set(CaptureRequest.SENSOR_SENSITIVITY, sensorSensitivity)     //20200331 Craig return last state
         if (exposureTime.toInt() != 0)  captureRequest.set(CaptureRequest.SENSOR_EXPOSURE_TIME, exposureTime)
@@ -1411,9 +1431,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         temp.compress(Bitmap.CompressFormat.JPEG, 100, FileOutputStream(output))
                     }
 
-                    calculateColorTemp(bytes)
                     progressbarShutter?.progress = 100 / 3 * 2
-                    calculateRefreshRate(bytes)
+                    colorTemperature = calculateColorTemp(bytes)
+
+                    refreshRate = calculateRefreshRate(bytes)
                     progressbarShutter?.progress = 100 / 3 * 3
                     progressbarShutter?.visibility = View.INVISIBLE
                     cont.resume(output)
@@ -1437,7 +1458,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     val byteArray = ByteArray(byteBuffer.remaining())
                     byteBuffer.get(byteArray)
 
-                    calculateContrast(result.image.width, result.image.height, byteArray)
+                    contrast = calculateContrast(result.image.width, result.image.height, byteArray)
                     progressbarShutter?.progress = 100 / 3 * 1
 
 //                    var aver = average(byteArray)
@@ -1490,7 +1511,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         return if (count == 0) Double.NaN else sum / (count / 2)
     }
 
-    private fun calculateRefreshRate(bytes: ByteArray) {
+    private fun calculateRefreshRate(bytes: ByteArray): Int {
         val temp  = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
         val bitmap = temp.rotate(90f)
         //val mat = Mat()
@@ -1504,7 +1525,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         Log.i(TAG, "find lines: ${lineObject.lines}")
 
         //Do continually shot here
+        val refresh = 0
         Log.i(TAG, "Find circles fin!")
+        return refresh
     }
 
     private fun calculateColorTemp(bytes: ByteArray): ColorTemperature {
@@ -1537,7 +1560,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             colorTemperature = ColorTemperature.WarmColorTemperature
             Log.i(TAG, "Warm color temperature")
         }
-        else if (abs(red - green) < (0.1 * 256) && (red - blue) < (0.1 * 256)){
+        else if (abs(red - green) < (0.1 * 256) && (red - blue) < (0.1 * 256) && (red + blue + green) > 30 ){
             colorTemperature = ColorTemperature.NormalColorTemperature
             Log.i(TAG, "Normal color temperature")
         }
@@ -1566,135 +1589,16 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 pixels[i / 2] += value
         }
 
-        Log.i(TAG, "Pixels max: ${pixels.max()}, Pixels min: ${pixels.min()}")
-        val rChannel = IntArray(width * height)
-        val gChannel = IntArray(width * height)
-        val bChannel = IntArray(width * height)
-//        val yChannel = IntArray(width * height)
-
-        var min_r = Int.MAX_VALUE
-        var min_g = Int.MAX_VALUE
-        var min_b = Int.MAX_VALUE
-        var max_r = Int.MIN_VALUE
-        var max_g = Int.MIN_VALUE
-        var max_b = Int.MIN_VALUE
-
-        Log.i(TAG, "Pixels size: ${pixels.size}")
-        Log.i(TAG, "Img Width: $width, Height: $height")
-        Log.i(TAG, "White balance")
-        for (j in 0 until height) {         //for finding max & min RGB for white balance
+        val redBuffer: IntArray = IntArray(width * height)
+        val greenBuffer: IntArray = IntArray(width * height)
+        val blueBuffer: IntArray = IntArray(width * height)
+        val rawConverter: RawConverter = RawConverter(pixels, width, height)
+        for(j in 0 until height) {
             for (i in 0 until width) {
-                if (abs(i - j) % 2 == 0) {
-                    if (pixels[i + j * width] < min_g && pixels[i + j * width] != 0) min_g = pixels[i + j * width]
-                    if (pixels[i + j * width] > max_g) max_g = pixels[i + j * width]
-                }
-                else if (i % 2 == 0 && j % 2 == 1 ) {
-                    if (pixels[i + j * width] < min_b && pixels[i + j * width] != 0) min_b = pixels[i + j * width]
-                    if (pixels[i + j * width] > max_b) max_b = pixels[i + j * width]
-                }
-                else if (i % 2 == 1 && j % 2 == 0) {
-                    if (pixels[i + j * width] < min_r && pixels[i + j * width] != 0) min_r = pixels[i + j * width]
-                    if (pixels[i + j * width] > max_r) max_r = pixels[i + j * width]
-                }
-            }
-        }
-
-        Log.i(TAG, "Min r: $min_r, Min g: $min_g, Min b: $min_b")
-        Log.i(TAG, "Max r: $max_r, Max g: $max_g, Max b: $max_b")
-        Log.i(TAG, "Demosiac")
-        for (j in 0 until height) {
-            for (i in 0 until width) {
-                var r: Int
-                var g = 0
-                var b: Int
-                if (abs(i - j) % 2 == 0) {
-                    g =  pixels[i + j * width]
-                } else {
-                    var count = 0
-                    if ((i - 1) >= 0) {
-                        g += pixels[(i - 1) + j * width]
-                        count ++
-                    }
-                    if ((i + 1) < width) {
-                        g += pixels[(i + 1) + j * width]
-                        count ++
-                    }
-                    if ((j - 1) >= 0) {
-                        g += pixels[i + (j - 1) * width]
-                        count ++
-                    }
-                    if ((j + 1) < height) {
-                        g += pixels[i + (j + 1) * width]
-                        count ++
-                    }
-                    g /= count
-                }
-
-                if (i % 2 == 0 && j % 2 == 1) {
-                    b = pixels[i + j * width]
-                } else {
-                    if (j % 2 == 1) {
-                        if ((i + 1) < width)
-                            b = (pixels[(i - 1) + j * width] + pixels[(i + 1) + j * width]) /2
-                        else
-                            b = pixels[(i - 1) + j * width]
-                    } else {
-                        if (j == 0) {
-                            if (i % 2 == 0)
-                                b = pixels[i + (j + 1) * width]
-                            else
-                                if ((i + 1) < width)
-                                    b = (pixels[(i - 1) + (j + 1) * width] + pixels[(i + 1) + (j + 1) * width]) / 2
-                                else
-                                    b = pixels[(i - 1) + (j + 1) * width]
-                        } else {
-                            if (i % 2 == 0)
-                                b = (pixels[i + (j - 1) * width] + pixels[i + (j + 1) * width]) / 2
-                            else
-                                if ((i + 1) < width)
-                                    b = (pixels[(i - 1) + (j - 1) * width] + pixels[(i + 1) + (j - 1) * width] + pixels[(i - 1) + (j + 1) * width] + pixels[(i + 1) + (j + 1) * width]) / 4
-                                else
-                                    b = (pixels[(i - 1) + (j - 1) * width] + pixels[(i - 1) + (j + 1) * width]) / 2
-                        }
-                    }
-                }
-
-                if (i % 2 == 1 && j % 2 == 0) {
-                    r = pixels[i + j * width]
-                } else {
-                    if (i % 2 == 1) {
-                        if ((j + 1) < height)
-                            r = (pixels[i + (j - 1) * width] + pixels[i + (j + 1) * width]) / 2
-                        else
-                            r = pixels[i + (j - 1) * width]
-                    } else {
-                        if (i == 0) {
-                            if (j % 2 == 0)
-                                r = pixels[(i + 1) + j * width]
-                            else
-                                if ((j + 1) < height)
-                                    r = (pixels[(i + 1) + (j - 1) * width] + pixels[(i + 1) + (j + 1) * width]) / 2
-                                else
-                                    r = pixels[(i + 1) + (j - 1) * width]
-                        } else {
-                            if (j % 2 == 0)
-                                r = (pixels[(i - 1) + j * width] + pixels[(i + 1) + j * height]) / 2
-                            else
-                                if ((j + 1) < height)
-                                    r = (pixels[(i - 1) + (j - 1) * width] + pixels[(i + 1) + (j - 1) * width] + pixels[(i - 1) + (j + 1) * width] + pixels[(i + 1) + (j + 1) * width]) / 4
-                                else
-                                    r = (pixels[(i - 1) + (j - 1) * width] + pixels[(i + 1) + (j - 1) * width]) / 2
-                        }
-                    }
-                }
-
-                rChannel[i + j * width] = r
-                gChannel[i + j * width] = g
-                bChannel[i + j * width] = b
-//                r = (r - min_r) * 65535 / (max_r - min_r)
-//                g = (g - min_g) * 65535 / (max_g - min_g)
-//                b = (b - min_b) * 65535 / (max_b - min_b)
-//                yChannel[i + j * width] = ((r * 299) + (g * 578) + (b * 114)) / 1000
+                val p = rawConverter.debay(CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT_GRBG, i, j)
+                redBuffer[rawConverter.getPixel(i, j)] = p[0]
+                greenBuffer[rawConverter.getPixel(i, j)] = p[1]
+                blueBuffer[rawConverter.getPixel(i, j)] = p[2]
             }
         }
 
@@ -1705,8 +1609,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 //        Log.i(TAG, "contrast ratio: ${max!! / min}")
 
         Log.i(TAG, "(0, 0) mR: ${pixels[1]}, mG: ${pixels[0]}, mB: ${pixels[width]}")
-        Log.i(TAG, "(0, 0) r: ${rChannel[3023 * width]}, g: ${gChannel[3023 * width]}, b: ${bChannel[3023 * width]}")
-        Log.i(TAG, "(w/2, h/2) r: ${rChannel[(width * height) / 2]}, g: ${gChannel[(width * height) / 2]}, b: ${bChannel[(width * height) / 2]}")
+        Log.i(TAG, "maxR: ${redBuffer.max()}, maxG: ${greenBuffer.max()}, maxB: ${blueBuffer.max()}")
+        Log.i(TAG, "minR: ${redBuffer.min()}, minG: ${greenBuffer.min()}, minB: ${blueBuffer.min()}")
 //        Log.i(TAG, "(0, 0) Intensity: ${yChannel[0]}, (w/2, h/2) Intensity: ${yChannel[(width * height) / 2]}")
         return if (min != null && max != null) {
             if (min > 0)
@@ -1837,6 +1741,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             .putLong(EXPOSURE_TIME, exposureTime)
             .putFloat(APERTURE, aperture)
             .putBoolean(MANUAL_ENABLE, isManualEnable)
+//            .putBoolean(AUTO_ENABLE, isAutoEnable)
             .putInt(APERTURE_PROGRESS, apertureProgress)
             .putInt(EXPOSURE_PROGRESS, exposureProgress)
             .putInt(SENSOR_SENSITIVITY_PROGRESS, sensorSensitivityProgress)
@@ -1849,6 +1754,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         exposureTime = settings.getLong(EXPOSURE_TIME, 0)
         aperture = settings.getFloat(APERTURE, 0f)
         isManualEnable = settings.getBoolean(MANUAL_ENABLE, false)
+//        isAutoEnable = settings.getBoolean(AUTO_ENABLE, false)
         apertureProgress = settings.getInt(APERTURE_PROGRESS, 0)
         exposureProgress = settings.getInt(EXPOSURE_PROGRESS, 0)
         sensorSensitivityProgress = settings.getInt(SENSOR_SENSITIVITY_PROGRESS, 0)
@@ -2015,6 +1921,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         private const val EXPOSURE_TIME = "EXPOSURE_TIME"
         private const val SENSOR_SENSITIVITY = "SENSOR_SENSITIVITY"
         private const val MANUAL_ENABLE = "MANUAL_ENABLE"
+//        private const val AUTO_ENABLE = "AUTO_ENABLE"
         private const val APERTURE_PROGRESS = "APERTURE_PROGRESS"
         private const val EXPOSURE_PROGRESS = "EXPOSURE_PROGRESS"
         private const val SENSOR_SENSITIVITY_PROGRESS = "SENSOR_SENSITIVITY_PROGRESS"
