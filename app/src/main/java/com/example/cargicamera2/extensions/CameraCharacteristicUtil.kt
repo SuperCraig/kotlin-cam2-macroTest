@@ -172,7 +172,7 @@ fun getISOList(min: Int, max: Int): ArrayList<Int> {
 
 fun getTvList(min: Long?, max: Long?): ArrayList<Int> {
     val tvArray = intArrayOf(
-        24000, 16000, 12000, 8000, 6000, 4000, 3000, 2000, 1500, 1000,
+        24000, 16000, 12000, 8000, 7000, 6000, 5500, 5000, 4500, 4000, 3500, 3000, 2500, 2000, 1500, 1000,
         750, 500, 350, 250, 180, 125, 90, 60, 50, 45, 30, 20, 15, 10
     )
     val tvList: ArrayList<Int> = ArrayList()

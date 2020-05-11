@@ -380,7 +380,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
         override fun onCaptureSequenceAborted(session: CameraCaptureSession, sequenceId: Int) {
             super.onCaptureSequenceAborted(session, sequenceId)
-            Log.i(TAG, "onCaptureSequenceAborted")
         }
 
     }
@@ -496,9 +495,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         try {
             val imageGalleryUiModelList: MutableMap<String, ArrayList<ImageGalleryUiModel>> =
                 MediaHelper.getImageGallery(this.context!!)
-            imageGalleryUiModelList.forEach {
-                Log.i("Camera2Fragment", it.key + ": " + it.value)
-            }
 
             val imageList:ArrayList<ImageGalleryUiModel> = imageGalleryUiModelList["Camera"]!!
             file = File(imageList[0].imageUri)
@@ -655,7 +651,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                     progressbarShutter?.visibility = View.INVISIBLE
 
-                    var historyViewModel = ViewModelProvider(this@Camera2BasicFragment).get(HistoryViewModel::class.java)
+                    val historyViewModel = ViewModelProvider(this@Camera2BasicFragment).get(HistoryViewModel::class.java)
                     val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
                     val currentDateTime: String = dateFormat.format(Date()) // Find todays date
                     historyViewModel.insert(History(currentDateTime, contrast!!.toInt(), refreshRate, colorTemperature.name))
@@ -666,7 +662,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     }
                 }
 
-                Log.i(TAG, "SENSOR_INFO_COLOR_FILTER_ARRANGEMENT: " + characteristics.get(CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT))
                 cameraHandler.postDelayed({
                     view.post {
                         if (!btnPicture.isEnabled)
@@ -1710,9 +1705,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         val greenBuffer: IntArray = IntArray(width * height)
         val blueBuffer: IntArray = IntArray(width * height)
         val rawConverter: RawConverter = RawConverter(pixels, width, height)
+        val colorFilterArrangement = characteristics.get(CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT)
         for(j in 0 until height) {
             for (i in 0 until width) {
-                val p = rawConverter.debay(CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT_GRBG, i, j)
+                val p = rawConverter.debay(colorFilterArrangement!!, i, j)
                 redBuffer[rawConverter.getPixel(i, j)] = p[0]
                 greenBuffer[rawConverter.getPixel(i, j)] = p[1]
                 blueBuffer[rawConverter.getPixel(i, j)] = p[2]
@@ -1725,19 +1721,20 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         val min = pixels.min()
 
         Log.i(TAG, "Max $max, Min: $min")
-//        Log.i(TAG, "contrast ratio: ${max!! / min}")
 
         Log.i(TAG, "(0, 0) mR: ${pixels[1]}, mG: ${pixels[0]}, mB: ${pixels[width]}")
         Log.i(TAG, "maxR: ${redBuffer.max()}, maxG: ${greenBuffer.max()}, maxB: ${blueBuffer.max()}")
         Log.i(TAG, "minR: ${redBuffer.min()}, minG: ${greenBuffer.min()}, minB: ${blueBuffer.min()}")
         Log.i(TAG, "Contrast: $contrast")
-        return if (min != null && max != null) {
-            if (min > 0)
-                (max / min).toDouble()
-            else
-                max.toDouble()
-        } else
-            null
+//        return if (min != null && max != null) {
+//            if (min > 0)
+//                (max / min).toDouble()
+//            else
+//                max.toDouble()
+//        } else
+//            null
+
+        return contrast
     }
 
     private fun luminance(r: Int, g: Int, b: Int): Double {
@@ -1750,7 +1747,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         val lum2 = luminance(rgb2[0], rgb2[1], rgb2[2])
         val brightness = max(lum1, lum2)
         val darkest = min(lum1, lum2)
-        return (brightness + 5) / (darkest + 5)
+        return (brightness + 1) / (darkest + 1)
     }
 
     fun Bitmap.rotate(degree: Float): Bitmap {
@@ -1804,8 +1801,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         Imgproc.Canny(edges, edges, 100.0, 200.0, 3)
 
         val threshold = 80
-        val minLineSize = 20.0
-        val linGap = 20.0
+        val minLineSize = 50.0
+        val linGap = 50.0
 
         Imgproc.HoughLinesP(edges, lines, 1.0, Math.PI / 180, threshold, minLineSize, linGap)
 
