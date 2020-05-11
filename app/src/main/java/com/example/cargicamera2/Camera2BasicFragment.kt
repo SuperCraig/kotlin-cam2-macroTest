@@ -61,6 +61,7 @@ import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
+import kotlin.collections.ArrayList
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
@@ -276,7 +277,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     private var shutterTimes = 0
 
-    private lateinit var colorTemperature: ColorTemperature
+    private var colorTemperature: ColorTemperature = ColorTemperature.None
     private var refreshRate: Int = 0
     private var contrast: Double? = 0.0
 
@@ -523,6 +524,21 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 //        else
 //            btnAuto.setImageResource(R.drawable.ic_auto)
 
+        if (isColorTemperatureEnable)
+            btnColorTemperature.setImageResource(R.drawable.ic_color_temperature_selection)
+        else
+            btnColorTemperature.setImageResource(R.drawable.ic_color_temperature)
+
+        if (isRefreshRateEnable)
+            btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate_selection)
+        else
+            btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate)
+
+        if (isContrastEnable)
+            btnContrast.setImageResource(R.drawable.ic_refresh_rate_selection)
+        else
+            btnContrast.setImageResource(R.drawable.ic_refresh_rate)
+
         progressbarShutter = view.findViewById(R.id.progressBar_shutter)
 
         val stamp = view.findViewById<View>(R.id.android)
@@ -579,6 +595,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     }
                 }
 
+                var task = 0
+                if (isColorTemperatureEnable) task += 1
+                if (isContrastEnable) task += 1
+                if (isRefreshRateEnable) task += 1
+                var scale = if (task != 0) 100 / task
+                else 100
+
                 // Disable click listener to prevent multiple requests simultaneously in flight
                 progressbarShutter?.max = 100
                 progressbarShutter?.progress = 0
@@ -588,54 +611,59 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 // Perform I/O heavy operations in a different scope
                 lifecycleScope.launch(Dispatchers.IO) {
-                    mRawImageReader?.let {
-                        takePhoto(it).use { result ->
-                            Log.d(TAG, "Result received: $result")
+                    if (isContrastEnable) {
+                        if (mRawImageReader != null) {
+                            takePhoto(mRawImageReader!!).use { result ->
+                                val output = saveResult(result, FunctionToDo.Contrast)
+                            }
+                            shutterTimes += 1
+                        } else {
+                            takePhoto(mImageReader).use { result ->
+                                val output = saveResult(result, FunctionToDo.Contrast)
+                            }
+                            shutterTimes += 1
+                        }
+                        scale += scale
+                        progressbarShutter?.progress = scale
+                    }
 
-                            // Save the result to disk
-                            val output = saveResult(result)
-                            Log.d(TAG, "Image saved: ${output.absolutePath}")
+                    if (isColorTemperatureEnable) {
+                        takePhoto(mImageReader).use { result ->
+                            val output = saveResult(result, FunctionToDo.ColorTemperature)
 
-                            MediaScannerConnection.scanFile(
-                                context, arrayOf(output.path),
-                                arrayOf("image/", "image/x-adobe-dng")
-                            ) { path, _ ->
-                                Log.i(TAG, "onScanCompleted : $path")
+                            if (output.name.contains("jpg") && isJPEGSavedEnable) {
+                                saveExif(output, aperture.toString(), (10.0.pow(9) / exposureTime).toString(), sensorSensitivity.toString())
                             }
                         }
                         shutterTimes += 1
+                        scale += scale
+                        progressbarShutter?.progress = scale
                     }
 
-                    takePhoto(mImageReader).use { result ->
-                        Log.d(TAG, "Result received: $result")
+                    if (isRefreshRateEnable) {
+                        takePhoto(mImageReader).use { result ->
+                            val output = saveResult(result, FunctionToDo.RefreshRate)
 
-                        // Save the result to disk
-                        val output = saveResult(result)
-                        Log.d(TAG, "Image saved: ${output.absolutePath}")
-
-                        // If the result is a JPEG file, update EXIF metadata with orientation info
-                        if (output.name.contains("jpg")) {
-                            val exif = ExifInterface(output.absolutePath)
-                            exif.setAttribute(
-                                ExifInterface.TAG_ORIENTATION, result.orientation.toString()
-                            )
-                            exif.saveAttributes()
-                            Log.d(TAG, "EXIF metadata saved: ${output.absolutePath}")
+                            if (output.name.contains("jpg") && isJPEGSavedEnable) {
+                                saveExif(output, aperture.toString(), (10.0.pow(9) / exposureTime).toString(), sensorSensitivity.toString())
+                            }
                         }
-
-                        MediaScannerConnection.scanFile(context, arrayOf(output.path),
-                            arrayOf("image/jpeg")) { path, _ ->
-                            Log.i(TAG, "onScanCompleted : $path")
-                        }
+                        shutterTimes += 1
+                        scale += scale
+                        progressbarShutter?.progress = scale
                     }
-                    shutterTimes += 1
+
+                    progressbarShutter?.visibility = View.INVISIBLE
 
                     var historyViewModel = ViewModelProvider(this@Camera2BasicFragment).get(HistoryViewModel::class.java)
                     val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
                     val currentDateTime: String = dateFormat.format(Date()) // Find todays date
                     historyViewModel.insert(History(currentDateTime, contrast!!.toInt(), refreshRate, colorTemperature.name))
 
-                    view.findViewById<View>(R.id.btnPicture).isEnabled = true
+                    lifecycleScope.launch(Dispatchers.Main) {
+                        view.findViewById<View>(R.id.btnPicture).isEnabled = true
+                        Log.i(TAG, "Done Function to Do")
+                    }
                 }
 
                 Log.i(TAG, "SENSOR_INFO_COLOR_FILTER_ARRANGEMENT: " + characteristics.get(CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT))
@@ -698,6 +726,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, 255.toByte(), 221.toByte(), 128.toByte())
                     it.composeCommand()
                 })
+
+                saveData()
             }
             R.id.btnRefreshRate -> {
                 val btnRefreshRate = view.findViewById<ImageView>(R.id.btnRefreshRate)
@@ -723,6 +753,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, 255.toByte(), 221.toByte(), 128.toByte())
                     it.composeCommand()
                 })
+
+                saveData()
             }
             R.id.btnColorTemperature -> {
                 val btnColorTemperature = view.findViewById<ImageView>(R.id.btnColorTemperature)
@@ -748,6 +780,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, 255.toByte(), 221.toByte(), 128.toByte())
                     it.composeCommand()
                 })
+
+                saveData()
             }
             R.id.btnManual ->{
                 val btnManual = view.findViewById<ImageButton>(R.id.btnManual)
@@ -1414,9 +1448,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
 
     /** Helper function used to save a [CombinedCaptureResult] into a [File] */
-    private suspend fun saveResult(result: CombinedCaptureResult): File = suspendCoroutine { cont ->
+    private suspend fun saveResult(result: CombinedCaptureResult, function: FunctionToDo): File = suspendCoroutine { cont ->
         when (result.format) {
-
             // When the format is JPEG or DEPTH JPEG we can simply save the bytes as-is
             ImageFormat.JPEG, ImageFormat.DEPTH_JPEG -> {
                 val buffer = result.image.planes[0].buffer
@@ -1424,19 +1457,38 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 try {
                     val output = createFile("jpg")
-//                    FileOutputStream(output).use { it.write(bytes) }
 
                     if (isJPEGSavedEnable) {
                         val temp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size).rotate(90f)
                         temp.compress(Bitmap.CompressFormat.JPEG, 100, FileOutputStream(output))
+
+                        MediaScannerConnection.scanFile(context, arrayOf(output.path),
+                            arrayOf("image/jpeg")) { path, _ ->
+                            Log.i(TAG, "onScanCompleted : $path")
+                        }
                     }
 
-                    progressbarShutter?.progress = 100 / 3 * 2
-                    colorTemperature = calculateColorTemp(bytes)
+                    when (function) {
+                        FunctionToDo.ColorTemperature -> {
+                            colorTemperature = if (isColorTemperatureEnable)
+                                calculateColorTemp(bytes)
+                            else
+                                ColorTemperature.None
+                        }
+                        FunctionToDo.RefreshRate -> {
+                            refreshRate = if (isRefreshRateEnable)
+                                calculateRefreshRate(bytes)
+                            else
+                                0
+                        }
+                        FunctionToDo.Contrast -> {
+                            contrast = if (isContrastEnable)
+                                calculateContrast(bytes)
+                            else
+                                0.0
+                        }
+                    }
 
-                    refreshRate = calculateRefreshRate(bytes)
-                    progressbarShutter?.progress = 100 / 3 * 3
-                    progressbarShutter?.visibility = View.INVISIBLE
                     cont.resume(output)
                 } catch (exc: IOException) {
                     Log.e(TAG, "Unable to write JPEG image to file", exc)
@@ -1451,22 +1503,32 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 try {
                     val output = createFile("dng")
 
-                    if (isRAWSavedEnable)
+                    if (isRAWSavedEnable){
                         FileOutputStream(output).use { dngCreator.writeImage(it, result.image) }
+
+                        MediaScannerConnection.scanFile(
+                            context, arrayOf(output.path),
+                            arrayOf("image/", "image/x-adobe-dng")
+                        ) { path, _ ->
+                            Log.i(TAG, "onScanCompleted : $path")
+                        }
+                    }
 
                     val byteBuffer = result.image.planes[0].buffer
                     val byteArray = ByteArray(byteBuffer.remaining())
                     byteBuffer.get(byteArray)
 
-                    contrast = calculateContrast(result.image.width, result.image.height, byteArray)
-                    progressbarShutter?.progress = 100 / 3 * 1
+                    when (function) {
+                        FunctionToDo.Contrast -> {
+                            contrast = if (isContrastEnable)
+                                calculateContrastRAW(result.image.width, result.image.height, byteArray)
+                            else
+                                0.0
+                        }
+                    }
 
 //                    var aver = average(byteArray)
-                    Log.i(TAG, "Image size: ${result.image.width} x ${result.image.height}")
-                    Log.i(TAG, "Buffer size: ${byteArray.size}")
 //                    Log.i(TAG, "Buffer average: ${aver}")
-
-                    Log.i(TAG,"Dng orientation: "+ result.orientation.toString())
 
                     cont.resume(output)
                 } catch (exc: IOException) {
@@ -1483,6 +1545,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 cont.resumeWithException(exc)
             }
         }
+    }
+
+    private fun saveExif(file: File, av: String, tv: String, iso: String) {
+        val exif = ExifInterface(file.absolutePath)
+        exif.setAttribute(ExifInterface.TAG_ISO_SPEED_RATINGS, iso)
+        exif.setAttribute(ExifInterface.TAG_EXPOSURE_TIME, tv)
+        exif.setAttribute(ExifInterface.TAG_APERTURE_VALUE, av)
+        exif.saveAttributes()
     }
 
     private fun sensorToDeviceRotation(cameraCharacteristics: CameraCharacteristics, deviceOrientation: Int): Int {
@@ -1549,10 +1619,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         red /= count
         green /= count
         blue /= count
-        val n: Double = ((0.23881) * red + (0.25499) * green - (0.58291) * blue) / ((0.11109) * red - (0.85406) * green + (0.52289) * blue)
-        val CCT = 449 * n.pow(3) + 3525 * n.pow(2) + 6823.3 * n + 5520.33
 
-        Log.i(TAG, "CCT: $CCT")
+        val cxcy = calculateXY(red, green, blue)
+        val cct = calculateCCT(cxcy[0], cxcy[1])
+
+        Log.i(TAG, "cct: $cct")
         Log.i(TAG, "Red: $red, Green: $green, Blue: $blue")
 
         var colorTemperature: ColorTemperature = ColorTemperature.None
@@ -1577,7 +1648,53 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         return colorTemperature
     }
 
-    private fun calculateContrast(width: Int, height: Int, bytes: ByteArray): Double? {
+    private fun calculateXY(r: Float, g: Float, b: Float):DoubleArray {
+        val X = (0.4125 * r) + (0.3576 * g) + (0.1804 * b)
+        val Y = (0.2127 * r) + (0.7125 * g) + (0.0722 * b)
+        val Z = (0.0193 * r) + (0.1192 * g) + (0.9503 * b)
+
+        val cx = X / (X + Y + Z)
+        val cy = Y / (X + Y + Z)
+        return doubleArrayOf(cx, cy)
+    }
+
+    private fun calculateCCT(cx: Double, cy: Double):Double {
+        val n = (cx - 0.3320) / (0.1858 - cy)
+        val cct = (449 * (n * n * n)) + (3525 * (n * n)) + (6823.3 * n) + 5520.33
+        return cct
+    }
+
+    private fun calculateContrast(bytes: ByteArray): Double? {
+        val temp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        val bitmap = temp.rotate(90f)
+        val min = intArrayOf(Int.MAX_VALUE, Int.MAX_VALUE, Int.MAX_VALUE)
+        val max = intArrayOf(Int.MIN_VALUE, Int.MIN_VALUE, Int.MIN_VALUE)
+        var argb = 0
+        var r = 0
+        var g = 0
+        var b = 0
+        for (j in 0 until bitmap.height) {
+            for (i in 0 until bitmap.width) {
+                argb = bitmap.getPixel(i, j)
+                r = Color.red(argb)
+                g = Color.green(argb)
+                b = Color.blue(argb)
+                if (r > max[0]) max[0] = r
+                if (g > max[1]) max[1] = g
+                if (b > max[2]) max[2] = b
+
+                if (r < min[0]) min[0] = r
+                if (g < min[1]) min[1] = g
+                if (b < min[2]) min[2] = b
+            }
+        }
+
+        contrast = contrast(intArrayOf(max[0] * 256, max[1] * 256, max[2] * 256), intArrayOf(min[0] * 256, min[1] * 256, min[2] * 256))
+        Log.i(TAG, "Contrast: $contrast")
+        return contrast
+    }
+
+    private fun calculateContrastRAW(width: Int, height: Int, bytes: ByteArray): Double? {
 //        File(createFile("raw").toString()).writeBytes(bytes)
 
         val pixels: IntArray = IntArray(bytes.size / 2)
@@ -1601,6 +1718,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 blueBuffer[rawConverter.getPixel(i, j)] = p[2]
             }
         }
+        contrast = contrast(intArrayOf(redBuffer.max()!!, greenBuffer.max()!!, blueBuffer.max()!!),
+                    intArrayOf(redBuffer.min()!!, greenBuffer.min()!!, blueBuffer.min()!!))
 
         val max = pixels.max()
         val min = pixels.min()
@@ -1611,7 +1730,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         Log.i(TAG, "(0, 0) mR: ${pixels[1]}, mG: ${pixels[0]}, mB: ${pixels[width]}")
         Log.i(TAG, "maxR: ${redBuffer.max()}, maxG: ${greenBuffer.max()}, maxB: ${blueBuffer.max()}")
         Log.i(TAG, "minR: ${redBuffer.min()}, minG: ${greenBuffer.min()}, minB: ${blueBuffer.min()}")
-//        Log.i(TAG, "(0, 0) Intensity: ${yChannel[0]}, (w/2, h/2) Intensity: ${yChannel[(width * height) / 2]}")
+        Log.i(TAG, "Contrast: $contrast")
         return if (min != null && max != null) {
             if (min > 0)
                 (max / min).toDouble()
@@ -1619,6 +1738,19 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 max.toDouble()
         } else
             null
+    }
+
+    private fun luminance(r: Int, g: Int, b: Int): Double {
+        val pixels: IntArray = intArrayOf(r, g, b)
+        return pixels[0] * 0.2126 + pixels[1] * 0.7152 + pixels[2] * 0.0072
+    }
+
+    private fun contrast(rgb1: IntArray, rgb2: IntArray): Double {
+        val lum1 = luminance(rgb1[0], rgb1[1], rgb1[2])
+        val lum2 = luminance(rgb2[0], rgb2[1], rgb2[2])
+        val brightness = max(lum1, lum2)
+        val darkest = min(lum1, lum2)
+        return (brightness + 5) / (darkest + 5)
     }
 
     fun Bitmap.rotate(degree: Float): Bitmap {
@@ -1697,12 +1829,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         val sdf = SimpleDateFormat("yyyy_MM_dd_HH_mm_ss_SSS", Locale.US)
         val path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM)
 
+//        path = context?.getExternalFilesDir(Environment.DIRECTORY_DCIM)     //application directory
+
         val dir = File(path, "/CraigCam2")
         if(!dir.isDirectory){
             dir.mkdirs()
         }
-
-        Log.d(TAG, "File dir: " + path.toString())
 
         return File(dir, "/IMG_${sdf.format(Date())}.$extension")
     }
@@ -1742,6 +1874,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             .putFloat(APERTURE, aperture)
             .putBoolean(MANUAL_ENABLE, isManualEnable)
 //            .putBoolean(AUTO_ENABLE, isAutoEnable)
+            .putBoolean(COLOR_TEMPERATURE_ENABLE, isColorTemperatureEnable)
+            .putBoolean(REFRESH_RATE_ENABLE, isRefreshRateEnable)
+            .putBoolean(CONTRAST_ENABLE, isContrastEnable)
             .putInt(APERTURE_PROGRESS, apertureProgress)
             .putInt(EXPOSURE_PROGRESS, exposureProgress)
             .putInt(SENSOR_SENSITIVITY_PROGRESS, sensorSensitivityProgress)
@@ -1755,6 +1890,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         aperture = settings.getFloat(APERTURE, 0f)
         isManualEnable = settings.getBoolean(MANUAL_ENABLE, false)
 //        isAutoEnable = settings.getBoolean(AUTO_ENABLE, false)
+        isColorTemperatureEnable = settings.getBoolean(COLOR_TEMPERATURE_ENABLE, false)
+        isRefreshRateEnable = settings.getBoolean(REFRESH_RATE_ENABLE, false)
+        isContrastEnable = settings.getBoolean(CONTRAST_ENABLE, false)
         apertureProgress = settings.getInt(APERTURE_PROGRESS, 0)
         exposureProgress = settings.getInt(EXPOSURE_PROGRESS, 0)
         sensorSensitivityProgress = settings.getInt(SENSOR_SENSITIVITY_PROGRESS, 0)
@@ -1922,6 +2060,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         private const val SENSOR_SENSITIVITY = "SENSOR_SENSITIVITY"
         private const val MANUAL_ENABLE = "MANUAL_ENABLE"
 //        private const val AUTO_ENABLE = "AUTO_ENABLE"
+        private const val COLOR_TEMPERATURE_ENABLE = "COLOR_TEMPERATURE_ENABLE"
+        private const val REFRESH_RATE_ENABLE = "REFRESH_RATE_ENABLE"
+        private const val CONTRAST_ENABLE = "CONTRAST_ENABLE"
         private const val APERTURE_PROGRESS = "APERTURE_PROGRESS"
         private const val EXPOSURE_PROGRESS = "EXPOSURE_PROGRESS"
         private const val SENSOR_SENSITIVITY_PROGRESS = "SENSOR_SENSITIVITY_PROGRESS"
@@ -1940,6 +2081,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             NormalColorTemperature,
             ColdColorTemperature,
             None
+        }
+
+        enum class FunctionToDo {
+            ColorTemperature,
+            RefreshRate,
+            Contrast
         }
         /**
          * Given `choices` of `Size`s supported by a camera, choose the smallest one that

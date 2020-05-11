@@ -25,7 +25,7 @@ class SplashScreenActivity : AppCompatActivity(),
     private var m_bluetoothAdapter: BluetoothAdapter? = null
     private lateinit var m_paireDevices: Set<BluetoothDevice>
     private val REQUEST_ENABLE_BLUETOOTH = 1
-    private lateinit var deviceList:ArrayList<BluetoothDevice>
+    private var deviceList:ArrayList<BluetoothDevice> = ArrayList()
 
     private val mRunnable: Runnable = Runnable {
         if (!isFinishing) {

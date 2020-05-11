@@ -3,21 +3,16 @@ package com.example.cargicamera2
 import android.graphics.Color
 import android.media.ExifInterface
 import android.media.MediaScannerConnection
-import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
-import android.util.Log.*
+import android.util.Log.d
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
-import androidx.core.net.toUri
-import androidx.core.view.get
-import androidx.core.view.size
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.FragmentManager
 import androidx.recyclerview.widget.GridLayoutManager
 import com.example.imagegallery.adapter.GalleryImageAdapter
 import com.example.imagegallery.adapter.GalleryImageClickListener
@@ -27,10 +22,8 @@ import com.example.imagegallery.model.ImageGalleryUiModel
 import com.example.imagegallery.service.MediaHelper
 import kotlinx.android.synthetic.main.fragment_photobox.*
 import java.io.File
-import java.lang.Exception
-import kotlin.math.pow
 
-class PhotoboxFragment : Fragment(), GalleryImageClickListener, View.OnClickListener{
+class PhotoboxFragment : Fragment(), GalleryImageAdapter.OnItemClickListener, View.OnClickListener{
 
     private val TAG = "PhotoboxFragment"
     // gallery column count
@@ -79,6 +72,7 @@ class PhotoboxFragment : Fragment(), GalleryImageClickListener, View.OnClickList
         // init recyclerview
         recyclerView.layoutManager = GridLayoutManager(this.context, SPAN_COUNT)
         recyclerView.adapter = galleryAdapter
+
     }
 
     private fun loadExtenalImages(){
@@ -92,39 +86,8 @@ class PhotoboxFragment : Fragment(), GalleryImageClickListener, View.OnClickList
         }
 
         galleryAdapter = GalleryImageAdapter(this.imageList)
-        galleryAdapter.listener = this
+        galleryAdapter.setOnItemClickListener(this)
         galleryAdapter.notifyDataSetChanged()
-    }
-
-    override fun onClick(position: Int) {
-        Log.i(TAG, "Clicked position: $position")
-
-        // handle click of image
-        if(isMultiSelectable){
-            if (position in positionList && position < imageList.size) {
-                positionList.remove(position)
-                imageList[position].isSelected = false
-                recyclerView.layoutManager?.findViewByPosition(position)?.setBackgroundResource(R.color.colorPrimaryDark)
-            }
-            else if (position < imageList.size) {
-                positionList.add(position)
-                imageList[position].isSelected = true
-                recyclerView.layoutManager?.findViewByPosition(position)?.setBackgroundColor(Color.parseColor(("#3547f0")))
-            }
-        }else{
-            currentPosition = position
-
-            val bundle = Bundle()
-            bundle.putSerializable("images", imageList)
-            bundle.putInt("position", position)
-            d(TAG, "image detail: ${imageList[position]}")
-
-            val fragmentManager = activity!!.supportFragmentManager
-            val fragmentTransaction = fragmentManager.beginTransaction()
-            val galleryFragment = GalleryFullscreenFragment()
-            galleryFragment.arguments = bundle
-            galleryFragment.show(fragmentTransaction, "gallery")
-        }
     }
 
     override fun onClick(v: View?) {
@@ -140,11 +103,10 @@ class PhotoboxFragment : Fragment(), GalleryImageClickListener, View.OnClickList
                     btnSelect.setImageResource(R.drawable.ic_cancel)
                 }
 
-                recyclerView.layoutManager = GridLayoutManager(this.context, SPAN_COUNT)
-                galleryAdapter = GalleryImageAdapter(imageList)
-                galleryAdapter.listener = this
-                recyclerView.adapter = galleryAdapter
-
+                imageList.forEach {
+                    it.isSelected = false
+                }
+                galleryAdapter.notifyDataSetChanged()
             }
             R.id.btn_camera ->{
                 val fragmentManager = activity!!.supportFragmentManager
@@ -260,6 +222,37 @@ class PhotoboxFragment : Fragment(), GalleryImageClickListener, View.OnClickList
                 loadExtenalImages()
                 recyclerView.adapter = galleryAdapter
             }
+        }
+    }
+
+    override fun onItemClick(position: Int, v: View) {
+        Log.i(TAG, "Clicked position: $position")
+
+        // handle click of image
+        if(isMultiSelectable){
+            if (position in positionList && position < imageList.size) {
+                positionList.remove(position)
+                imageList[position].isSelected = false
+                galleryAdapter.notifyDataSetChanged()
+            }
+            else if (position < imageList.size) {
+                positionList.add(position)
+                imageList[position].isSelected = true
+                galleryAdapter.notifyDataSetChanged()
+            }
+        }else{
+            currentPosition = position
+
+            val bundle = Bundle()
+            bundle.putSerializable("images", imageList)
+            bundle.putInt("position", position)
+            d(TAG, "image detail: ${imageList[position]}")
+
+            val fragmentManager = activity!!.supportFragmentManager
+            val fragmentTransaction = fragmentManager.beginTransaction()
+            val galleryFragment = GalleryFullscreenFragment()
+            galleryFragment.arguments = bundle
+            galleryFragment.show(fragmentTransaction, "gallery")
         }
     }
 }

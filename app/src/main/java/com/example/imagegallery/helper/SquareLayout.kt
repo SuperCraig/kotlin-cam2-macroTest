@@ -7,7 +7,7 @@ import android.util.AttributeSet
 import android.widget.FrameLayout
 import android.widget.RelativeLayout
 
-internal class SquareLayout: FrameLayout {
+class SquareLayout: FrameLayout {
 
     constructor(context: Context) : super(context)
 

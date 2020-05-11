@@ -5,39 +5,62 @@ import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
+import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
-import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.example.cargicamera2.R
 import com.example.imagegallery.helper.GlideApp
+import com.example.imagegallery.helper.SquareLayout
 import kotlinx.android.synthetic.main.activity_main.view.container
 import kotlinx.android.synthetic.main.item_gallery_image.view.*
+import org.w3c.dom.Text
 
-class GalleryImageAdapter(private val itemList: List<Image>) : RecyclerView.Adapter<GalleryImageAdapter.ViewHolder>() {
+class GalleryImageAdapter(private val itemList: List<Image>) : RecyclerView.Adapter<GalleryImageAdapter.ImagePickerViewHolder>() {
 
     private var context: Context? = null
     var listener: GalleryImageClickListener? = null
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): GalleryImageAdapter.ViewHolder {
+    private lateinit var onItemClickListener: OnItemClickListener
+
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ImagePickerViewHolder {
         context = parent.context
         val view = LayoutInflater.from(parent.context).inflate(
             R.layout.item_gallery_image, parent,
             false)
-        return ViewHolder(view)
+        return ImagePickerViewHolder(view)
     }
 
     override fun getItemCount(): Int {
         return itemList.size
     }
 
-    override fun onBindViewHolder(holder: GalleryImageAdapter.ViewHolder, position: Int) {
-        holder.bind()
+//    override fun onBindViewHolder(holder: GalleryImageAdapter.ViewHolder, position: Int) {
+//        holder.bind(position)
+//        Log.i("onBindViewHolder", "position: $position")
+//    }
+
+    override fun onBindViewHolder(holder: ImagePickerViewHolder, position: Int) {
+        val image = itemList[position]
+
+        GlideApp.with(context!!)
+            .load(image.imageUrl)
+            .centerCrop()
+            .diskCacheStrategy(DiskCacheStrategy.ALL)
+            .into(holder.image)
+
+        if (image.isSelected)
+            holder.container.setBackgroundColor(Color.parseColor("#3547f0"))
+        else
+            holder.container.setBackgroundResource(R.color.colorPrimaryDark)
+
+        holder.title.text = image.title
     }
 
     inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-
-        fun bind() {
-            val image = itemList[adapterPosition]
+        fun bind(position: Int) {
+            val image = itemList[position]
 
             // load image
             GlideApp.with(context!!)
@@ -46,19 +69,31 @@ class GalleryImageAdapter(private val itemList: List<Image>) : RecyclerView.Adap
                 .diskCacheStrategy(DiskCacheStrategy.ALL)
                 .into(itemView.ivGalleryImage)
 
-            // adding click or tap handler for our image layout
-            itemView.container.setOnClickListener {
-                listener?.onClick(adapterPosition)
-//                if(it.isSelected){
-//                    it.setBackgroundResource(R.color.colorPrimaryDark)
-//                    it.isSelected = false
-//                }else{
-//                    it.setBackgroundColor(Color.parseColor("#3547f0"))
-//                    it.isSelected = true
-//                }
+            itemView.setOnClickListener {
+                onItemClickListener.onItemClick(adapterPosition, it)
             }
 
             itemView.ivGalleryTitle.text = image.title
         }
+    }
+
+    inner class ImagePickerViewHolder(itemView: View): RecyclerView.ViewHolder(itemView) {
+        var container: SquareLayout = itemView.container as SquareLayout
+        var image: ImageView = itemView.ivGalleryImage as ImageView
+        var title: TextView = itemView.ivGalleryTitle as TextView
+
+        init {
+            itemView.setOnClickListener {
+                onItemClickListener.onItemClick(adapterPosition, it)
+            }
+        }
+    }
+
+    fun setOnItemClickListener(onItemClickListener: OnItemClickListener) {
+        this.onItemClickListener = onItemClickListener
+    }
+
+    interface OnItemClickListener {
+        fun onItemClick(position: Int, v: View)
     }
 }
