@@ -580,13 +580,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     override fun onClick(view: View) {
         when (view.id) {
             R.id.btnPicture -> {
-                lifecycleScope.launch(Dispatchers.Main) {
-                    if (IMAGE_BUFFER_SIZE - shutterTimes <= 1) {
-                        openCamera(textureView.width, textureView.height)
-                        progressbarShutter?.visibility = View.INVISIBLE
-                        shutterTimes = 0
-                    }
-                }
+//                lifecycleScope.launch(Dispatchers.Main) {
+//                    if (IMAGE_BUFFER_SIZE - shutterTimes <= 1) {
+//                        openCamera(textureView.width, textureView.height)
+//                        progressbarShutter?.visibility = View.INVISIBLE
+//                        shutterTimes = 0
+//                    }
+//                }
 
                 var task = 0
                 if (isColorTemperatureEnable) task += 1
@@ -600,26 +600,29 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 progressbarShutter?.progress = 0
                 progressbarShutter?.visibility = ProgressBar.VISIBLE
 
-                view.findViewById<View>(R.id.btnPicture).isEnabled = false
+//                view.findViewById<View>(R.id.btnPicture).isEnabled = false
 
                 // Perform I/O heavy operations in a different scope
                 lifecycleScope.launch(Dispatchers.IO) {
+                    btnPicture.isEnabled = false
+
                     if (isContrastEnable) {
                         if (mRawImageReader != null) {
                             takePhoto(mRawImageReader!!).use { result ->
                                 val output = procedureContrast(result)
                             }
-                            shutterTimes += 1
+//                            shutterTimes += 1
                         } else {
                             takePhoto(mImageReader).use { result ->
                                 val output = procedureContrast(result)
                             }
-                            shutterTimes += 1
+//                            shutterTimes += 1
                         }
-                        scale += scale
+
                         progressbarShutter?.progress = scale
                     }
 
+                    Thread.sleep(200)
                     if (isColorTemperatureEnable) {
                         takePhoto(mImageReader).use { result ->
                             val output = procedureColorTemperature(result)
@@ -628,11 +631,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                 saveExif(output, aperture.toString(), (10.0.pow(9) / exposureTime).toString(), sensorSensitivity.toString())
                             }
                         }
-                        shutterTimes += 1
+//                        shutterTimes += 1
                         scale += scale
                         progressbarShutter?.progress = scale
                     }
 
+                    Thread.sleep(200)
                     if (isRefreshRateEnable) {      //from tv: 750 ~ 4000 and fixed iso 800
                         takePhoto(mImageReader).use { result ->
                             val circleObject = procedureRefreshRate(result)
@@ -641,32 +645,28 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                 saveExif(circleObject.file!!, aperture.toString(), (10.0.pow(9) / exposureTime).toString(), sensorSensitivity.toString())
                             }
                         }
-                        shutterTimes += 1
+//                        shutterTimes += 1
                         scale += scale
                         progressbarShutter?.progress = scale
                     }
 
                     progressbarShutter?.visibility = View.INVISIBLE
+                    btnPicture.isEnabled = true
 
                     val historyViewModel = ViewModelProvider(this@Camera2BasicFragment).get(HistoryViewModel::class.java)
                     val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
                     val currentDateTime: String = dateFormat.format(Date()) // Find todays date
                     historyViewModel.insert(History(currentDateTime, contrast!!.toInt(), refreshRate, colorTemperature.name))
-
-                    lifecycleScope.launch(Dispatchers.Main) {
-                        view.findViewById<View>(R.id.btnPicture).isEnabled = true
-                        Log.i(TAG, "Done Function to Do")
-                    }
                 }
 
-                cameraHandler.postDelayed({
-                    view.post {
-                        if (!btnPicture.isEnabled)
-                            btnPicture.isEnabled = true
-
-                        progressbarShutter?.visibility = View.INVISIBLE
-                    }
-                }, 10000)
+//                cameraHandler.postDelayed({
+//                    view.post {
+//                        if (!btnPicture.isEnabled)
+//                            btnPicture.isEnabled = true
+//
+//                        progressbarShutter?.visibility = View.INVISIBLE
+//                    }
+//                }, 20000)
             }
             R.id.btnAuto -> {
                 val btnAuto = view.findViewById<ImageButton>(R.id.btnAuto)
@@ -1339,7 +1339,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
         // Flush any images left in the image reader
         @Suppress("ControlFlowWithEmptyBody")
-        while (imageReader.acquireNextImage() != null) {
+        var it = imageReader.acquireNextImage()
+        while (it != null) {
+            it.close()
+            it = imageReader.acquireNextImage()
         }
 
         // Start a new image queue
@@ -1628,8 +1631,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private fun calculateRefreshRate(bytes: ByteArray): CircleObject {
         val temp  = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
         val bitmap = temp.rotate(90f)
-        //val mat = Mat()
-        //val canny = mat.canny(bitmap) { it.compress(Bitmap.CompressFormat.JPEG, 80, FileOutputStream(createFile("jpg")))}
 
 //        val lineObject = findLines(bitmap)
 
@@ -1653,8 +1654,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         var red: Float = 0f
         var green: Float = 0f
         var blue: Float = 0f
-        for (j in 0 until bitmap.height) {
-            for (i in 0 until bitmap.width) {
+        for (j in 0 until bitmap.height / 4) {      //consider 1 / 4 picture of luminace
+            for (i in 0 until bitmap.width / 4) {
                 val argb = bitmap.getPixel(i, j)
                 red += Color.red(argb)
                 green += Color.green(argb)
@@ -1736,7 +1737,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         }
 
         contrast = contrast(intArrayOf(max[0] * 256, max[1] * 256, max[2] * 256), intArrayOf(min[0] * 256, min[1] * 256, min[2] * 256))
-        Log.i(TAG, "Contrast: $contrast")
+        Log.i(TAG, "Contrast of JPEG: $contrast")
         return contrast
     }
 
@@ -1776,7 +1777,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         Log.i(TAG, "(0, 0) mR: ${pixels[1]}, mG: ${pixels[0]}, mB: ${pixels[width]}")
         Log.i(TAG, "maxR: ${redBuffer.max()}, maxG: ${greenBuffer.max()}, maxB: ${blueBuffer.max()}")
         Log.i(TAG, "minR: ${redBuffer.min()}, minG: ${greenBuffer.min()}, minB: ${blueBuffer.min()}")
-        Log.i(TAG, "Contrast: $contrast")
+        Log.i(TAG, "Contrast of RAW: $contrast")
 //        return if (min != null && max != null) {
 //            if (min > 0)
 //                (max / min).toDouble()
@@ -1807,7 +1808,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     }
 
     private fun findCircles(bitmap: Bitmap): CircleObject {
-        val image = bitmap.toMat()
+        var image = bitmap.toMat()
         val gray = Mat()
         val gaussian = Mat()
         val th1 = Mat()
@@ -2103,7 +2104,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
          */
         private const val MAX_PREVIEW_HEIGHT = 1080
 
-        private const val IMAGE_BUFFER_SIZE = 10
+        private const val IMAGE_BUFFER_SIZE = 5
 
         /** Maximum time allowed to wait for the result of an image capture */
         private const val IMAGE_CAPTURE_TIMEOUT_MILLIS: Long = 2000
