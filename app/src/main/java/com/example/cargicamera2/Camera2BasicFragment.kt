@@ -9,11 +9,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
-import android.content.res.AssetManager
 import android.content.res.Configuration
 import android.graphics.*
-import android.graphics.Point
-import android.graphics.Rect
 import android.hardware.camera2.*
 import android.media.*
 import android.os.*
@@ -39,27 +36,25 @@ import com.example.cargicamera2.ui.AutoFitTextureView
 import com.example.cargicamera2.ui.ErrorDialog
 import com.example.cargicamera2.ui.FocusView
 import com.example.cargicamera2.ui.GridLineView
-import com.example.extensions.adaptiveThreshold
-import com.example.extensions.canny
 import com.example.extensions.toBitmap
 import com.example.extensions.toMat
 import com.example.imagegallery.model.ImageGalleryUiModel
 import com.example.imagegallery.service.MediaHelper
 import com.example.lib.CustomSeekBar
 import kotlinx.android.synthetic.main.fragment_camera2_basic.*
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import org.opencv.core.*
-import org.opencv.imgcodecs.Imgcodecs
+import org.opencv.core.Mat
+import org.opencv.core.MatOfPoint
+import org.opencv.core.Scalar
 import org.opencv.imgproc.Imgproc
-import java.io.*
+import java.io.Closeable
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.*
-import java.util.concurrent.ArrayBlockingQueue
-import java.util.concurrent.Semaphore
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
+import java.util.concurrent.*
 import kotlin.collections.ArrayList
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -604,16 +599,18 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 // Perform I/O heavy operations in a different scope
                 lifecycleScope.launch(Dispatchers.IO) {
+                    cameraHandler.postDelayed(restoreButtonAction, 15000)
+
                     btnPicture.isEnabled = false
 
                     if (isContrastEnable) {
                         if (mRawImageReader != null) {
-                            takePhoto(mRawImageReader!!).use { result ->
+                            takeRawPhoto(mRawImageReader!!).use { result ->
                                 val output = procedureContrast(result)
                             }
 //                            shutterTimes += 1
                         } else {
-                            takePhoto(mImageReader).use { result ->
+                            takeJPEGPhoto(mImageReader).use { result ->
                                 val output = procedureContrast(result)
                             }
 //                            shutterTimes += 1
@@ -624,7 +621,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                     Thread.sleep(200)
                     if (isColorTemperatureEnable) {
-                        takePhoto(mImageReader).use { result ->
+                        takeJPEGPhoto(mImageReader).use { result ->
                             val output = procedureColorTemperature(result)
 
                             if (output.name.contains("jpg") && isJPEGSavedEnable) {
@@ -638,12 +635,23 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                     Thread.sleep(200)
                     if (isRefreshRateEnable) {      //from tv: 750 ~ 4000 and fixed iso 800
-                        takePhoto(mImageReader).use { result ->
+                        takeJPEGPhoto(mImageReader).use { result ->
+                            val ae: Long = (10.0.pow(9) / 750).roundToLong()
+                            setExposureTime(ae)
                             val circleObject = procedureRefreshRate(result)
 
-                            if (circleObject.file!!.name.contains("jpg") && isJPEGSavedEnable) {
-                                saveExif(circleObject.file!!, aperture.toString(), (10.0.pow(9) / exposureTime).toString(), sensorSensitivity.toString())
-                            }
+                            Log.i(TAG, "circles: ${circleObject.circles}")
+//                            if (circleObject.file!!.name.contains("jpg") && isJPEGSavedEnable) {
+//                                saveExif(circleObject.file!!, aperture.toString(), (10.0.pow(9) / exposureTime).toString(), sensorSensitivity.toString())
+//                            }
+                        }
+
+                        takeJPEGPhoto(mImageReader).use { result ->
+                            val ae = (10.0.pow(9) / 3500).roundToLong()
+                            setExposureTime(ae)
+                            val circleObject = procedureRefreshRate(result)
+
+                            Log.i(TAG, "circles: ${circleObject.circles}")
                         }
 //                        shutterTimes += 1
                         scale += scale
@@ -657,16 +665,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
                     val currentDateTime: String = dateFormat.format(Date()) // Find todays date
                     historyViewModel.insert(History(currentDateTime, contrast!!.toInt(), refreshRate, colorTemperature.name))
+
+                    cameraHandler.removeCallbacks(restoreButtonAction)
                 }
 
-//                cameraHandler.postDelayed({
-//                    view.post {
-//                        if (!btnPicture.isEnabled)
-//                            btnPicture.isEnabled = true
-//
-//                        progressbarShutter?.visibility = View.INVISIBLE
-//                    }
-//                }, 20000)
             }
             R.id.btnAuto -> {
                 val btnAuto = view.findViewById<ImageButton>(R.id.btnAuto)
@@ -832,6 +834,16 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 fragmentTransaction.commit()
                 Log.i(TAG, "R.id.btnSetting")
             }
+        }
+    }
+
+    private val restoreButtonAction = Runnable {
+        view?.post {
+            if (!btnPicture.isEnabled)
+                btnPicture.isEnabled = true
+
+            if (progressbarShutter?.visibility == View.VISIBLE)
+                progressbarShutter?.visibility = View.INVISIBLE
         }
     }
 
@@ -1334,7 +1346,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
      * template. It performs synchronization between the [CaptureResult] and the [Image] resulting
      * from the single capture, and outputs a [CombinedCaptureResult] object.
      */
-    private suspend fun takePhoto(imageReader: ImageReader):
+    private suspend fun takeRawPhoto(imageReader: ImageReader):
             CombinedCaptureResult = suspendCoroutine { cont ->
 
         // Flush any images left in the image reader
@@ -1355,7 +1367,113 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         }, imageReaderHandler)
 
         val captureRequest = captureSession.device.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE)
-        if(mRawImageReader != null) captureRequest.addTarget(mRawImageReader!!.surface)
+        captureRequest.addTarget(mRawImageReader!!.surface)
+
+        val rotation = activity!!.windowManager.defaultDisplay.rotation
+
+//        captureRequest.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
+        captureRequest.set(CaptureRequest.SCALER_CROP_REGION, zoom)
+        if (sensorSensitivity != 0) captureRequest.set(CaptureRequest.SENSOR_SENSITIVITY, sensorSensitivity)     //20200331 Craig return last state
+        if (exposureTime.toInt() != 0)  captureRequest.set(CaptureRequest.SENSOR_EXPOSURE_TIME, exposureTime)
+        if (aperture.toInt() != 0)  captureRequest.set(CaptureRequest.LENS_APERTURE, aperture)
+
+        captureRequest.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation))
+        Log.i(TAG, "takePhoto, rotation: $rotation")
+
+        captureSession.capture(
+            captureRequest.build(),
+            object : CameraCaptureSession.CaptureCallback() {
+                override fun onCaptureStarted(
+                    session: CameraCaptureSession,
+                    request: CaptureRequest,
+                    timestamp: Long,
+                    frameNumber: Long
+                ) {
+                    super.onCaptureStarted(session, request, timestamp, frameNumber)
+                    if(isSoundEnable) {
+                        cameraHandler.post{ mediaActionSound.play(MediaActionSound.SHUTTER_CLICK) }
+                        Log.i(TAG, "onCaptureStarted")
+                    }
+                }
+
+                override fun onCaptureCompleted(
+                    session: CameraCaptureSession,
+                    request: CaptureRequest,
+                    result: TotalCaptureResult
+                ) {
+                    super.onCaptureCompleted(session, request, result)
+                    val resultTimestamp = result.get(CaptureResult.SENSOR_TIMESTAMP)
+                    Log.d(TAG, "Capture result received: $resultTimestamp")
+
+                    // Set a timeout in case image captured is dropped from the pipeline
+                    val exc = TimeoutException("Image dequeuing took too long")
+                    val timeoutRunnable = Runnable { cont.resumeWithException(exc) }
+                    imageReaderHandler.postDelayed(timeoutRunnable, IMAGE_CAPTURE_TIMEOUT_MILLIS)
+
+                    // Loop in the coroutine's context until an image with matching timestamp comes
+                    // We need to launch the coroutine context again because the callback is done in
+                    //  the handler provided to the `capture` method, not in our coroutine context
+                    @Suppress("BlockingMethodInNonBlockingContext")
+                    lifecycleScope.launch(cont.context) {
+                        while (true) {
+
+                            // Dequeue images while timestamps don't match
+                            val image = imageQueue.take()
+
+                            // TODO(owahltinez): b/142011420
+                            // if (image.timestamp != resultTimestamp) continue
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+                                image.format != ImageFormat.DEPTH_JPEG &&
+                                image.timestamp != resultTimestamp
+                            ) continue
+                            Log.d(TAG, "Matching image dequeued: ${image.timestamp}")
+
+                            // Unset the image reader listener
+                            imageReaderHandler.removeCallbacks(timeoutRunnable)
+                            imageReader.setOnImageAvailableListener(null, null)
+
+                            // Clear the queue of images, if there are left
+                            while (imageQueue.size > 0) {
+                                imageQueue.take().close()
+                            }
+
+                            cont.resume(
+                                CombinedCaptureResult(
+                                    image, result, ExifInterface.ORIENTATION_NORMAL, imageReader.imageFormat
+                                )
+                            )
+
+                            // There is no need to break out of the loop, this coroutine will suspend
+                        }
+                    }
+                }
+            },
+            cameraHandler
+        )
+    }
+
+    private suspend fun takeJPEGPhoto(imageReader: ImageReader):
+            CombinedCaptureResult = suspendCoroutine { cont ->
+
+        // Flush any images left in the image reader
+        @Suppress("ControlFlowWithEmptyBody")
+        var it = imageReader.acquireNextImage()
+        while (it != null) {
+            it.close()
+            it = imageReader.acquireNextImage()
+        }
+
+        // Start a new image queue
+//        val imageQueue = ArrayBlockingQueue<Image>(IMAGE_BUFFER_SIZE)
+        val imageQueue = LinkedBlockingQueue<Image>(IMAGE_BUFFER_SIZE)
+
+        imageReader.setOnImageAvailableListener({ reader ->
+            val image = reader.acquireNextImage()
+            Log.d(TAG, "Image available in queue: ${image.timestamp}")
+            imageQueue.add(image)
+        }, imageReaderHandler)
+
+        val captureRequest = captureSession.device.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE)
         captureRequest.addTarget(mImageReader.surface)
 
         val rotation = activity!!.windowManager.defaultDisplay.rotation
@@ -1654,7 +1772,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         var red: Float = 0f
         var green: Float = 0f
         var blue: Float = 0f
-        for (j in 0 until bitmap.height / 4) {      //consider 1 / 4 picture of luminace
+        for (j in 0 until bitmap.height / 4) {      //consider 1 / 4 picture of luminace to speed up calculation
             for (i in 0 until bitmap.width / 4) {
                 val argb = bitmap.getPixel(i, j)
                 red += Color.red(argb)
@@ -1809,6 +1927,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     private fun findCircles(bitmap: Bitmap): CircleObject {
         var image = bitmap.toMat()
+        val roi = org.opencv.core.Rect(0, 0, image.width() / 4, image.height() / 4)     //use 1 / 4 of picture to speed up calculation
+        image = Mat(image, roi)
         val gray = Mat()
         val gaussian = Mat()
         val th1 = Mat()
