@@ -12,6 +12,8 @@ import android.content.pm.PackageManager
 import android.content.res.AssetManager
 import android.content.res.Configuration
 import android.graphics.*
+import android.graphics.Point
+import android.graphics.Rect
 import android.hardware.camera2.*
 import android.media.*
 import android.os.*
@@ -48,10 +50,7 @@ import kotlinx.android.synthetic.main.fragment_camera2_basic.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import org.opencv.core.Core
-import org.opencv.core.Mat
-import org.opencv.core.MatOfByte
-import org.opencv.core.Scalar
+import org.opencv.core.*
 import org.opencv.imgcodecs.Imgcodecs
 import org.opencv.imgproc.Imgproc
 import java.io.*
@@ -430,8 +429,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             if (sensorSensitivity != iso)
                 vibrate.vibrate(vibrationEffect)
 
-            previewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, iso)
-            captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
+            setSensorSensitivity(iso)
 
             sensorSensitivity = iso
             sensorSensitivityProgress = progress
@@ -458,8 +456,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             if (exposureTime != ae)
                 vibrate.vibrate(vibrationEffect)
 
-            previewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, ae)      //shutter speed = 1 / (10^9 / ae) sec.
-            captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
+            setExposureTime(ae)
 
             exposureTime = ae
             exposureProgress = progress
@@ -482,8 +479,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             if (this.aperture != aperture)
                 vibrate.vibrate(vibrationEffect)
 
-            previewRequestBuilder.set(CaptureRequest.LENS_APERTURE, aperture)
-            captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
+            setApertureSize(aperture)
+
             this.aperture = aperture
             apertureProgress = avCustomSeekBar.progress
             avCustomSeekBar.text = "F$aperture"
@@ -531,9 +528,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate)
 
         if (isContrastEnable)
-            btnContrast.setImageResource(R.drawable.ic_refresh_rate_selection)
+            btnContrast.setImageResource(R.drawable.ic_contrast_selection)
         else
-            btnContrast.setImageResource(R.drawable.ic_refresh_rate)
+            btnContrast.setImageResource(R.drawable.ic_contrast)
 
         progressbarShutter = view.findViewById(R.id.progressBar_shutter)
 
@@ -610,12 +607,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     if (isContrastEnable) {
                         if (mRawImageReader != null) {
                             takePhoto(mRawImageReader!!).use { result ->
-                                val output = saveResult(result, FunctionToDo.Contrast)
+                                val output = procedureContrast(result)
                             }
                             shutterTimes += 1
                         } else {
                             takePhoto(mImageReader).use { result ->
-                                val output = saveResult(result, FunctionToDo.Contrast)
+                                val output = procedureContrast(result)
                             }
                             shutterTimes += 1
                         }
@@ -625,7 +622,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                     if (isColorTemperatureEnable) {
                         takePhoto(mImageReader).use { result ->
-                            val output = saveResult(result, FunctionToDo.ColorTemperature)
+                            val output = procedureColorTemperature(result)
 
                             if (output.name.contains("jpg") && isJPEGSavedEnable) {
                                 saveExif(output, aperture.toString(), (10.0.pow(9) / exposureTime).toString(), sensorSensitivity.toString())
@@ -636,12 +633,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         progressbarShutter?.progress = scale
                     }
 
-                    if (isRefreshRateEnable) {
+                    if (isRefreshRateEnable) {      //from tv: 750 ~ 4000 and fixed iso 800
                         takePhoto(mImageReader).use { result ->
-                            val output = saveResult(result, FunctionToDo.RefreshRate)
+                            val circleObject = procedureRefreshRate(result)
 
-                            if (output.name.contains("jpg") && isJPEGSavedEnable) {
-                                saveExif(output, aperture.toString(), (10.0.pow(9) / exposureTime).toString(), sensorSensitivity.toString())
+                            if (circleObject.file!!.name.contains("jpg") && isJPEGSavedEnable) {
+                                saveExif(circleObject.file!!, aperture.toString(), (10.0.pow(9) / exposureTime).toString(), sensorSensitivity.toString())
                             }
                         }
                         shutterTimes += 1
@@ -1441,9 +1438,83 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         )
     }
 
+    private suspend fun procedureRefreshRate(result: CombinedCaptureResult): CircleObject = suspendCoroutine { cont ->
+        when (result.format) {
+            ImageFormat.JPEG, ImageFormat.DEPTH_JPEG -> {
+                val buffer = result.image.planes[0].buffer
+                val bytes = ByteArray(buffer.remaining()).apply { buffer.get(this) }
 
-    /** Helper function used to save a [CombinedCaptureResult] into a [File] */
-    private suspend fun saveResult(result: CombinedCaptureResult, function: FunctionToDo): File = suspendCoroutine { cont ->
+                try {
+                    val output = createFile("jpg")
+
+                    if (isJPEGSavedEnable) {
+                        val temp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size).rotate(90f)
+                        temp.compress(Bitmap.CompressFormat.JPEG, 100, FileOutputStream(output))
+
+                        MediaScannerConnection.scanFile(context, arrayOf(output.path),
+                            arrayOf("image/jpeg")) { path, _ ->
+                            Log.i(TAG, "onScanCompleted : $path")
+                        }
+                    }
+
+                    val circleObject = calculateRefreshRate(bytes)
+                    circleObject.file = output
+
+                    cont.resume(circleObject)
+                }catch (exc: IOException) {
+                    Log.e(TAG, "Unable to write JPEG image to file", exc)
+                    cont.resumeWithException(exc)
+                }
+            }
+            // No other formats are supported by this sample
+            else -> {
+                val exc = RuntimeException("Unknown image format: ${result.image.format}")
+                Log.e(TAG, exc.message, exc)
+                cont.resumeWithException(exc)
+            }
+        }
+    }
+
+    private suspend fun procedureColorTemperature(result: CombinedCaptureResult): File = suspendCoroutine { cont ->
+        when (result.format) {
+            ImageFormat.JPEG, ImageFormat.DEPTH_JPEG -> {
+                val buffer = result.image.planes[0].buffer
+                val bytes = ByteArray(buffer.remaining()).apply { buffer.get(this) }
+
+                try {
+                    val output = createFile("jpg")
+
+                    if (isJPEGSavedEnable) {
+                        val temp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size).rotate(90f)
+                        temp.compress(Bitmap.CompressFormat.JPEG, 100, FileOutputStream(output))
+
+                        MediaScannerConnection.scanFile(context, arrayOf(output.path),
+                            arrayOf("image/jpeg")) { path, _ ->
+                            Log.i(TAG, "onScanCompleted : $path")
+                        }
+                    }
+
+                    colorTemperature = if (isColorTemperatureEnable)
+                        calculateColorTemp(bytes)
+                    else
+                        ColorTemperature.None
+
+                    cont.resume(output)
+                }catch (exc: IOException) {
+                    Log.e(TAG, "Unable to write JPEG image to file", exc)
+                    cont.resumeWithException(exc)
+                }
+            }
+            // No other formats are supported by this sample
+            else -> {
+                val exc = RuntimeException("Unknown image format: ${result.image.format}")
+                Log.e(TAG, exc.message, exc)
+                cont.resumeWithException(exc)
+            }
+        }
+    }
+
+    private suspend fun procedureContrast(result: CombinedCaptureResult): File = suspendCoroutine { cont ->
         when (result.format) {
             // When the format is JPEG or DEPTH JPEG we can simply save the bytes as-is
             ImageFormat.JPEG, ImageFormat.DEPTH_JPEG -> {
@@ -1463,26 +1534,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         }
                     }
 
-                    when (function) {
-                        FunctionToDo.ColorTemperature -> {
-                            colorTemperature = if (isColorTemperatureEnable)
-                                calculateColorTemp(bytes)
-                            else
-                                ColorTemperature.None
-                        }
-                        FunctionToDo.RefreshRate -> {
-                            refreshRate = if (isRefreshRateEnable)
-                                calculateRefreshRate(bytes)
-                            else
-                                0
-                        }
-                        FunctionToDo.Contrast -> {
-                            contrast = if (isContrastEnable)
-                                calculateContrast(bytes)
-                            else
-                                0.0
-                        }
-                    }
+                    contrast = if (isContrastEnable)
+                        calculateContrast(bytes)
+                    else
+                        0.0
 
                     cont.resume(output)
                 } catch (exc: IOException) {
@@ -1513,17 +1568,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     val byteArray = ByteArray(byteBuffer.remaining())
                     byteBuffer.get(byteArray)
 
-                    when (function) {
-                        FunctionToDo.Contrast -> {
-                            contrast = if (isContrastEnable)
-                                calculateContrastRAW(result.image.width, result.image.height, byteArray)
-                            else
-                                0.0
-                        }
-                    }
-
-//                    var aver = average(byteArray)
-//                    Log.i(TAG, "Buffer average: ${aver}")
+                    contrast = if (isContrastEnable)
+                        calculateContrastRAW(result.image.width, result.image.height, byteArray)
+                    else
+                        0.0
 
                     cont.resume(output)
                 } catch (exc: IOException) {
@@ -1541,6 +1589,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             }
         }
     }
+
 
     private fun saveExif(file: File, av: String, tv: String, iso: String) {
         val exif = ExifInterface(file.absolutePath)
@@ -1576,23 +1625,25 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         return if (count == 0) Double.NaN else sum / (count / 2)
     }
 
-    private fun calculateRefreshRate(bytes: ByteArray): Int {
+    private fun calculateRefreshRate(bytes: ByteArray): CircleObject {
         val temp  = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
         val bitmap = temp.rotate(90f)
         //val mat = Mat()
         //val canny = mat.canny(bitmap) { it.compress(Bitmap.CompressFormat.JPEG, 80, FileOutputStream(createFile("jpg")))}
 
-        val lineObject = findLines(bitmap)
+//        val lineObject = findLines(bitmap)
+
+        val circleObject = findCircles(bitmap)
 
         if (isJPEGSavedEnable)
-            lineObject.mat.toBitmap().compress(Bitmap.CompressFormat.JPEG, 80, FileOutputStream(createFile("jpg")))
+            circleObject.mat.toBitmap().compress(Bitmap.CompressFormat.JPEG, 80, FileOutputStream(createFile("jpg")))
 
-        Log.i(TAG, "find lines: ${lineObject.lines}")
+//        Log.i(TAG, "find lines: ${lineObject.lines}")
 
+        Log.i(TAG, "find circles: ${circleObject.circles}")
         //Do continually shot here
-        val refresh = 0
         Log.i(TAG, "Find circles fin!")
-        return refresh
+        return circleObject
     }
 
     private fun calculateColorTemp(bytes: ByteArray): ColorTemperature {
@@ -1645,7 +1696,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     private fun calculateXY(r: Float, g: Float, b: Float):DoubleArray {
         val X = (0.4125 * r) + (0.3576 * g) + (0.1804 * b)
-        val Y = (0.2127 * r) + (0.7125 * g) + (0.0722 * b)
+        val Y = (0.2127 * r) + (0.7125 * g) + (0.0722 * b)      //luminance
         val Z = (0.0193 * r) + (0.1192 * g) + (0.9503 * b)
 
         val cx = X / (X + Y + Z)
@@ -1739,7 +1790,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     private fun luminance(r: Int, g: Int, b: Int): Double {
         val pixels: IntArray = intArrayOf(r, g, b)
-        return pixels[0] * 0.2126 + pixels[1] * 0.7152 + pixels[2] * 0.0072
+        return pixels[0] * 0.2126 + pixels[1] * 0.7152 + pixels[2] * 0.0722
     }
 
     private fun contrast(rgb1: IntArray, rgb2: IntArray): Double {
@@ -1755,37 +1806,29 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         return Bitmap.createBitmap(this, 0, 0, width, height, matrix, true)
     }
 
-    private fun findCircles(bitmap: Bitmap): Mat {
+    private fun findCircles(bitmap: Bitmap): CircleObject {
         val image = bitmap.toMat()
-        val hsvImage = Mat()
-        val hueImage = Mat()
-        val circles = Mat()
+        val gray = Mat()
+        val gaussian = Mat()
+        val th1 = Mat()
+        val th2 = Mat()
+        val contour: MutableList<MatOfPoint> = ArrayList<MatOfPoint>()
 
-        Imgproc.medianBlur(image, image, 3)
-        Imgproc.cvtColor(image, hsvImage, Imgproc.COLOR_RGB2HSV)
+        Imgproc.cvtColor(image, gray, Imgproc.COLOR_BGR2GRAY)
+        Imgproc.medianBlur(gray, gray, 3)
+        Imgproc.GaussianBlur(gray, gaussian, org.opencv.core.Size(9.0, 9.0), 2.0, 2.0)
+        Imgproc.threshold(gaussian, th1, 100.0, 255.0, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU)
+        Imgproc.threshold(th1, th2, 127.0, 255.0, Imgproc.THRESH_BINARY_INV)
 
-        val lowerRedHueRange = Mat()
-        val upperRedHueRange = Mat()
-        Core.inRange(hsvImage, Scalar(0.0, 150.0, 100.0), Scalar(10.0, 255.0, 255.0), lowerRedHueRange)
-        Core.inRange(hsvImage, Scalar(160.0, 150.0, 100.0), Scalar(179.0, 255.0, 255.0), upperRedHueRange)
-        Core.addWeighted(lowerRedHueRange, 1.0, upperRedHueRange, 1.0, 0.0, hueImage)
+        Imgproc.findContours(th2, contour, Mat(), Imgproc.RETR_TREE, Imgproc.CHAIN_APPROX_SIMPLE)
 
-        Imgproc.GaussianBlur(hueImage, hueImage, org.opencv.core.Size(9.0, 9.0), 2.0, 2.0)
-        Imgproc.HoughCircles(hueImage, circles, Imgproc.CV_HOUGH_GRADIENT, 1.0,
-            hueImage.rows() / 8.toDouble(), 100.0, 20.0, 0, 0)
-
-        if (circles.cols() > 0) {
-            for (x in 0 until Math.min(circles.cols(), 5)) {
-                val circleVec = circles.get(0, x) ?: break
-                val center = org.opencv.core.Point(circleVec[0].toInt().toDouble(), circleVec[1].toInt().toDouble())
-                val radius = circleVec[2].toInt()
-
-                Imgproc.circle(image, center, 3, Scalar(0.0, 255.0, 0.0), 5)
-                Imgproc.circle(image, center, radius, Scalar(0.0, 255.0, 0.0), 2)
-            }
+        for (cnt in contour) {
+            val m = Imgproc.moments(cnt)
+            val cX = m.m10 / m.m00
+            val cY = m.m01 / m.m00
+            Imgproc.circle(image, org.opencv.core.Point(cX, cY), 10, Scalar(254.0, 227.0, 1.0), -1)
         }
-
-        return image
+        return CircleObject(image, contour.size)
     }
 
     private fun findLines(bitmap: Bitmap): LineObject {
@@ -1823,7 +1866,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     }
 
     private fun createFile(extension: String): File {
-        val sdf = SimpleDateFormat("yyyy_MM_dd_HH_mm_ss_SSS", Locale.US)
+        val sdf = SimpleDateFormat("yyyy_MM_dd_HH_mm_ss_SSS", Locale.TAIWAN)
         val path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM)
 
 //        path = context?.getExternalFilesDir(Environment.DIRECTORY_DCIM)     //application directory
@@ -1833,7 +1876,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             dir.mkdirs()
         }
 
-        return File(dir, "/IMG_${sdf.format(Date())}.$extension")
+        return File(dir, "/IMG_${sdf.format(Date()) + "_" + tvCustomSeekBar.text.replace('.', '+').replace('/', '+')}.$extension")
     }
 
     private fun pickPictureFromGallery() {
@@ -1991,6 +2034,21 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         }
     }
 
+    private fun setSensorSensitivity(iso: Int) {
+        previewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, iso)
+        captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
+    }
+
+    private fun setExposureTime(ae: Long) {
+        previewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, ae)      //shutter speed = 1 / (10^9 / ae) sec.
+        captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
+    }
+
+    private fun setApertureSize(aperture: Float) {
+        previewRequestBuilder.set(CaptureRequest.LENS_APERTURE, aperture)
+        captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
+    }
+
     companion object {
         /**
          * Conversion from screen rotation to JPEG orientation.
@@ -2080,11 +2138,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             None
         }
 
-        enum class FunctionToDo {
-            ColorTemperature,
-            RefreshRate,
-            Contrast
-        }
         /**
          * Given `choices` of `Size`s supported by a camera, choose the smallest one that
          * is at least as large as the respective texture view size, and that is at most as large as
@@ -2152,6 +2205,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         }
 
         data class LineObject(val mat: Mat, val lines: Int)
+
+        data class CircleObject(val mat: Mat, val circles: Int, var file: File? = null)
 
         private const val PERMISSIONS_REQUEST_CODE = 10
         private val PERMISSIONS_REQUIRED = arrayOf(
