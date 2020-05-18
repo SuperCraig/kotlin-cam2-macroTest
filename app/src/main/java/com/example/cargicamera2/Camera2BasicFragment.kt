@@ -275,6 +275,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private var refreshRate: Int = 0
     private var contrast: Double? = 0.0
 
+    private lateinit var isoCustomSeekBar: CustomSeekBar
+    private lateinit var tvCustomSeekBar: CustomSeekBar
+    private lateinit var avCustomSeekBar: CustomSeekBar
+
     /**
      * [CameraDevice.StateCallback] is called when [CameraDevice] changes its state.
      */
@@ -408,7 +412,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         readData()          //read shared preferneces data & apply
         readSettingData()
 
-        val isoCustomSeekBar: CustomSeekBar = view.findViewById(R.id.isoCustomSeekBar)
+        isoCustomSeekBar = view.findViewById(R.id.isoCustomSeekBar)
         isoCustomSeekBar.progress = sensorSensitivityProgress
         isoCustomSeekBar.text = "ISO $sensorSensitivity"
         isoCustomSeekBar.setOnTouchListener { _, _ ->
@@ -425,15 +429,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 vibrate.vibrate(vibrationEffect)
 
             setSensorSensitivity(iso)
-
-            sensorSensitivity = iso
             sensorSensitivityProgress = progress
-            isoCustomSeekBar.text = "ISO $iso"
             saveData()      //save shared preferences
             false
         }
 
-        val tvCustomSeekBar: CustomSeekBar = view.findViewById(R.id.tvCustomSeekBar)
+        tvCustomSeekBar = view.findViewById(R.id.tvCustomSeekBar)
         tvCustomSeekBar.progress = exposureProgress
         tvCustomSeekBar.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / exposureTime)}s"
         tvCustomSeekBar.setOnTouchListener{_, _ ->
@@ -452,15 +453,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 vibrate.vibrate(vibrationEffect)
 
             setExposureTime(ae)
-
-            exposureTime = ae
             exposureProgress = progress
-            tvCustomSeekBar.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / ae)}s"
             saveData()      //save shared preferences
             false
         }
 
-        val avCustomSeekBar: CustomSeekBar = view.findViewById(R.id.avCustomSeekBar)
+        avCustomSeekBar = view.findViewById(R.id.avCustomSeekBar)
         avCustomSeekBar.progress = apertureProgress
         avCustomSeekBar.text = "F$aperture"
         avCustomSeekBar.setOnTouchListener{_, _ ->
@@ -475,10 +473,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 vibrate.vibrate(vibrationEffect)
 
             setApertureSize(aperture)
-
-            this.aperture = aperture
             apertureProgress = avCustomSeekBar.progress
-            avCustomSeekBar.text = "F$aperture"
             saveData()
             false
         }
@@ -605,23 +600,26 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                     if (isContrastEnable) {
                         if (mRawImageReader != null) {
-                            takeRawPhoto(mRawImageReader!!).use { result ->
+                            takeRawPhoto().use { result ->
                                 val output = procedureContrast(result)
                             }
 //                            shutterTimes += 1
                         } else {
-                            takeJPEGPhoto(mImageReader).use { result ->
+                            takeJPEGPhoto().use { result ->
                                 val output = procedureContrast(result)
                             }
 //                            shutterTimes += 1
                         }
+
+                        scale = if (scale == 0) scale
+                        else scale + scale
 
                         progressbarShutter?.progress = scale
                     }
 
                     Thread.sleep(200)
                     if (isColorTemperatureEnable) {
-                        takeJPEGPhoto(mImageReader).use { result ->
+                        takeJPEGPhoto().use { result ->
                             val output = procedureColorTemperature(result)
 
                             if (output.name.contains("jpg") && isJPEGSavedEnable) {
@@ -629,37 +627,42 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             }
                         }
 //                        shutterTimes += 1
-                        scale += scale
+                        scale = if (scale == 0) scale
+                        else scale + scale
+
                         progressbarShutter?.progress = scale
                     }
 
                     Thread.sleep(200)
                     if (isRefreshRateEnable) {      //from tv: 750 ~ 4000 and fixed iso 800
-                        takeJPEGPhoto(mImageReader).use { result ->
-                            val ae: Long = (10.0.pow(9) / 750).roundToLong()
+                        val exposureTimeRange = intArrayOf(750, 1000, 1500, 2000, 2500, 3000, 3500, 4000)
+                        val fixedISO = 800
+                        val circleCount = ArrayList<Int>()
+                        setSensorSensitivity(fixedISO)
+                        exposureTimeRange.forEach {
+                            val ae: Long = (10.0.pow(9) / it).roundToLong()
                             setExposureTime(ae)
-                            val circleObject = procedureRefreshRate(result)
-
-                            Log.i(TAG, "circles: ${circleObject.circles}")
-//                            if (circleObject.file!!.name.contains("jpg") && isJPEGSavedEnable) {
-//                                saveExif(circleObject.file!!, aperture.toString(), (10.0.pow(9) / exposureTime).toString(), sensorSensitivity.toString())
-//                            }
+                            takeJPEGPhoto().use { result ->
+                                val circleObject = procedureRefreshRate(result)
+                                circleCount.add(circleObject.circles)
+                                Log.i(TAG, "Refresh rate: $it, circles: ${circleObject.circles}")
+                            }
                         }
-
-                        takeJPEGPhoto(mImageReader).use { result ->
-                            val ae = (10.0.pow(9) / 3500).roundToLong()
-                            setExposureTime(ae)
-                            val circleObject = procedureRefreshRate(result)
-
-                            Log.i(TAG, "circles: ${circleObject.circles}")
+                        val max = circleCount.max()
+                        var avgCount = 0
+                        circleCount.forEach {
+                            if (it < 0.78 * max!! && it > 0.6 * max && avgCount != 0 && it != exposureTimeRange[0])
+                                avgCount = it
                         }
+                        val avgIndex = circleCount.indexOf(avgCount)
+                        refreshRate = exposureTimeRange[avgIndex]
+                        Log.i(TAG, "Refresh Rate: $refreshRate")
 //                        shutterTimes += 1
-                        scale += scale
+                        scale = if (scale == 0) scale
+                        else scale + scale
+
                         progressbarShutter?.progress = scale
                     }
-
-                    progressbarShutter?.visibility = View.INVISIBLE
-                    btnPicture.isEnabled = true
 
                     val historyViewModel = ViewModelProvider(this@Camera2BasicFragment).get(HistoryViewModel::class.java)
                     val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
@@ -667,6 +670,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     historyViewModel.insert(History(currentDateTime, contrast!!.toInt(), refreshRate, colorTemperature.name))
 
                     cameraHandler.removeCallbacks(restoreButtonAction)
+
+                    lifecycleScope.launch(Dispatchers.Main) {
+                        progressbarShutter?.visibility = View.INVISIBLE
+                        btnPicture.isEnabled = true
+                    }
                 }
 
             }
@@ -1138,6 +1146,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             )
             previewRequestBuilder.addTarget(surface)
 
+            initialize3A()
+
             val outputs = if(mRawImageReader == null) {
                 listOf(surface, mImageReader.surface)
             } else {
@@ -1171,11 +1181,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                 previewRequest,
                                 captureCallback, backgroundHandler
                             )
-
-                            if (sensorSensitivity != 0) previewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, sensorSensitivity)     //20200331 Craig return last state
-                            if (exposureTime.toInt() != 0)  previewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, exposureTime)
-                            if (aperture.toInt() != 0)  previewRequestBuilder.set(CaptureRequest.LENS_APERTURE, aperture)
-                            if (zoom != null)   previewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, zoom)
 
 //                            unlockFocus()
                             captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
@@ -1346,21 +1351,21 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
      * template. It performs synchronization between the [CaptureResult] and the [Image] resulting
      * from the single capture, and outputs a [CombinedCaptureResult] object.
      */
-    private suspend fun takeRawPhoto(imageReader: ImageReader):
+    private suspend fun takeRawPhoto():
             CombinedCaptureResult = suspendCoroutine { cont ->
 
         // Flush any images left in the image reader
         @Suppress("ControlFlowWithEmptyBody")
-        var it = imageReader.acquireNextImage()
+        var it = mRawImageReader!!.acquireNextImage()
         while (it != null) {
             it.close()
-            it = imageReader.acquireNextImage()
+            it = mRawImageReader!!.acquireNextImage()
         }
 
         // Start a new image queue
         val imageQueue = ArrayBlockingQueue<Image>(IMAGE_BUFFER_SIZE)
 
-        imageReader.setOnImageAvailableListener({ reader ->
+        mRawImageReader!!.setOnImageAvailableListener({ reader ->
             val image = reader.acquireNextImage()
             Log.d(TAG, "Image available in queue: ${image.timestamp}")
             imageQueue.add(image)
@@ -1373,9 +1378,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
 //        captureRequest.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
         captureRequest.set(CaptureRequest.SCALER_CROP_REGION, zoom)
-        if (sensorSensitivity != 0) captureRequest.set(CaptureRequest.SENSOR_SENSITIVITY, sensorSensitivity)     //20200331 Craig return last state
-        if (exposureTime.toInt() != 0)  captureRequest.set(CaptureRequest.SENSOR_EXPOSURE_TIME, exposureTime)
-        if (aperture.toInt() != 0)  captureRequest.set(CaptureRequest.LENS_APERTURE, aperture)
 
         captureRequest.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation))
         Log.i(TAG, "takePhoto, rotation: $rotation")
@@ -1430,7 +1432,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                             // Unset the image reader listener
                             imageReaderHandler.removeCallbacks(timeoutRunnable)
-                            imageReader.setOnImageAvailableListener(null, null)
+                            mRawImageReader!!.setOnImageAvailableListener(null, null)
 
                             // Clear the queue of images, if there are left
                             while (imageQueue.size > 0) {
@@ -1439,7 +1441,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                             cont.resume(
                                 CombinedCaptureResult(
-                                    image, result, ExifInterface.ORIENTATION_NORMAL, imageReader.imageFormat
+                                    image, result, ExifInterface.ORIENTATION_NORMAL, mRawImageReader!!.imageFormat
                                 )
                             )
 
@@ -1452,22 +1454,22 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         )
     }
 
-    private suspend fun takeJPEGPhoto(imageReader: ImageReader):
+    private suspend fun takeJPEGPhoto():
             CombinedCaptureResult = suspendCoroutine { cont ->
 
         // Flush any images left in the image reader
         @Suppress("ControlFlowWithEmptyBody")
-        var it = imageReader.acquireNextImage()
+        var it = mImageReader.acquireNextImage()
         while (it != null) {
             it.close()
-            it = imageReader.acquireNextImage()
+            it = mImageReader.acquireNextImage()
         }
 
         // Start a new image queue
 //        val imageQueue = ArrayBlockingQueue<Image>(IMAGE_BUFFER_SIZE)
         val imageQueue = LinkedBlockingQueue<Image>(IMAGE_BUFFER_SIZE)
 
-        imageReader.setOnImageAvailableListener({ reader ->
+        mImageReader.setOnImageAvailableListener({ reader ->
             val image = reader.acquireNextImage()
             Log.d(TAG, "Image available in queue: ${image.timestamp}")
             imageQueue.add(image)
@@ -1480,9 +1482,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
 //        captureRequest.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
         captureRequest.set(CaptureRequest.SCALER_CROP_REGION, zoom)
-        if (sensorSensitivity != 0) captureRequest.set(CaptureRequest.SENSOR_SENSITIVITY, sensorSensitivity)     //20200331 Craig return last state
-        if (exposureTime.toInt() != 0)  captureRequest.set(CaptureRequest.SENSOR_EXPOSURE_TIME, exposureTime)
-        if (aperture.toInt() != 0)  captureRequest.set(CaptureRequest.LENS_APERTURE, aperture)
 
         captureRequest.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation))
         Log.i(TAG, "takePhoto, rotation: $rotation")
@@ -1537,7 +1536,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                             // Unset the image reader listener
                             imageReaderHandler.removeCallbacks(timeoutRunnable)
-                            imageReader.setOnImageAvailableListener(null, null)
+                            mImageReader.setOnImageAvailableListener(null, null)
 
                             // Clear the queue of images, if there are left
                             while (imageQueue.size > 0) {
@@ -1546,7 +1545,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                             cont.resume(
                                 CombinedCaptureResult(
-                                    image, result, ExifInterface.ORIENTATION_NORMAL, imageReader.imageFormat
+                                    image, result, ExifInterface.ORIENTATION_NORMAL, mImageReader.imageFormat
                                 )
                             )
 
@@ -2158,16 +2157,29 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private fun setSensorSensitivity(iso: Int) {
         previewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, iso)
         captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
+        sensorSensitivity = iso
+        isoCustomSeekBar.text = "ISO $iso"
     }
 
     private fun setExposureTime(ae: Long) {
         previewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, ae)      //shutter speed = 1 / (10^9 / ae) sec.
         captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
+        exposureTime = ae
+        tvCustomSeekBar.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / ae)}s"
     }
 
     private fun setApertureSize(aperture: Float) {
         previewRequestBuilder.set(CaptureRequest.LENS_APERTURE, aperture)
         captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
+        this.aperture = aperture
+        avCustomSeekBar.text = "F$aperture"
+    }
+
+    private fun initialize3A() {
+        if (sensorSensitivity != 0) previewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, sensorSensitivity)     //20200331 Craig return last state
+        if (exposureTime.toInt() != 0)  previewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, exposureTime)
+        if (aperture.toInt() != 0)  previewRequestBuilder.set(CaptureRequest.LENS_APERTURE, aperture)
+        if (zoom != null)   previewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, zoom)
     }
 
     companion object {

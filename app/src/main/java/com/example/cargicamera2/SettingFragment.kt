@@ -80,6 +80,10 @@ class SettingFragment : Fragment(){
         layout_about.setOnClickListener{
             Log.i(TAG, "layout_about.setOnClickListener")
         }
+
+        container.setOnClickListener {
+
+        }
     }
 
     override fun onPause() {

@@ -57,11 +57,11 @@ class HistoryFragment : Fragment(), RoomRecyclerItemTouchHelper.RecyclerItemTouc
         historyViewModel = ViewModelProvider(this).get(HistoryViewModel::class.java)
         historyViewModel.getAllNotes().observe(this.viewLifecycleOwner, androidx.lifecycle.Observer { it ->
             adapter.submitList(it)
-            it.forEach {
-                Log.d("Contrast: ", it.contrast.toString())
-                Log.d("Refresh Rate: ", it.refreshRate.toString())
-                Log.d("Color Temperature: ", it.colorTemperature.toString())
-            }
+//            it.forEach {
+//                Log.d("Contrast: ", it.contrast.toString())
+//                Log.d("Refresh Rate: ", it.refreshRate.toString())
+//                Log.d("Color Temperature: ", it.colorTemperature.toString())
+//            }
         })
 
 
