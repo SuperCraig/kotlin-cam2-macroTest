@@ -1,7 +1,8 @@
 # kotlin-cam2-macroTest
 
-function list
-*Camera2
-*calculate contrast, refresh rate, color, temperature
+*function list
+	*Camera2
+	*calculate contrast, refresh rate, color, temperature
 
--[x] Setting fragment is not completed
+-[x] Other predefined function & page
+-[] Setting fragment is not completed
