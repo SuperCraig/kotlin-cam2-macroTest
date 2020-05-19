@@ -5,4 +5,4 @@
 	* calculate contrast, refresh rate, color, temperature  
   
 - [x] Other predefined function & page  
-- [] Setting fragment is not completed  
+- [ ] Setting fragment is not completed  
