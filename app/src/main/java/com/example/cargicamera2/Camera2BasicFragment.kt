@@ -429,6 +429,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 vibrate.vibrate(vibrationEffect)
 
             setSensorSensitivity(iso)
+            sensorSensitivity = iso
             sensorSensitivityProgress = progress
             saveData()      //save shared preferences
             false
@@ -453,6 +454,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 vibrate.vibrate(vibrationEffect)
 
             setExposureTime(ae)
+            exposureTime = ae
             exposureProgress = progress
             saveData()      //save shared preferences
             false
@@ -473,6 +475,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 vibrate.vibrate(vibrationEffect)
 
             setApertureSize(aperture)
+            this.aperture = aperture
             apertureProgress = avCustomSeekBar.progress
             saveData()
             false
@@ -599,6 +602,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     btnPicture.isEnabled = false
 
                     if (isContrastEnable) {
+                        if (isManualEnable) {       //set default iso & tv for contrast measurement
+
+                        }
+
                         if (mRawImageReader != null) {
                             takeRawPhoto().use { result ->
                                 val output = procedureContrast(result)
@@ -618,7 +625,16 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     }
 
                     Thread.sleep(200)
-                    if (isColorTemperatureEnable) {
+                    if (isColorTemperatureEnable) {     //set fixed iso 320 & tv 250
+                        if (isManualEnable) {
+                            val iso = 320
+                            setSensorSensitivity(iso)
+                            val ae = (10.0.pow(9) / 750).roundToLong()
+                            setExposureTime(ae)
+
+                            Thread.sleep(50)
+                        }
+
                         takeJPEGPhoto().use { result ->
                             val output = procedureColorTemperature(result)
 
@@ -642,6 +658,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         exposureTimeRange.forEach {
                             val ae: Long = (10.0.pow(9) / it).roundToLong()
                             setExposureTime(ae)
+
+                            Thread.sleep(50)
                             takeJPEGPhoto().use { result ->
                                 val circleObject = procedureRefreshRate(result)
                                 circleCount.add(circleObject.circles)
@@ -650,7 +668,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         }
                         val max = circleCount.max()
                         var avgCount = 0
-                        circleCount.forEach {
+                        circleCount.forEach {       //(max - it) / max < 0.2
                             if (it < 0.78 * max!! && it > 0.6 * max && avgCount != 0 && it != exposureTimeRange[0])
                                 avgCount = it
                         }
@@ -1790,6 +1808,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         Log.i(TAG, "cct: $cct")
         Log.i(TAG, "Red: $red, Green: $green, Blue: $blue")
 
+        val colorTemperatureCCT = if (cct < 5000) ColorTemperature.WarmColorTemperature
+        else if (cct >= 5000 && cct < 8000) ColorTemperature.NormalColorTemperature
+        else ColorTemperature.ColdColorTemperature
+
         var colorTemperature: ColorTemperature = ColorTemperature.None
         if (red > green && red > blue){
             colorTemperature = ColorTemperature.WarmColorTemperature
@@ -1808,8 +1830,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             Log.i(TAG, "No color temperature")
         }
 
+
 //        bitmap.compress(Bitmap.CompressFormat.PNG, 85, FileOutputStream(file))
-        return colorTemperature
+        return colorTemperatureCCT
     }
 
     private fun calculateXY(r: Float, g: Float, b: Float):DoubleArray {
@@ -2157,21 +2180,18 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private fun setSensorSensitivity(iso: Int) {
         previewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, iso)
         captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
-        sensorSensitivity = iso
         isoCustomSeekBar.text = "ISO $iso"
     }
 
     private fun setExposureTime(ae: Long) {
         previewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, ae)      //shutter speed = 1 / (10^9 / ae) sec.
         captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
-        exposureTime = ae
         tvCustomSeekBar.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / ae)}s"
     }
 
     private fun setApertureSize(aperture: Float) {
         previewRequestBuilder.set(CaptureRequest.LENS_APERTURE, aperture)
         captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
-        this.aperture = aperture
         avCustomSeekBar.text = "F$aperture"
     }
 
