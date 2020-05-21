@@ -273,7 +273,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     private var colorTemperature: ColorTemperature = ColorTemperature.None
     private var refreshRate: Int = 0
-    private var contrast: Double? = 0.0
+    private var contrast: Double = 0.0
 
     private lateinit var isoCustomSeekBar: CustomSeekBar
     private lateinit var tvCustomSeekBar: CustomSeekBar
@@ -562,8 +562,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             textureView.surfaceTextureListener = surfaceTextureListener
         }
 
-        readCommandHandler.postDelayed(readCommandRunnable, 500)
-
         if (!btnPicture.isEnabled)
             btnPicture.isEnabled = true
 
@@ -597,13 +595,17 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 // Perform I/O heavy operations in a different scope
                 lifecycleScope.launch(Dispatchers.IO) {
-                    cameraHandler.postDelayed(restoreButtonAction, 15000)
+//                    cameraHandler.postDelayed(restoreButtonAction, 15000)
 
                     btnPicture.isEnabled = false
 
                     if (isContrastEnable) {
                         if (isManualEnable) {       //set default iso & tv for contrast measurement
-
+//                            val ae = (10.0.pow(9) / exposureTime).roundToLong()
+//                            setExposureTime(ae)
+//                            setSensorSensitivity(sensorSensitivity)
+//
+//                            Thread.sleep(50)
                         }
 
                         if (mRawImageReader != null) {
@@ -643,6 +645,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             }
                         }
 //                        shutterTimes += 1
+
                         scale = if (scale == 0) scale
                         else scale + scale
 
@@ -650,49 +653,72 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     }
 
                     Thread.sleep(200)
-                    if (isRefreshRateEnable) {      //from tv: 750 ~ 4000 and fixed iso 800
-                        val exposureTimeRange = intArrayOf(750, 1000, 1500, 2000, 2500, 3000, 3500, 4000)
-                        val fixedISO = 800
+                    if (isRefreshRateEnable) {      //from tv: 1000 ~ 4000 and fixed iso 800
+                        val exposureTimeRange = intArrayOf(1500, 2000, 2500, 3000, 3500, 4000)
+                        val fixedISO = 60
                         val circleCount = ArrayList<Int>()
                         setSensorSensitivity(fixedISO)
-                        exposureTimeRange.forEach {
-                            val ae: Long = (10.0.pow(9) / it).roundToLong()
-                            setExposureTime(ae)
 
-                            Thread.sleep(50)
-                            takeJPEGPhoto().use { result ->
-                                val circleObject = procedureRefreshRate(result)
-                                circleCount.add(circleObject.circles)
-                                Log.i(TAG, "Refresh rate: $it, circles: ${circleObject.circles}")
+                        var prevRate = 0.0
+                        var assigned = false
+
+                        setExposureTime((10.0.pow(9) / 1000).roundToLong())      //start from 1000
+                        Thread.sleep(50)
+
+                        takeJPEGPhoto().use { result ->
+                            val countOfBlack = procedureRefreshRate(result)
+                            prevRate = countOfBlack.blackOfCount / countOfBlack.totalCount
+                            Log.i(TAG, "Black rate: $prevRate")
+                        }
+
+                        if (prevRate < 0.1) {
+                            exposureTimeRange.forEach {
+                                if (!assigned) {
+                                    val ae: Long = (10.0.pow(9) / it).roundToLong()
+                                    setExposureTime(ae)
+                                    Thread.sleep(50)
+
+                                    takeJPEGPhoto().use { result ->
+                                        val countOfBlack = procedureRefreshRate(result)
+                                        val curRate = countOfBlack.blackOfCount / countOfBlack.totalCount
+
+                                        if (curRate > 0.1) {
+                                            if (it in 1001..2499) refreshRate = 2000
+                                            if (it in 2500 .. 3000) refreshRate = 3000
+                                            if (it > 3000) refreshRate = 4000
+                                            assigned = true
+                                        }
+                                        Log.i(TAG, "Black rate: $curRate")
+                                    }
+                                }
                             }
+                        } else {
+                            refreshRate = 1000
+                            assigned = true
                         }
-                        val max = circleCount.max()
-                        var avgCount = 0
-                        circleCount.forEach {       //(max - it) / max < 0.2
-                            if (it < 0.78 * max!! && it > 0.6 * max && avgCount != 0 && it != exposureTimeRange[0])
-                                avgCount = it
-                        }
-                        val avgIndex = circleCount.indexOf(avgCount)
-                        refreshRate = exposureTimeRange[avgIndex]
-                        Log.i(TAG, "Refresh Rate: $refreshRate")
-//                        shutterTimes += 1
+
+                        if (!assigned)
+                            refreshRate = 4000
+
                         scale = if (scale == 0) scale
                         else scale + scale
 
                         progressbarShutter?.progress = scale
                     }
 
+                    if (!isContrastEnable) contrast = 0.0
+                    if (!isColorTemperatureEnable) colorTemperature = ColorTemperature.None
+                    if (!isRefreshRateEnable) refreshRate = 0
+                    
                     val historyViewModel = ViewModelProvider(this@Camera2BasicFragment).get(HistoryViewModel::class.java)
                     val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
                     val currentDateTime: String = dateFormat.format(Date()) // Find todays date
-                    historyViewModel.insert(History(currentDateTime, contrast!!.toInt(), refreshRate, colorTemperature.name))
+                    historyViewModel.insert(History(currentDateTime, contrast.toInt(), refreshRate, colorTemperature.name))
+
+                    Log.i(TAG, "Contrast: ${contrast.toInt()}, Refresh Rate: $refreshRate, Color Temperature: ${colorTemperature.name}")
 
                     cameraHandler.removeCallbacks(restoreButtonAction)
-
-                    lifecycleScope.launch(Dispatchers.Main) {
-                        progressbarShutter?.visibility = View.INVISIBLE
-                        btnPicture.isEnabled = true
-                    }
+                    cameraHandler.post(restoreButtonAction)
                 }
 
             }
@@ -728,24 +754,28 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 if(isContrastEnable){
                     btnContrast.setImageResource(R.drawable.ic_contrast_selection)
+
+                    sendCommand(MBITSP2020().let{
+                        it.setPattern(MBITSP2020.Pattern.CONTRAST_4)
+                        it.setDisplayWidth(1920)
+                        it.setDisplayHeight(1080)
+                        it.setDisplayStartX(0)
+                        it.setDisplayStartY(0)
+                        it.setModuleWidth(64)
+                        it.setModuleHeight(40)
+                        it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_1, 255.toByte(), 0, 0)
+                        it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_2, 255.toByte(), 255.toByte(), 0)
+                        it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_3, 255.toByte(), 0, 255.toByte())
+                        it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, 255.toByte(), 221.toByte(), 128.toByte())
+                        it.composeCommand()
+                    })
+
+                    readCommandHandler.removeCallbacksAndMessages(null)
+                    readCommandHandler.post(readCommandRunnable)
+
                 }else{
                     btnContrast.setImageResource(R.drawable.ic_contrast)
                 }
-
-                sendCommand(MBITSP2020().let{
-                    it.setPattern(MBITSP2020.Pattern.CONTRAST_4)
-                    it.setDisplayWidth(1920)
-                    it.setDisplayHeight(1080)
-                    it.setDisplayStartX(0)
-                    it.setDisplayStartY(0)
-                    it.setModuleWidth(64)
-                    it.setModuleHeight(40)
-                    it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_1, 255.toByte(), 0, 0)
-                    it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_2, 255.toByte(), 255.toByte(), 0)
-                    it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_3, 255.toByte(), 0, 255.toByte())
-                    it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, 255.toByte(), 221.toByte(), 128.toByte())
-                    it.composeCommand()
-                })
 
                 saveData()
             }
@@ -755,24 +785,27 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 if(isRefreshRateEnable){
                     btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate_selection)
+
+                    sendCommand(MBITSP2020().let{
+                        it.setPattern(MBITSP2020.Pattern.REFRESH_RATE)
+                        it.setDisplayWidth(1920)
+                        it.setDisplayHeight(1080)
+                        it.setDisplayStartX(0)
+                        it.setDisplayStartY(0)
+                        it.setModuleWidth(64)
+                        it.setModuleHeight(40)
+                        it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_1, 255.toByte(), 0, 0)
+                        it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_2, 255.toByte(), 255.toByte(), 0)
+                        it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_3, 255.toByte(), 0, 255.toByte())
+                        it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, 255.toByte(), 221.toByte(), 128.toByte())
+                        it.composeCommand()
+                    })
+
+                    readCommandHandler.removeCallbacksAndMessages(null)
+                    readCommandHandler.post(readCommandRunnable)
                 }else{
                     btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate)
                 }
-
-                sendCommand(MBITSP2020().let{
-                    it.setPattern(MBITSP2020.Pattern.REFRESH_RATE)
-                    it.setDisplayWidth(1920)
-                    it.setDisplayHeight(1080)
-                    it.setDisplayStartX(0)
-                    it.setDisplayStartY(0)
-                    it.setModuleWidth(64)
-                    it.setModuleHeight(40)
-                    it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_1, 255.toByte(), 0, 0)
-                    it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_2, 255.toByte(), 255.toByte(), 0)
-                    it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_3, 255.toByte(), 0, 255.toByte())
-                    it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, 255.toByte(), 221.toByte(), 128.toByte())
-                    it.composeCommand()
-                })
 
                 saveData()
             }
@@ -782,24 +815,27 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 if(isColorTemperatureEnable){
                     btnColorTemperature.setImageResource(R.drawable.ic_color_temperature_selection)
+
+                    sendCommand(MBITSP2020().let{
+                        it.setPattern(MBITSP2020.Pattern.COLOR_TEMPERATURE)
+                        it.setDisplayWidth(1920)
+                        it.setDisplayHeight(1080)
+                        it.setDisplayStartX(0)
+                        it.setDisplayStartY(0)
+                        it.setModuleWidth(64)
+                        it.setModuleHeight(40)
+                        it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_1, 255.toByte(), 0, 0)
+                        it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_2, 255.toByte(), 255.toByte(), 0)
+                        it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_3, 255.toByte(), 0, 255.toByte())
+                        it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, 255.toByte(), 221.toByte(), 128.toByte())
+                        it.composeCommand()
+                    })
+
+                    readCommandHandler.removeCallbacksAndMessages(null)
+                    readCommandHandler.post(readCommandRunnable)
                 }else{
                     btnColorTemperature.setImageResource(R.drawable.ic_color_temperature)
                 }
-
-                sendCommand(MBITSP2020().let{
-                    it.setPattern(MBITSP2020.Pattern.COLOR_TEMPERATURE)
-                    it.setDisplayWidth(1920)
-                    it.setDisplayHeight(1080)
-                    it.setDisplayStartX(0)
-                    it.setDisplayStartY(0)
-                    it.setModuleWidth(64)
-                    it.setModuleHeight(40)
-                    it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_1, 255.toByte(), 0, 0)
-                    it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_2, 255.toByte(), 255.toByte(), 0)
-                    it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_3, 255.toByte(), 0, 255.toByte())
-                    it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, 255.toByte(), 221.toByte(), 128.toByte())
-                    it.composeCommand()
-                })
 
                 saveData()
             }
@@ -880,7 +916,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     override fun onStop() {
         super.onStop()
-        readCommandHandler.removeCallbacks(readCommandRunnable)
         Log.i(TAG, "onStop")
     }
 
@@ -1484,8 +1519,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         }
 
         // Start a new image queue
-//        val imageQueue = ArrayBlockingQueue<Image>(IMAGE_BUFFER_SIZE)
-        val imageQueue = LinkedBlockingQueue<Image>(IMAGE_BUFFER_SIZE)
+        val imageQueue = ArrayBlockingQueue<Image>(IMAGE_BUFFER_SIZE)
 
         mImageReader.setOnImageAvailableListener({ reader ->
             val image = reader.acquireNextImage()
@@ -1576,7 +1610,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         )
     }
 
-    private suspend fun procedureRefreshRate(result: CombinedCaptureResult): CircleObject = suspendCoroutine { cont ->
+    private suspend fun procedureRefreshRate(result: CombinedCaptureResult): CountOfBlack = suspendCoroutine { cont ->
         when (result.format) {
             ImageFormat.JPEG, ImageFormat.DEPTH_JPEG -> {
                 val buffer = result.image.planes[0].buffer
@@ -1595,10 +1629,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         }
                     }
 
-                    val circleObject = calculateRefreshRate(bytes)
-                    circleObject.file = output
+                    val countOfBlack = calculateRefreshRate(bytes)
+                    countOfBlack.file = output
 
-                    cont.resume(circleObject)
+                    cont.resume(countOfBlack)
                 }catch (exc: IOException) {
                     Log.e(TAG, "Unable to write JPEG image to file", exc)
                     cont.resumeWithException(exc)
@@ -1763,23 +1797,20 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         return if (count == 0) Double.NaN else sum / (count / 2)
     }
 
-    private fun calculateRefreshRate(bytes: ByteArray): CircleObject {
+    private fun calculateRefreshRate(bytes: ByteArray): CountOfBlack {
         val temp  = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
         val bitmap = temp.rotate(90f)
 
 //        val lineObject = findLines(bitmap)
 
-        val circleObject = findCircles(bitmap)
+//        val circleObject = findCircles(bitmap)
+
+        val countOfBlack = findBlackRate(bitmap)
 
         if (isJPEGSavedEnable)
-            circleObject.mat.toBitmap().compress(Bitmap.CompressFormat.JPEG, 80, FileOutputStream(createFile("jpg")))
+            countOfBlack.mat.toBitmap().compress(Bitmap.CompressFormat.JPEG, 80, FileOutputStream(createFile("jpg")))
 
-//        Log.i(TAG, "find lines: ${lineObject.lines}")
-
-        Log.i(TAG, "find circles: ${circleObject.circles}")
-        //Do continually shot here
-        Log.i(TAG, "Find circles fin!")
-        return circleObject
+        return countOfBlack
     }
 
     private fun calculateColorTemp(bytes: ByteArray): ColorTemperature {
@@ -1789,8 +1820,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         var red: Float = 0f
         var green: Float = 0f
         var blue: Float = 0f
-        for (j in 0 until bitmap.height / 4) {      //consider 1 / 4 picture of luminace to speed up calculation
-            for (i in 0 until bitmap.width / 4) {
+        for (j in bitmap.height / 4 .. bitmap.height * 3 / 4) {      //consider 1 / 4 picture of luminace to speed up calculation
+            for (i in bitmap.width / 4 .. bitmap.width * 3 / 4) {
                 val argb = bitmap.getPixel(i, j)
                 red += Color.red(argb)
                 green += Color.green(argb)
@@ -1803,6 +1834,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         blue /= count
 
         val cxcy = calculateXY(red, green, blue)
+        Log.i(TAG, "Color temperature: cx: ${cxcy[0]}, cy${cxcy[1]}")
+
         val cct = calculateCCT(cxcy[0], cxcy[1])
 
         Log.i(TAG, "cct: $cct")
@@ -1851,7 +1884,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         return cct
     }
 
-    private fun calculateContrast(bytes: ByteArray): Double? {
+    private fun calculateContrast(bytes: ByteArray): Double {
         val temp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
         val bitmap = temp.rotate(90f)
         val min = intArrayOf(Int.MAX_VALUE, Int.MAX_VALUE, Int.MAX_VALUE)
@@ -1881,7 +1914,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         return contrast
     }
 
-    private fun calculateContrastRAW(width: Int, height: Int, bytes: ByteArray): Double? {
+    private fun calculateContrastRAW(width: Int, height: Int, bytes: ByteArray): Double {
 //        File(createFile("raw").toString()).writeBytes(bytes)
 
         val pixels: IntArray = IntArray(bytes.size / 2)
@@ -1906,13 +1939,34 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 blueBuffer[rawConverter.getPixel(i, j)] = p[2]
             }
         }
-        contrast = contrast(intArrayOf(redBuffer.max()!!, greenBuffer.max()!!, blueBuffer.max()!!),
-                    intArrayOf(redBuffer.min()!!, greenBuffer.min()!!, blueBuffer.min()!!))
 
-        val max = pixels.max()
-        val min = pixels.min()
+        var count = 0
+        var lum1 = 0.0
+        for(i in 0 until width * height / 2) {
+            val lum = luminance(redBuffer[i], greenBuffer[i], blueBuffer[i])
+            if (lum < 256 * 1) {
+                lum1 += lum
+                count += 1
+            }
+        }
+        lum1 /= count
 
-        Log.i(TAG, "Max $max, Min: $min")
+        count = 0
+        var lum2 = 0.0
+        for(i in width * height / 2 until width * height) {
+            val lum = luminance(redBuffer[i], greenBuffer[i], blueBuffer[i])
+            if (lum > 256 * 230) {
+                lum2 += lum
+                count += 1
+            }
+        }
+        lum2 /= count
+
+//        contrast = contrast(intArrayOf(redBuffer.max()!!, greenBuffer.max()!!, blueBuffer.max()!!),
+//                    intArrayOf(redBuffer.min()!!, greenBuffer.min()!!, blueBuffer.min()!!))
+
+        contrast = if (lum2 > lum1) lum2 / lum1
+        else lum1 / lum2
 
         Log.i(TAG, "(0, 0) mR: ${pixels[1]}, mG: ${pixels[0]}, mB: ${pixels[width]}")
         Log.i(TAG, "maxR: ${redBuffer.max()}, maxG: ${greenBuffer.max()}, maxB: ${blueBuffer.max()}")
@@ -2006,6 +2060,24 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             }
         }
         return LineObject(edges, lines.rows())
+    }
+
+    private fun findBlackRate(bitmap: Bitmap): CountOfBlack {
+        val image = bitmap.toMat()
+        val gray = Mat()
+        val gaussian = Mat()
+        val th1 = Mat()
+        val width = image.width()
+        val height = image.height()
+
+        Imgproc.cvtColor(image, gray, Imgproc.COLOR_BGR2GRAY)
+        Imgproc.GaussianBlur(gray, gaussian, org.opencv.core.Size(15.0, 15.0), 0.0)
+        Imgproc.threshold(gaussian, th1, 10.0, 255.0, Imgproc.THRESH_BINARY)
+        val nonZeroCount = org.opencv.core.Core.countNonZero(th1)
+        val totalPixels = width * height
+        val blackOfCount = totalPixels - nonZeroCount
+
+        return CountOfBlack(th1, blackOfCount.toDouble(), totalPixels.toDouble())
     }
 
     private fun createFile(extension: String): File {
@@ -2122,11 +2194,21 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         if (m_bluetoothSocket != null) {
             try {
                 val bytes: ByteArray = ByteArray(20)
+                val stopByte = '~'.toByte()
+                var receivedData: String = ""
+                var done = false
                 m_bluetoothSocket!!.inputStream.read(bytes)
-                Log.i(TAG, "Bluetooth received: ${bytes[0]}")
+
+                bytes.forEach {
+                    if (it != stopByte && !done)
+                        receivedData += it.toChar()
+                    else
+                        done = true
+                }
+                Log.i(TAG, "Bluetooth received: $receivedData")
             } catch (e: IOException) {
                 e.printStackTrace()
-                readCommandHandler.removeCallbacks(readCommandRunnable)
+                readCommandHandler.removeCallbacksAndMessages(null)
             }
         }
 //        readCommandHandler.postDelayed(readCommandRunnable, 500)
@@ -2360,6 +2442,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         data class LineObject(val mat: Mat, val lines: Int)
 
         data class CircleObject(val mat: Mat, val circles: Int, var file: File? = null)
+
+        data class CountOfBlack(val mat: Mat, val blackOfCount: Double, val totalCount: Double, var file: File? = null)
 
         private const val PERMISSIONS_REQUEST_CODE = 10
         private val PERMISSIONS_REQUIRED = arrayOf(
