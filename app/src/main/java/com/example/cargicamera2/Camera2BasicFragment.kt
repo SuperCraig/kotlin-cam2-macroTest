@@ -709,7 +709,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     if (!isContrastEnable) contrast = 0.0
                     if (!isColorTemperatureEnable) colorTemperature = ColorTemperature.None
                     if (!isRefreshRateEnable) refreshRate = 0
-                    
+
                     val historyViewModel = ViewModelProvider(this@Camera2BasicFragment).get(HistoryViewModel::class.java)
                     val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
                     val currentDateTime: String = dateFormat.format(Date()) // Find todays date
