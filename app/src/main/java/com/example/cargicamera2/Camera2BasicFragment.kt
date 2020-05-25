@@ -118,7 +118,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     previewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, zoom)
 
 //                        unlockFocus()
-                    captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
+                    captureSession.setRepeatingRequest(previewRequestBuilder.build(), null, backgroundHandler)
                 }
                 fingerSpacing = currentFingerSpacing
 
@@ -235,9 +235,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private val readCommandThread = HandlerThread("readCommandThread").apply { start() }
     private val readCommandHandler = Handler(readCommandThread.looper)
 
-    /** Live data listener for changes in the device orientation relative to the camera */
-    private lateinit var relativeOrientation: OrientationLiveData
-
     private lateinit var settings: SharedPreferences
     private var aperture: Float = 0f
     private var exposureTime: Long = 0
@@ -268,8 +265,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private lateinit var gridLineView: GridLineView
 
     private val mediaActionSound: MediaActionSound = MediaActionSound()
-
-    private var shutterTimes = 0
 
     private var colorTemperature: ColorTemperature = ColorTemperature.None
     private var refreshRate: Int = 0
@@ -302,85 +297,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         }
     }
 
-
-    /**
-     * This a callback object for the [ImageReader]. "onImageAvailable" will be called when a
-     * still image is ready to be saved.
-     */
-    private val onImageAvailableListener = ImageReader.OnImageAvailableListener {
-        backgroundHandler?.post(ImageSaver(it.acquireNextImage(), createFile("jpg")))
-    }
-
-    /**
-     * A [CameraCaptureSession.CaptureCallback] that handles events related to JPEG capture.
-     */
-    private val captureCallback = object : CameraCaptureSession.CaptureCallback() {
-
-        private fun process(result: CaptureResult) {
-            captureResult = result
-            when (state) {
-                STATE_PREVIEW -> Unit // Do nothing when the camera preview is working normally.
-                STATE_WAITING_LOCK -> capturePicture(result)
-                STATE_WAITING_PRECAPTURE -> {
-                    // CONTROL_AE_STATE can be null on some devices
-                    val aeState = result.get(CaptureResult.CONTROL_AE_STATE)
-                    if (aeState == null ||
-                        aeState == CaptureResult.CONTROL_AE_STATE_PRECAPTURE ||
-                        aeState == CaptureRequest.CONTROL_AE_STATE_FLASH_REQUIRED
-                    ) {
-                        state = STATE_WAITING_NON_PRECAPTURE
-                    }
-                }
-                STATE_WAITING_NON_PRECAPTURE -> {
-                    // CONTROL_AE_STATE can be null on some devices
-                    val aeState = result.get(CaptureResult.CONTROL_AE_STATE)
-                    if (aeState == null || aeState != CaptureResult.CONTROL_AE_STATE_PRECAPTURE) {
-                        state = STATE_PICTURE_TAKEN
-                        captureStillPicture()
-                    }
-                }
-            }
-        }
-
-        private fun capturePicture(result: CaptureResult) {
-            val afState = result.get(CaptureResult.CONTROL_AF_STATE)
-            if (afState == null) {
-                captureStillPicture()
-            } else if (afState == CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED
-                || afState == CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED
-            ) {
-                // CONTROL_AE_STATE can be null on some devices
-                val aeState = result.get(CaptureResult.CONTROL_AE_STATE)
-                if (aeState == null || aeState == CaptureResult.CONTROL_AE_STATE_CONVERGED) {
-                    state = STATE_PICTURE_TAKEN
-                    captureStillPicture()
-                } else {
-                    runPrecaptureSequence()
-                }
-            }
-        }
-
-        override fun onCaptureProgressed(
-            session: CameraCaptureSession,
-            request: CaptureRequest,
-            partialResult: CaptureResult
-        ) {
-            process(partialResult)
-        }
-
-        override fun onCaptureCompleted(
-            session: CameraCaptureSession,
-            request: CaptureRequest,
-            result: TotalCaptureResult
-        ) {
-            process(result)
-        }
-
-        override fun onCaptureSequenceAborted(session: CameraCaptureSession, sequenceId: Int) {
-            super.onCaptureSequenceAborted(session, sequenceId)
-        }
-
-    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -565,20 +481,15 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         if (!btnPicture.isEnabled)
             btnPicture.isEnabled = true
 
+        if (progressbarShutter!!.visibility == View.VISIBLE)
+            progressbarShutter!!.visibility = View.INVISIBLE
+
         Log.i(TAG, "onResume")
     }
 
     override fun onClick(view: View) {
         when (view.id) {
             R.id.btnPicture -> {
-//                lifecycleScope.launch(Dispatchers.Main) {
-//                    if (IMAGE_BUFFER_SIZE - shutterTimes <= 1) {
-//                        openCamera(textureView.width, textureView.height)
-//                        progressbarShutter?.visibility = View.INVISIBLE
-//                        shutterTimes = 0
-//                    }
-//                }
-
                 var task = 0
                 if (isColorTemperatureEnable) task += 1
                 if (isContrastEnable) task += 1
@@ -600,24 +511,39 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     btnPicture.isEnabled = false
 
                     if (isContrastEnable) {
-                        if (isManualEnable) {       //set default iso & tv for contrast measurement
-//                            val ae = (10.0.pow(9) / exposureTime).roundToLong()
-//                            setExposureTime(ae)
-//                            setSensorSensitivity(sensorSensitivity)
-//
-//                            Thread.sleep(50)
+                        if (isManualEnable) {       //set iso: 50 & tv: 180 for contrast measurement
+                            val ae = (10.0.pow(9) / 180).roundToLong()
+                            setExposureTime(ae)
+                            setSensorSensitivity(50)
+
+                            Thread.sleep(50)
                         }
 
                         if (mRawImageReader != null) {
+                            //////////////////////////////////////////
+//                            progressbarShutter!!.progress = 0
+//                            for (i in 0 until 200) {
+//                                takeRawPhoto().use { result ->
+//                                    val output = procedureContrast(result)
+//                                }
+//                                takeJPEGPhoto().use { result ->
+//                                    val output = procedureContrast(result)
+//                                }
+//
+//                                if (i % 2 == 0)
+//                                    progressbarShutter!!.progress += 1
+//                            }
+                            /////////////////////////////////////////
                             takeRawPhoto().use { result ->
                                 val output = procedureContrast(result)
                             }
-//                            shutterTimes += 1
+                            takeRawPhoto().use { result ->
+                                val output = procedureContrast(result)
+                            }
                         } else {
                             takeJPEGPhoto().use { result ->
                                 val output = procedureContrast(result)
                             }
-//                            shutterTimes += 1
                         }
 
                         scale = if (scale == 0) scale
@@ -636,7 +562,21 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                             Thread.sleep(50)
                         }
-
+                        /////////////////////////////////////////////
+//                        progressbarShutter!!.progress = 0
+//                        for (i in 0 until 200) {
+//                            takeJPEGPhoto().use { result ->
+//                                val output = procedureColorTemperature(result)
+//
+//                                if (output.name.contains("jpg") && isJPEGSavedEnable) {
+//                                    saveExif(output, aperture.toString(), (10.0.pow(9) / exposureTime).toString(), sensorSensitivity.toString())
+//                                }
+//                            }
+//
+//                            if (i % 2 == 0)
+//                                progressbarShutter!!.progress += 1
+//                        }
+                        /////////////////////////////////////////////
                         takeJPEGPhoto().use { result ->
                             val output = procedureColorTemperature(result)
 
@@ -644,7 +584,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                 saveExif(output, aperture.toString(), (10.0.pow(9) / exposureTime).toString(), sensorSensitivity.toString())
                             }
                         }
-//                        shutterTimes += 1
 
                         scale = if (scale == 0) scale
                         else scale + scale
@@ -658,7 +597,24 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         val fixedISO = 60
                         val circleCount = ArrayList<Int>()
                         setSensorSensitivity(fixedISO)
-
+                        ////////////////////////////////////////////
+//                        progressbarShutter!!.progress = 0
+//                        for (i in 0 until 200) {
+//                            exposureTimeRange.forEach {
+//                                val ae: Long = (10.0.pow(9) / it).roundToLong()
+//                                setExposureTime(ae)
+//                                Thread.sleep(50)
+//
+//                                takeJPEGPhoto().use { result ->
+//                                    val countOfBlack = procedureRefreshRate(result)
+//                                    Log.i(TAG, "Black rate: ${countOfBlack.blackOfCount / countOfBlack.totalCount}")
+//                                }
+//                            }
+//
+//                            if (i % 2 == 0)
+//                                progressbarShutter!!.progress += 1
+//                        }
+                        ///////////////////////////////////////////
                         var prevRate = 0.0
                         var assigned = false
 
@@ -683,7 +639,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                         val curRate = countOfBlack.blackOfCount / countOfBlack.totalCount
 
                                         if (curRate > 0.1) {
-                                            if (it in 1001..2499) refreshRate = 2000
+                                            if (it in 1001 .. 2499) refreshRate = 2000
                                             if (it in 2500 .. 3000) refreshRate = 3000
                                             if (it > 3000) refreshRate = 4000
                                             assigned = true
@@ -739,7 +695,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     previewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
 
                 previewRequestBuilder.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO)
-                captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
+                captureSession.setRepeatingRequest(previewRequestBuilder.build(), null, backgroundHandler)
 
                 isManualEnable = false
                 avCustomSeekBar.visibility = View.INVISIBLE
@@ -858,7 +814,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 }
 
                 previewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
-                captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
+                captureSession.setRepeatingRequest(previewRequestBuilder.build(), null, backgroundHandler)
 
                 isAutoEnable = false
                 btnAuto.setImageResource(R.drawable.ic_auto)
@@ -908,6 +864,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 progressbarShutter?.visibility = View.INVISIBLE
         }
     }
+
 
     override fun onPause() {
         super.onPause()
@@ -1232,11 +1189,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             previewRequest = previewRequestBuilder.build()
                             captureSession.setRepeatingRequest(
                                 previewRequest,
-                                captureCallback, backgroundHandler
+                                null, backgroundHandler
                             )
-
-//                            unlockFocus()
-                            captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
 
                             Log.i(TAG, "CameraCaptureSession.StateCallback")
                         } catch (e: CameraAccessException) {
@@ -1268,138 +1222,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     }
 
     /**
-     * Run the precapture sequence for capturing a still image. This method should be called when
-     * we get a response in [.captureCallback] from [.lockFocus].
-     */
-    private fun runPrecaptureSequence() {
-        try {
-            // This is how to tell the camera to trigger.
-            previewRequestBuilder.set(
-                CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER,
-                CaptureRequest.CONTROL_AE_PRECAPTURE_TRIGGER_START
-            )
-
-            // Tell #captureCallback to wait for the precapture sequence to be set.
-            state = STATE_WAITING_PRECAPTURE
-            captureSession.capture(
-                previewRequestBuilder.build(), captureCallback,
-                backgroundHandler
-            )
-        } catch (e: CameraAccessException) {
-            Log.e(TAG, e.toString())
-        }
-    }
-
-    /**
-     * Capture a still picture. This method should be called when we get a response in
-     * [.captureCallback] from both [.lockFocus].
-     */
-    private fun captureStillPicture() {
-        try {
-            if (activity == null || cameraDevice == null) return
-            val rotation = activity!!.windowManager.defaultDisplay.rotation
-
-            // This is the CaptureRequest.Builder that we use to take a picture.
-            val captureBuilder = cameraDevice?.createCaptureRequest(
-                CameraDevice.TEMPLATE_STILL_CAPTURE
-            )?.apply {
-                addTarget(mImageReader.surface)
-
-                mImageReader.let {
-                    addTarget(it.surface)
-                }
-
-                // Sensor orientation is 90 for most devices, or 270 for some devices (eg. Nexus 5X)
-                // We have to take that into account and rotate JPEG properly.
-                // For devices with orientation of 90, we return our mapping from ORIENTATIONS.
-                // For devices with orientation of 270, we need to rotate the JPEG 180 degrees.
-                set(
-                    CaptureRequest.JPEG_ORIENTATION,
-                    sensorToDeviceRotation(characteristics, rotation)
-                )
-
-                // Use the same AE and AF modes as the preview.
-                set(
-                    CaptureRequest.CONTROL_AF_MODE,
-                    CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE
-                )
-            }?.also { setAutoFlash(it) }
-
-            val captureCallback = object : CameraCaptureSession.CaptureCallback() {
-
-                override fun onCaptureCompleted(
-                    session: CameraCaptureSession,
-                    request: CaptureRequest,
-                    result: TotalCaptureResult
-                ) {
-                    activity!!.showToast("Saved: $file")
-                    Log.d(TAG, file.toString())
-//                    unlockFocus()
-                }
-            }
-
-            captureSession.apply {
-                stopRepeating()
-                abortCaptures()
-                capture(captureBuilder?.build()!!, captureCallback, null)
-            }
-
-        } catch (e: CameraAccessException) {
-            Log.e(TAG, e.toString())
-        }
-    }
-
-    /**
-     * Unlock the focus. This method should be called when still image capture sequence is
-     * finished.
-     */
-    private fun unlockFocus() {
-        try {
-            // Reset the auto-focus trigger
-            previewRequestBuilder.set(
-                CaptureRequest.CONTROL_AF_TRIGGER,
-                CameraMetadata.CONTROL_AF_TRIGGER_CANCEL
-            )
-
-            setAutoFlash(previewRequestBuilder)
-
-            captureSession.capture(
-                previewRequestBuilder.build(), captureCallback,
-                backgroundHandler
-            )
-            // After this, the camera will go back to the normal state of preview.
-            state = STATE_PREVIEW
-            captureSession.setRepeatingRequest(
-                previewRequest, captureCallback,
-                backgroundHandler
-            )
-        } catch (e: CameraAccessException) {
-            Log.e(TAG, e.toString())
-        }
-    }
-
-    /**
-     * Lock the focus as the first step for a still image capture.
-     */
-    private fun lockFocus() {
-        try {
-            // This is how to tell the camera to lock focus.
-            previewRequestBuilder.set(
-                CaptureRequest.CONTROL_AF_TRIGGER,
-                CameraMetadata.CONTROL_AF_TRIGGER_START
-            )
-            // Tell #captureCallback to wait for the lock.
-            state = STATE_WAITING_LOCK
-            captureSession.capture(
-                previewRequestBuilder.build(), captureCallback,
-                backgroundHandler
-            )
-        } catch (e: CameraAccessException) {
-            Log.e(TAG, e.toString())
-        }
-    }
-
-    /**
      * Helper function used to capture a still image using the [CameraDevice.TEMPLATE_STILL_CAPTURE]
      * template. It performs synchronization between the [CaptureResult] and the [Image] resulting
      * from the single capture, and outputs a [CombinedCaptureResult] object.
@@ -1427,13 +1249,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         val captureRequest = captureSession.device.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE)
         captureRequest.addTarget(mRawImageReader!!.surface)
 
-        val rotation = activity!!.windowManager.defaultDisplay.rotation
-
 //        captureRequest.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
         captureRequest.set(CaptureRequest.SCALER_CROP_REGION, zoom)
-
-        captureRequest.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation))
-        Log.i(TAG, "takePhoto, rotation: $rotation")
 
         captureSession.capture(
             captureRequest.build(),
@@ -1470,26 +1287,27 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     //  the handler provided to the `capture` method, not in our coroutine context
                     @Suppress("BlockingMethodInNonBlockingContext")
                     lifecycleScope.launch(cont.context) {
-                        while (true) {
+                        // Dequeue images while timestamps don't match
+                        val image = imageQueue.take()
 
-                            // Dequeue images while timestamps don't match
-                            val image = imageQueue.take()
-
-                            // TODO(owahltinez): b/142011420
-                            // if (image.timestamp != resultTimestamp) continue
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
-                                image.format != ImageFormat.DEPTH_JPEG &&
-                                image.timestamp != resultTimestamp
-                            ) continue
-                            Log.d(TAG, "Matching image dequeued: ${image.timestamp}")
-
+                        // TODO(owahltinez): b/142011420
+                        // if (image.timestamp != resultTimestamp) continue
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+                            image.format != ImageFormat.DEPTH_JPEG &&
+                            image.timestamp != resultTimestamp
+                        ) {
+                            imageQueue.forEach { image ->
+                                image.close()
+                            }
+                        }
+                        else {
                             // Unset the image reader listener
                             imageReaderHandler.removeCallbacks(timeoutRunnable)
                             mRawImageReader!!.setOnImageAvailableListener(null, null)
 
                             // Clear the queue of images, if there are left
-                            while (imageQueue.size > 0) {
-                                imageQueue.take().close()
+                            imageQueue.forEach { image ->
+                                image.close()
                             }
 
                             cont.resume(
@@ -1497,8 +1315,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                     image, result, ExifInterface.ORIENTATION_NORMAL, mRawImageReader!!.imageFormat
                                 )
                             )
-
-                            // There is no need to break out of the loop, this coroutine will suspend
                         }
                     }
                 }
@@ -1530,13 +1346,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         val captureRequest = captureSession.device.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE)
         captureRequest.addTarget(mImageReader.surface)
 
-        val rotation = activity!!.windowManager.defaultDisplay.rotation
-
 //        captureRequest.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
         captureRequest.set(CaptureRequest.SCALER_CROP_REGION, zoom)
-
-        captureRequest.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation))
-        Log.i(TAG, "takePhoto, rotation: $rotation")
 
         captureSession.capture(
             captureRequest.build(),
@@ -1573,26 +1384,26 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     //  the handler provided to the `capture` method, not in our coroutine context
                     @Suppress("BlockingMethodInNonBlockingContext")
                     lifecycleScope.launch(cont.context) {
-                        while (true) {
+                        // Dequeue images while timestamps don't match
+                        val image = imageQueue.take()
 
-                            // Dequeue images while timestamps don't match
-                            val image = imageQueue.take()
-
-                            // TODO(owahltinez): b/142011420
-                            // if (image.timestamp != resultTimestamp) continue
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
-                                image.format != ImageFormat.DEPTH_JPEG &&
-                                image.timestamp != resultTimestamp
-                            ) continue
-                            Log.d(TAG, "Matching image dequeued: ${image.timestamp}")
-
+                        // TODO(owahltinez): b/142011420
+                        // if (image.timestamp != resultTimestamp) continue
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+                            image.format != ImageFormat.DEPTH_JPEG &&
+                            image.timestamp != resultTimestamp
+                        ) {
+                            imageQueue.forEach { image ->
+                                image.close()
+                            }
+                        } else {
                             // Unset the image reader listener
                             imageReaderHandler.removeCallbacks(timeoutRunnable)
-                            mImageReader.setOnImageAvailableListener(null, null)
+//                            mImageReader.setOnImageAvailableListener(null, null)
 
                             // Clear the queue of images, if there are left
-                            while (imageQueue.size > 0) {
-                                imageQueue.take().close()
+                            imageQueue.forEach { image ->
+                                image.close()
                             }
 
                             cont.resume(
@@ -1600,8 +1411,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                     image, result, ExifInterface.ORIENTATION_NORMAL, mImageReader.imageFormat
                                 )
                             )
-
-                            // There is no need to break out of the loop, this coroutine will suspend
                         }
                     }
                 }
@@ -1627,10 +1436,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             arrayOf("image/jpeg")) { path, _ ->
                             Log.i(TAG, "onScanCompleted : $path")
                         }
+
+                        temp.recycle()
                     }
 
                     val countOfBlack = calculateRefreshRate(bytes)
                     countOfBlack.file = output
+
+                    result.image.close()
 
                     cont.resume(countOfBlack)
                 }catch (exc: IOException) {
@@ -1664,12 +1477,16 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             arrayOf("image/jpeg")) { path, _ ->
                             Log.i(TAG, "onScanCompleted : $path")
                         }
+
+                        temp.recycle()
                     }
 
                     colorTemperature = if (isColorTemperatureEnable)
                         calculateColorTemp(bytes)
                     else
                         ColorTemperature.None
+
+                    result.image.close()
 
                     cont.resume(output)
                 }catch (exc: IOException) {
@@ -1704,12 +1521,16 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             arrayOf("image/jpeg")) { path, _ ->
                             Log.i(TAG, "onScanCompleted : $path")
                         }
+
+                        temp.recycle()
                     }
 
                     contrast = if (isContrastEnable)
                         calculateContrast(bytes)
                     else
                         0.0
+
+                    result.image.close()
 
                     cont.resume(output)
                 } catch (exc: IOException) {
@@ -1745,6 +1566,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     else
                         0.0
 
+                    result.image.close()
                     cont.resume(output)
                 } catch (exc: IOException) {
                     Log.e(TAG, "Unable to write DNG image to file", exc)
@@ -1810,6 +1632,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         if (isJPEGSavedEnable)
             countOfBlack.mat.toBitmap().compress(Bitmap.CompressFormat.JPEG, 80, FileOutputStream(createFile("jpg")))
 
+        temp.recycle()
+        bitmap.recycle()
         return countOfBlack
     }
 
@@ -1865,6 +1689,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
 
 //        bitmap.compress(Bitmap.CompressFormat.PNG, 85, FileOutputStream(file))
+
+        temp.recycle()
+        bitmap.recycle()
         return colorTemperatureCCT
     }
 
@@ -1893,12 +1720,18 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         var r = 0
         var g = 0
         var b = 0
-        for (j in 0 until bitmap.height) {
-            for (i in 0 until bitmap.width) {
+        val width = bitmap.width
+        val height = bitmap.height
+
+        var lum1 = 0.0
+        var count = 0
+        for (j in 0 until height) {     //left white, right black
+            for (i in 0 until width / 2) {
                 argb = bitmap.getPixel(i, j)
                 r = Color.red(argb)
                 g = Color.green(argb)
                 b = Color.blue(argb)
+
                 if (r > max[0]) max[0] = r
                 if (g > max[1]) max[1] = g
                 if (b > max[2]) max[2] = b
@@ -1906,11 +1739,51 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 if (r < min[0]) min[0] = r
                 if (g < min[1]) min[1] = g
                 if (b < min[2]) min[2] = b
+
+                val lum = r * 0.2126 + g * 0.7152 + b * 0.0722
+                if (lum > 220) {
+                    lum1 += lum
+                    count ++
+                }
             }
         }
+        lum1 /= count
+
+        var lum2 = 0.0
+        count = 0
+        for (j in 0 until height) {
+            for (i in width / 2 until width) {
+                argb = bitmap.getPixel(i, j)
+                r = Color.red(argb)
+                g = Color.green(argb)
+                b = Color.blue(argb)
+
+                if (r > max[0]) max[0] = r
+                if (g > max[1]) max[1] = g
+                if (b > max[2]) max[2] = b
+
+                if (r < min[0]) min[0] = r
+                if (g < min[1]) min[1] = g
+                if (b < min[2]) min[2] = b
+
+                val lum = r * 0.2126 + g * 0.7152 + b * 0.0722
+                if (lum < 50) {
+                    lum2 += lum
+                    count ++
+                }
+            }
+        }
+        lum2 /= count
+
+        val contrastLum = if (lum2 > lum1) lum2 / lum1 * 256
+        else lum1 / lum2 * 256
 
         contrast = contrast(intArrayOf(max[0] * 256, max[1] * 256, max[2] * 256), intArrayOf(min[0] * 256, min[1] * 256, min[2] * 256))
-        Log.i(TAG, "Contrast of JPEG: $contrast")
+        Log.i(TAG, "Contrast of JPEG: $contrast, Contrast Lum: $contrastLum, lum1: $lum1, lum2: $lum2")
+        contrast = contrastLum
+
+        temp.recycle()
+        bitmap.recycle()
         return contrast
     }
 
@@ -1926,25 +1799,28 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 pixels[i / 2] += value
         }
 
-        val redBuffer: IntArray = IntArray(width * height)
-        val greenBuffer: IntArray = IntArray(width * height)
-        val blueBuffer: IntArray = IntArray(width * height)
+//        val redBuffer: IntArray = IntArray(width * height)
+//        val greenBuffer: IntArray = IntArray(width * height)
+//        val blueBuffer: IntArray = IntArray(width * height)
+        val luminanceBuffer: IntArray = IntArray(width * height)
         val rawConverter: RawConverter = RawConverter(pixels, width, height)
         val colorFilterArrangement = characteristics.get(CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT)
         for(j in 0 until height) {
             for (i in 0 until width) {
                 val p = rawConverter.debay(colorFilterArrangement!!, i, j)
-                redBuffer[rawConverter.getPixel(i, j)] = p[0]
-                greenBuffer[rawConverter.getPixel(i, j)] = p[1]
-                blueBuffer[rawConverter.getPixel(i, j)] = p[2]
+//                redBuffer[rawConverter.getPixel(i, j)] = p[0]
+//                greenBuffer[rawConverter.getPixel(i, j)] = p[1]
+//                blueBuffer[rawConverter.getPixel(i, j)] = p[2]
+                luminanceBuffer[rawConverter.getPixel(i, j)] = luminance(p[0], p[1], p[2]).toInt()
             }
         }
 
         var count = 0
         var lum1 = 0.0
-        for(i in 0 until width * height / 2) {
-            val lum = luminance(redBuffer[i], greenBuffer[i], blueBuffer[i])
-            if (lum < 256 * 1) {
+        for(i in 0 until width * height / 2) {      //up black, down white -> rotate 90: left white, right black
+//            val lum = luminance(redBuffer[i], greenBuffer[i], blueBuffer[i])
+            val lum = luminanceBuffer[i]
+            if (lum > 256 * 180)  {
                 lum1 += lum
                 count += 1
             }
@@ -1954,8 +1830,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         count = 0
         var lum2 = 0.0
         for(i in width * height / 2 until width * height) {
-            val lum = luminance(redBuffer[i], greenBuffer[i], blueBuffer[i])
-            if (lum > 256 * 230) {
+//            val lum = luminance(redBuffer[i], greenBuffer[i], blueBuffer[i])
+            val lum = luminanceBuffer[i]
+            if (lum < 256 * 50) {
                 lum2 += lum
                 count += 1
             }
@@ -1968,10 +1845,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         contrast = if (lum2 > lum1) lum2 / lum1
         else lum1 / lum2
 
-        Log.i(TAG, "(0, 0) mR: ${pixels[1]}, mG: ${pixels[0]}, mB: ${pixels[width]}")
-        Log.i(TAG, "maxR: ${redBuffer.max()}, maxG: ${greenBuffer.max()}, maxB: ${blueBuffer.max()}")
-        Log.i(TAG, "minR: ${redBuffer.min()}, minG: ${greenBuffer.min()}, minB: ${blueBuffer.min()}")
-        Log.i(TAG, "Contrast of RAW: $contrast")
+//        Log.i(TAG, "maxR: ${redBuffer.max()}, maxG: ${greenBuffer.max()}, maxB: ${blueBuffer.max()}")
+//        Log.i(TAG, "minR: ${redBuffer.min()}, minG: ${greenBuffer.min()}, minB: ${blueBuffer.min()}")
+        Log.i(TAG, "minLuminance: ${luminanceBuffer.min()}, maxLuminance: ${luminanceBuffer.max()}")
+        Log.i(TAG, "Contrast of RAW: $contrast, lum1: $lum1, lum2: $lum2")
 //        return if (min != null && max != null) {
 //            if (min > 0)
 //                (max / min).toDouble()
@@ -2025,7 +1902,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             val cY = m.m01 / m.m00
             Imgproc.circle(image, org.opencv.core.Point(cX, cY), 10, Scalar(254.0, 227.0, 1.0), -1)
         }
-        return CircleObject(image, contour.size)
+
+        val circleObject = CircleObject(image, contour.size)
+//        image.release()
+        gray.release()
+        gaussian.release()
+        th1.release()
+        th2.release()
+        return circleObject
     }
 
     private fun findLines(bitmap: Bitmap): LineObject {
@@ -2059,7 +1943,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 Imgproc.line(edges, start, end, Scalar(255.0, 0.0, 0.0), 3)
             }
         }
-        return LineObject(edges, lines.rows())
+
+        val lineObject = LineObject(edges, lines.rows())
+        image.release()
+//        edges.release()
+        lines.release()
+        return lineObject
     }
 
     private fun findBlackRate(bitmap: Bitmap): CountOfBlack {
@@ -2077,7 +1966,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         val totalPixels = width * height
         val blackOfCount = totalPixels - nonZeroCount
 
-        return CountOfBlack(th1, blackOfCount.toDouble(), totalPixels.toDouble())
+        val countOfBlack = CountOfBlack(th1, blackOfCount.toDouble(), totalPixels.toDouble())
+
+        image.release()
+        gray.release()
+        gaussian.release()
+//        th1.release()
+        return countOfBlack
     }
 
     private fun createFile(extension: String): File {
@@ -2261,19 +2156,19 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     private fun setSensorSensitivity(iso: Int) {
         previewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, iso)
-        captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
+        captureSession.setRepeatingRequest(previewRequestBuilder.build(), null, backgroundHandler)
         isoCustomSeekBar.text = "ISO $iso"
     }
 
     private fun setExposureTime(ae: Long) {
         previewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, ae)      //shutter speed = 1 / (10^9 / ae) sec.
-        captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
+        captureSession.setRepeatingRequest(previewRequestBuilder.build(), null, backgroundHandler)
         tvCustomSeekBar.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / ae)}s"
     }
 
     private fun setApertureSize(aperture: Float) {
         previewRequestBuilder.set(CaptureRequest.LENS_APERTURE, aperture)
-        captureSession.setRepeatingRequest(previewRequestBuilder.build(), captureCallback, backgroundHandler)
+        captureSession.setRepeatingRequest(previewRequestBuilder.build(), null, backgroundHandler)
         avCustomSeekBar.text = "F$aperture"
     }
 
@@ -2307,26 +2202,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
          * Camera state: Showing camera preview.
          */
         private const val STATE_PREVIEW = 0
-
-        /**
-         * Camera state: Waiting for the focus to be locked.
-         */
-        private const val STATE_WAITING_LOCK = 1
-
-        /**
-         * Camera state: Waiting for the exposure to be precapture state.
-         */
-        private const val STATE_WAITING_PRECAPTURE = 2
-
-        /**
-         * Camera state: Waiting for the exposure state to be something other than precapture.
-         */
-        private const val STATE_WAITING_NON_PRECAPTURE = 3
-
-        /**
-         * Camera state: Picture was taken.
-         */
-        private const val STATE_PICTURE_TAKEN = 4
 
         /**
          * Max preview width that is guaranteed by Camera2 API
