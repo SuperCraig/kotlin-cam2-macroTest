@@ -6,11 +6,16 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
 import android.content.Context
+import android.content.Context.SENSOR_SERVICE
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.*
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.hardware.camera2.*
 import android.media.*
 import android.os.*
@@ -274,6 +279,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private lateinit var tvCustomSeekBar: CustomSeekBar
     private lateinit var avCustomSeekBar: CustomSeekBar
 
+    private var sensorManager: SensorManager? = null
+    private var lightSensor: Sensor? = null
+
+    private val lightSensorListener: LightSensorListener = LightSensorListener()
+
     /**
      * [CameraDevice.StateCallback] is called when [CameraDevice] changes its state.
      */
@@ -305,8 +315,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     ): View? {
         var view: View = inflater.inflate(R.layout.fragment_camera2_basic, container, false)
         m_address = arguments?.getString(SplashScreenActivity.EXTRA_ADDRESS).toString()
+
+        sensorManager = context?.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        lightSensor = sensorManager!!.getDefaultSensor(Sensor.TYPE_LIGHT)
+
         Log.i(TAG,"onCreateView")
         Log.i(TAG, "Paired address: $m_address")
+        Log.i(TAG, "Power: ${lightSensor!!.power}, Vendor: ${lightSensor!!.vendor}, Range: ${lightSensor!!.maximumRange}, ${lightSensor!!.resolution}")
         return view
     }
 
@@ -484,6 +499,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         if (progressbarShutter!!.visibility == View.VISIBLE)
             progressbarShutter!!.visibility = View.INVISIBLE
 
+        sensorManager!!.registerListener(lightSensorListener, sensorManager!!.getDefaultSensor(Sensor.TYPE_LIGHT), SensorManager.SENSOR_DELAY_NORMAL)
         Log.i(TAG, "onResume")
     }
 
@@ -512,13 +528,15 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                     if (isContrastEnable) {
                         if (isManualEnable) {       //set iso: 50 & tv: 180 for contrast measurement
-                            val ae = (10.0.pow(9) / 180).roundToLong()
+                            val ae = (10.0.pow(9) / 60).roundToLong()
+                            val iso = 50
                             setExposureTime(ae)
-                            setSensorSensitivity(50)
+                            setSensorSensitivity(iso)
 
                             Thread.sleep(50)
                         }
 
+                        Log.i(TAG, "Lux: ${lightSensorListener.getLux()}")
                         if (mRawImageReader != null) {
                             //////////////////////////////////////////
 //                            progressbarShutter!!.progress = 0
@@ -537,7 +555,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             takeRawPhoto().use { result ->
                                 val output = procedureContrast(result)
                             }
-                            takeRawPhoto().use { result ->
+                            takeJPEGPhoto().use { result ->
                                 val output = procedureContrast(result)
                             }
                         } else {
@@ -557,7 +575,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         if (isManualEnable) {
                             val iso = 320
                             setSensorSensitivity(iso)
-                            val ae = (10.0.pow(9) / 750).roundToLong()
+                            val ae = (10.0.pow(9) / 60).roundToLong()
                             setExposureTime(ae)
 
                             Thread.sleep(50)
@@ -627,7 +645,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             Log.i(TAG, "Black rate: $prevRate")
                         }
 
-                        if (prevRate < 0.1) {
+                        if (prevRate < 0.2) {
                             exposureTimeRange.forEach {
                                 if (!assigned) {
                                     val ae: Long = (10.0.pow(9) / it).roundToLong()
@@ -638,7 +656,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                         val countOfBlack = procedureRefreshRate(result)
                                         val curRate = countOfBlack.blackOfCount / countOfBlack.totalCount
 
-                                        if (curRate > 0.1) {
+                                        if (curRate > 0.2) {
                                             if (it in 1001 .. 2499) refreshRate = 2000
                                             if (it in 2500 .. 3000) refreshRate = 3000
                                             if (it > 3000) refreshRate = 4000
@@ -868,6 +886,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     override fun onPause() {
         super.onPause()
+        sensorManager!!.unregisterListener(lightSensorListener)
         Log.i(TAG, "onPause")
     }
 
@@ -1088,7 +1107,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         val rotation = activity!!.windowManager.defaultDisplay.rotation
         val matrix = Matrix()
         val viewRect = RectF(0f, 0f, viewWidth.toFloat(), viewHeight.toFloat())
-        var bufferRect = RectF(0f, 0f, previewSize.height.toFloat(), previewSize.width.toFloat())
+        val bufferRect = RectF(0f, 0f, previewSize.height.toFloat(), previewSize.width.toFloat())
 
         val centerX = viewRect.centerX()
         val centerY = viewRect.centerY()
@@ -1303,7 +1322,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         else {
                             // Unset the image reader listener
                             imageReaderHandler.removeCallbacks(timeoutRunnable)
-                            mRawImageReader!!.setOnImageAvailableListener(null, null)
+//                            mRawImageReader!!.setOnImageAvailableListener(null, null)
 
                             // Clear the queue of images, if there are left
                             imageQueue.forEach { image ->
@@ -1775,6 +1794,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         }
         lum2 /= count
 
+
+        if (lum1 < 1.0) lum1 = 1.0
+        if (lum2 < 1.0) lum2 = 1.0
+
         val contrastLum = if (lum2 > lum1) lum2 / lum1 * 256
         else lum1 / lum2 * 256
 
@@ -2177,6 +2200,24 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         if (exposureTime.toInt() != 0)  previewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, exposureTime)
         if (aperture.toInt() != 0)  previewRequestBuilder.set(CaptureRequest.LENS_APERTURE, aperture)
         if (zoom != null)   previewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, zoom)
+    }
+
+    inner class LightSensorListener: SensorEventListener {
+        private var lux = 0f
+        override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
+            Log.i(TAG, "Sensor: ${sensor!!.name}, accuracy: $accuracy")
+        }
+
+        override fun onSensorChanged(event: SensorEvent?) {
+            if (event!!.sensor.type == Sensor.TYPE_LIGHT) {
+//                Log.i(TAG, "Lux: ${event.values[0]}")
+                lux = event.values[0]
+            }
+        }
+
+        fun getLux(): Float {
+            return lux
+        }
     }
 
     companion object {

@@ -9,14 +9,12 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_below="@+id/layoutTop"
-        android:layout_above="@+id/control"
-        android:layout_centerInParent="true"
-        android:layout_centerHorizontal="true">
+        android:layout_above="@+id/control">
 
         <com.example.cargicamera2.ui.AutoFitTextureView
             android:id="@+id/texture"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:layout_centerInParent="true"/>
 
         <com.example.cargicamera2.ui.GridLineView
