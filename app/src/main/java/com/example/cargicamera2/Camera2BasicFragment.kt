@@ -321,7 +321,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
         Log.i(TAG,"onCreateView")
         Log.i(TAG, "Paired address: $m_address")
-        Log.i(TAG, "Power: ${lightSensor!!.power}, Vendor: ${lightSensor!!.vendor}, Range: ${lightSensor!!.maximumRange}, ${lightSensor!!.resolution}")
         return view
     }
 
