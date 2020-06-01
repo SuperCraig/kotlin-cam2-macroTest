@@ -3,7 +3,7 @@ package com.example.cargicamera2.extensions
 class MBITSP2020 {
     private val header = byteArrayOf(
         'M'.toByte(), 'B'.toByte(),
-        'I'.toByte(), 'T'.toByte(), 'S'.toByte(), 'P'.toByte(), 2, 0, 2, 0
+        'I'.toByte(), 'T'.toByte(), 'S'.toByte(), 'P'.toByte(), 0x32, 0x30, 0x32, 0x30
     )
 
     enum class Pattern {
@@ -14,7 +14,27 @@ class MBITSP2020 {
         GRAY_SCALE_1, GRAY_SCALE_2, GRAY_SCALE_3, GRAY_SCALE_4
     }
 
+    /**
+                    Mode0          Mode1          Mode2          Mode3
+     GrayScale1-R   v              v              v              v
+     GrayScale1-G   v              v              v              v
+     GrayScale1-B   v              v              v              v
+     GrayScale2-R   v              v              x              v
+     GrayScale2-G   v              v              x              v
+     GrayScale2-B   v              v              x              v
+     GrayScale3-R   x              v              x              v
+     GrayScale3-G   x              v              x              v
+     GrayScale3-B   x              v              x              v
+     GrayScale4-R   x              v              x              v
+     GrayScale4-G   x              v              x              v
+     GrayScale4-B   x              v              x              v
+     */
+    enum class Mode {
+        MODE0, MODE1, MODE2, MODE3
+    }
+
     private lateinit var pattern: Pattern
+    private lateinit var mode: Mode
     private lateinit var displayWidth: ByteArray
     private lateinit var displayHeight: ByteArray
     private lateinit var displayStartX: ByteArray
@@ -46,6 +66,20 @@ class MBITSP2020 {
             Pattern.CONTRAST_4 -> byteArrayOf(1)
             Pattern.REFRESH_RATE -> byteArrayOf(2)
             Pattern.COLOR_TEMPERATURE -> byteArrayOf(3)
+            else -> byteArrayOf(4)
+        }
+    }
+
+    fun setMode(mode: Mode) {
+       this.mode = mode
+    }
+
+    private fun getMode(): ByteArray {
+        return when (mode) {
+            Mode.MODE0 -> byteArrayOf(0)
+            Mode.MODE1 -> byteArrayOf(1)
+            Mode.MODE2 -> byteArrayOf(2)
+            Mode.MODE3 -> byteArrayOf(3)
             else -> byteArrayOf(4)
         }
     }
@@ -139,32 +173,32 @@ class MBITSP2020 {
     }
 
     private fun getGrayScale(pattern: Pattern): ByteArray {
-        when (pattern) {
-            Pattern.CONTRAST_2 -> {
-                setGrayScale(GrayScaleSets.GRAY_SCALE_1, grayScale1[0], grayScale1[1], grayScale1[2])
-                setGrayScale(GrayScaleSets.GRAY_SCALE_2, grayScale2[0], grayScale2[1], grayScale2[2])
-                setGrayScale(GrayScaleSets.GRAY_SCALE_3, 0, 0, 0)
-                setGrayScale(GrayScaleSets.GRAY_SCALE_4, 0, 0, 0)
-            }
-            Pattern.CONTRAST_4 -> {
-                setGrayScale(GrayScaleSets.GRAY_SCALE_1, grayScale1[0], grayScale1[1], grayScale1[2])
-                setGrayScale(GrayScaleSets.GRAY_SCALE_2, grayScale2[0], grayScale2[1], grayScale2[2])
-                setGrayScale(GrayScaleSets.GRAY_SCALE_3, grayScale3[0], grayScale3[1], grayScale3[2])
-                setGrayScale(GrayScaleSets.GRAY_SCALE_4, grayScale4[0], grayScale4[1], grayScale4[2])
-            }
-            Pattern.REFRESH_RATE -> {
-                setGrayScale(GrayScaleSets.GRAY_SCALE_1, grayScale1[0], grayScale1[1], grayScale1[2])
-                setGrayScale(GrayScaleSets.GRAY_SCALE_2, 0, 0, 0)
-                setGrayScale(GrayScaleSets.GRAY_SCALE_3, 0, 0, 0)
-                setGrayScale(GrayScaleSets.GRAY_SCALE_4, 0, 0, 0)
-            }
-            Pattern.COLOR_TEMPERATURE -> {
-                setGrayScale(GrayScaleSets.GRAY_SCALE_1, grayScale1[0], grayScale1[1], grayScale1[2])
-                setGrayScale(GrayScaleSets.GRAY_SCALE_2, grayScale2[0], grayScale2[1], grayScale2[2])
-                setGrayScale(GrayScaleSets.GRAY_SCALE_3, grayScale3[0], grayScale3[1], grayScale3[2])
-                setGrayScale(GrayScaleSets.GRAY_SCALE_4, grayScale4[0], grayScale4[1], grayScale4[2])
-            }
-        }
+//        when (pattern) {
+//            Pattern.CONTRAST_2 -> {
+//                setGrayScale(GrayScaleSets.GRAY_SCALE_1, grayScale1[0], grayScale1[1], grayScale1[2])
+//                setGrayScale(GrayScaleSets.GRAY_SCALE_2, grayScale2[0], grayScale2[1], grayScale2[2])
+//                setGrayScale(GrayScaleSets.GRAY_SCALE_3, 0, 0, 0)
+//                setGrayScale(GrayScaleSets.GRAY_SCALE_4, 0, 0, 0)
+//            }
+//            Pattern.CONTRAST_4 -> {
+//                setGrayScale(GrayScaleSets.GRAY_SCALE_1, grayScale1[0], grayScale1[1], grayScale1[2])
+//                setGrayScale(GrayScaleSets.GRAY_SCALE_2, grayScale2[0], grayScale2[1], grayScale2[2])
+//                setGrayScale(GrayScaleSets.GRAY_SCALE_3, grayScale3[0], grayScale3[1], grayScale3[2])
+//                setGrayScale(GrayScaleSets.GRAY_SCALE_4, grayScale4[0], grayScale4[1], grayScale4[2])
+//            }
+//            Pattern.REFRESH_RATE -> {
+//                setGrayScale(GrayScaleSets.GRAY_SCALE_1, grayScale1[0], grayScale1[1], grayScale1[2])
+//                setGrayScale(GrayScaleSets.GRAY_SCALE_2, 0, 0, 0)
+//                setGrayScale(GrayScaleSets.GRAY_SCALE_3, 0, 0, 0)
+//                setGrayScale(GrayScaleSets.GRAY_SCALE_4, 0, 0, 0)
+//            }
+//            Pattern.COLOR_TEMPERATURE -> {
+//                setGrayScale(GrayScaleSets.GRAY_SCALE_1, grayScale1[0], grayScale1[1], grayScale1[2])
+//                setGrayScale(GrayScaleSets.GRAY_SCALE_2, grayScale2[0], grayScale2[1], grayScale2[2])
+//                setGrayScale(GrayScaleSets.GRAY_SCALE_3, grayScale3[0], grayScale3[1], grayScale3[2])
+//                setGrayScale(GrayScaleSets.GRAY_SCALE_4, grayScale4[0], grayScale4[1], grayScale4[2])
+//            }
+//        }
         return grayScale1 + grayScale2 + grayScale3 + grayScale4
     }
 
@@ -178,7 +212,8 @@ class MBITSP2020 {
     }
 
     fun composeCommand(): ByteArray {
-        return header + getPattern() + getDisplayWidth() + getDisplayHeight() + getDisplayStartX() + getDisplayStartY() + getModuleWidth() + getModuleHeight() + getGrayScale(pattern)
+//        return header + getPattern() + getDisplayWidth() + getDisplayHeight() + getDisplayStartX() + getDisplayStartY() + getModuleWidth() + getModuleHeight() + getGrayScale(pattern)
+        return header + getMode() + getDisplayWidth() + getDisplayHeight() + getDisplayStartX() + getDisplayStartY() + getModuleWidth() + getModuleHeight() + getGrayScale(pattern)
     }
 
     fun decomposeCommand(bytes: ByteArray): Boolean {

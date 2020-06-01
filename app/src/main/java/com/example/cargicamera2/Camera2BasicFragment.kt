@@ -551,16 +551,29 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 //                                    progressbarShutter!!.progress += 1
 //                            }
                             /////////////////////////////////////////
+                            var contrastObjectRAW: ContrastObject? = null
+                            var contrastObjectJPEG: ContrastObject? = null
                             takeRawPhoto().use { result ->
-                                val output = procedureContrast(result)
+                                contrastObjectRAW = procedureContrast(result)
                             }
                             takeJPEGPhoto().use { result ->
-                                val output = procedureContrast(result)
+                                contrastObjectJPEG = procedureContrast(result)
                             }
+
+                            contrast = contrastObjectJPEG!!.contrast
+                            if (contrastObjectJPEG!!.contrast.isNaN() || contrastObjectJPEG!!.contrast.isInfinite())
+                                contrast = contrastObjectRAW!!.contrast
+                            if (contrastObjectRAW!!.contrast < 20 || contrastObjectRAW!!.contrast.isNaN() || contrastObjectRAW!!.contrast.isInfinite())
+                                contrast = lightSensorListener.getLux().toDouble()
+
                         } else {
+                            var contrastObject: ContrastObject? = null
                             takeJPEGPhoto().use { result ->
-                                val output = procedureContrast(result)
+                                contrastObject = procedureContrast(result)
                             }
+
+                            contrast = if (contrastObject!!.contrast.isNaN()) lightSensorListener.getLux().toDouble()
+                            else contrastObject!!.contrast
                         }
 
                         scale = if (scale == 0) scale
@@ -572,9 +585,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     Thread.sleep(200)
                     if (isColorTemperatureEnable) {     //set fixed iso 320 & tv 250
                         if (isManualEnable) {
-                            val iso = 320
+                            val iso = 200
                             setSensorSensitivity(iso)
-                            val ae = (10.0.pow(9) / 60).roundToLong()
+                            val ae = (10.0.pow(9) / 125).roundToLong()
                             setExposureTime(ae)
 
                             Thread.sleep(50)
@@ -728,23 +741,29 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 if(isContrastEnable){
                     btnContrast.setImageResource(R.drawable.ic_contrast_selection)
 
-                    sendCommand(MBITSP2020().let{
-                        it.setPattern(MBITSP2020.Pattern.CONTRAST_4)
-                        it.setDisplayWidth(1920)
-                        it.setDisplayHeight(1080)
-                        it.setDisplayStartX(0)
-                        it.setDisplayStartY(0)
-                        it.setModuleWidth(64)
-                        it.setModuleHeight(40)
-                        it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_1, 255.toByte(), 0, 0)
-                        it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_2, 255.toByte(), 255.toByte(), 0)
-                        it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_3, 255.toByte(), 0, 255.toByte())
-                        it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, 255.toByte(), 221.toByte(), 128.toByte())
-                        it.composeCommand()
-                    })
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        for (i in 0 until 3) {      // send 3 times is because monica application BLE problem
+                            sendCommand(MBITSP2020().let{
+                                it.setMode(MBITSP2020.Mode.MODE0)
+                                it.setDisplayWidth(1920)
+                                it.setDisplayHeight(1080)
+                                it.setDisplayStartX(0)
+                                it.setDisplayStartY(0)
+                                it.setModuleWidth(128)
+                                it.setModuleHeight(128)
+                                it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_1, 255.toByte(), 255.toByte(), 255.toByte())
+                                it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_2, 32.toByte(), 32.toByte(), 32.toByte())
+                                it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_3, 0.toByte(), 0.toByte(), 0.toByte())
+                                it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, 0.toByte(), 0.toByte(), 0.toByte())
+                                it.composeCommand()
+                            })
 
-                    readCommandHandler.removeCallbacksAndMessages(null)
-                    readCommandHandler.post(readCommandRunnable)
+                            Thread.sleep(200)
+                        }
+
+                        readCommandHandler.removeCallbacksAndMessages(null)
+                        readCommandHandler.post(readCommandRunnable)
+                    }
 
                 }else{
                     btnContrast.setImageResource(R.drawable.ic_contrast)
@@ -759,23 +778,30 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 if(isRefreshRateEnable){
                     btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate_selection)
 
-                    sendCommand(MBITSP2020().let{
-                        it.setPattern(MBITSP2020.Pattern.REFRESH_RATE)
-                        it.setDisplayWidth(1920)
-                        it.setDisplayHeight(1080)
-                        it.setDisplayStartX(0)
-                        it.setDisplayStartY(0)
-                        it.setModuleWidth(64)
-                        it.setModuleHeight(40)
-                        it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_1, 255.toByte(), 0, 0)
-                        it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_2, 255.toByte(), 255.toByte(), 0)
-                        it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_3, 255.toByte(), 0, 255.toByte())
-                        it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, 255.toByte(), 221.toByte(), 128.toByte())
-                        it.composeCommand()
-                    })
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        for (i in 0 until 3) {      // send 3 times is because monica application BLE problem
+                            sendCommand(MBITSP2020().let{
+                                it.setMode(MBITSP2020.Mode.MODE2)
+                                it.setDisplayWidth(1920)
+                                it.setDisplayHeight(1080)
+                                it.setDisplayStartX(0)
+                                it.setDisplayStartY(0)
+                                it.setModuleWidth(128)
+                                it.setModuleHeight(128)
+                                it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_1, 255.toByte(), 255.toByte(), 255.toByte())
+                                it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_2, 0.toByte(), 0.toByte(), 0.toByte())
+                                it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_3, 0.toByte(), 0.toByte(), 0.toByte())
+                                it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, 0.toByte(), 0.toByte(), 0.toByte())
+                                it.composeCommand()
+                            })
 
-                    readCommandHandler.removeCallbacksAndMessages(null)
-                    readCommandHandler.post(readCommandRunnable)
+                            Thread.sleep(200)
+                        }
+
+                        readCommandHandler.removeCallbacksAndMessages(null)
+                        readCommandHandler.post(readCommandRunnable)
+                    }
+
                 }else{
                     btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate)
                 }
@@ -789,23 +815,30 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 if(isColorTemperatureEnable){
                     btnColorTemperature.setImageResource(R.drawable.ic_color_temperature_selection)
 
-                    sendCommand(MBITSP2020().let{
-                        it.setPattern(MBITSP2020.Pattern.COLOR_TEMPERATURE)
-                        it.setDisplayWidth(1920)
-                        it.setDisplayHeight(1080)
-                        it.setDisplayStartX(0)
-                        it.setDisplayStartY(0)
-                        it.setModuleWidth(64)
-                        it.setModuleHeight(40)
-                        it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_1, 255.toByte(), 0, 0)
-                        it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_2, 255.toByte(), 255.toByte(), 0)
-                        it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_3, 255.toByte(), 0, 255.toByte())
-                        it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, 255.toByte(), 221.toByte(), 128.toByte())
-                        it.composeCommand()
-                    })
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        for (i in 0 until 3) {      // send 3 times is because monica application BLE problem
+                            sendCommand(MBITSP2020().let{
+                                it.setMode(MBITSP2020.Mode.MODE2)
+                                it.setDisplayWidth(1920)
+                                it.setDisplayHeight(1080)
+                                it.setDisplayStartX(0)
+                                it.setDisplayStartY(0)
+                                it.setModuleWidth(128)
+                                it.setModuleHeight(128)
+                                it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_1, 255.toByte(), 255.toByte(), 255.toByte())
+                                it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_2, 0.toByte(), 0.toByte(), 0.toByte())
+                                it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_3, 0.toByte(), 0.toByte(), 0.toByte())
+                                it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, 0.toByte(), 0.toByte(), 0.toByte())
+                                it.composeCommand()
+                            })
 
-                    readCommandHandler.removeCallbacksAndMessages(null)
-                    readCommandHandler.post(readCommandRunnable)
+                            Thread.sleep(200)
+                        }
+
+                        readCommandHandler.removeCallbacksAndMessages(null)
+                        readCommandHandler.post(readCommandRunnable)
+                    }
+
                 }else{
                     btnColorTemperature.setImageResource(R.drawable.ic_color_temperature)
                 }
@@ -1521,7 +1554,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         }
     }
 
-    private suspend fun procedureContrast(result: CombinedCaptureResult): File = suspendCoroutine { cont ->
+    private suspend fun procedureContrast(result: CombinedCaptureResult): ContrastObject = suspendCoroutine { cont ->
         when (result.format) {
             // When the format is JPEG or DEPTH JPEG we can simply save the bytes as-is
             ImageFormat.JPEG, ImageFormat.DEPTH_JPEG -> {
@@ -1550,7 +1583,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                     result.image.close()
 
-                    cont.resume(output)
+                    cont.resume(ContrastObject(contrast, output))
                 } catch (exc: IOException) {
                     Log.e(TAG, "Unable to write JPEG image to file", exc)
                     cont.resumeWithException(exc)
@@ -1585,7 +1618,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         0.0
 
                     result.image.close()
-                    cont.resume(output)
+                    cont.resume(ContrastObject(contrast, output))
                 } catch (exc: IOException) {
                     Log.e(TAG, "Unable to write DNG image to file", exc)
                     exc.printStackTrace()
@@ -1710,7 +1743,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
         temp.recycle()
         bitmap.recycle()
-        return colorTemperatureCCT
+        return if (colorTemperature == ColorTemperature.None) colorTemperatureCCT
+        else colorTemperature
     }
 
     private fun calculateXY(r: Float, g: Float, b: Float):DoubleArray {
@@ -2089,17 +2123,19 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     }
 
     private fun sendCommand(bytes: ByteArray){
-        if (m_bluetoothSocket != null){
+//        if (m_bluetoothSocket != null){
+        if (m_isConnected) {
             try {
                 m_bluetoothSocket!!.outputStream.write(bytes)
                 Log.i(TAG, "Bluetooth is sent data")
             }catch (e: IOException) {
-                e.printStackTrace()
                 disconnect()
 
-                if (m_address.contains(":"))
-                    ConnectToDevice(context!!).execute()
+                e.printStackTrace()
             }
+        } else {
+            if (m_address.contains(":"))
+                ConnectToDevice(context!!).execute()
         }
     }
 
@@ -2111,17 +2147,23 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         if (m_bluetoothSocket != null) {
             try {
                 val bytes: ByteArray = ByteArray(20)
-                val stopByte = '~'.toByte()
+                var receivedCount = 0
                 var receivedData: String = ""
                 var done = false
                 m_bluetoothSocket!!.inputStream.read(bytes)
 
                 bytes.forEach {
-                    if (it != stopByte && !done)
-                        receivedData += it.toChar()
+                    if (receivedCount < 11 && !done) {
+                        receivedData += if(it < 0x30) (it + 0x30).toChar()
+                            else it.toChar()
+                        receivedCount += 1
+                    }
                     else
                         done = true
                 }
+
+                if (receivedData.contains("MBITSP2020"))
+                    m_isCommandSent = true
                 Log.i(TAG, "Bluetooth received: $receivedData")
             } catch (e: IOException) {
                 e.printStackTrace()
@@ -2280,6 +2322,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         lateinit var m_bluetoothAdapter: BluetoothAdapter
         var m_isConnected: Boolean = false
         lateinit var m_address: String
+        var m_isCommandSent: Boolean = false
 
         enum class ColorTemperature {
             WarmColorTemperature,
@@ -2359,6 +2402,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         data class CircleObject(val mat: Mat, val circles: Int, var file: File? = null)
 
         data class CountOfBlack(val mat: Mat, val blackOfCount: Double, val totalCount: Double, var file: File? = null)
+
+        data class ContrastObject(val contrast: Double, val file: File)
 
         private const val PERMISSIONS_REQUEST_CODE = 10
         private val PERMISSIONS_REQUIRED = arrayOf(
