@@ -130,7 +130,7 @@ class SplashScreenActivity : AppCompatActivity(),
         if (!m_paireDevices.isEmpty()) {
             for (device: BluetoothDevice in m_paireDevices) {
                 list.add(device)
-                Log.i("device", "$device")
+                Log.i("device", "uuid: ${device.uuids}, device name: ${device.name}, device address: ${device.address}, device type: ${device.type}")
             }
         }
 

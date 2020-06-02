@@ -75,6 +75,7 @@
                     android:paddingEnd="8dp"
                     android:paddingStart="8dp"
                     android:text="Contrast"
+                    android:textSize="15dp"
                     android:textAppearance="@style/TextAppearance.AppCompat.Medium"
                     android:textColor="#787878"
                     tools:text="Contrast"/>
@@ -88,6 +89,7 @@
                     android:maxLines="2"
                     android:paddingEnd="8dp"
                     android:paddingStart="8dp"
+                    android:textSize="15dp"
                     android:textAppearance="@style/TextAppearance.AppCompat.Medium"
                     android:textColor="#787878"
                     android:text="0"/>
@@ -104,6 +106,7 @@
                     android:paddingStart="8dp"
                     android:layout_marginStart="20dp"
                     android:text="Refresh rate"
+                    android:textSize="15dp"
                     android:textAppearance="@style/TextAppearance.AppCompat.Medium"
                     android:textColor="#787878"/>
 
@@ -117,6 +120,7 @@
                     android:maxLines="2"
                     android:paddingEnd="8dp"
                     android:paddingStart="8dp"
+                    android:textSize="15dp"
                     android:textAppearance="@style/TextAppearance.AppCompat.Medium"
                     android:textColor="#787878"
                     android:text="0"/>
@@ -132,7 +136,8 @@
                     android:paddingEnd="8dp"
                     android:paddingStart="8dp"
                     android:layout_marginStart="20dp"
-                    android:text="Refresh rate"
+                    android:textSize="15dp"
+                    android:text="Color temperature"
                     android:textAppearance="@style/TextAppearance.AppCompat.Medium"
                     android:textColor="#787878"/>
 
@@ -146,6 +151,7 @@
                     android:maxLines="2"
                     android:paddingEnd="8dp"
                     android:paddingStart="8dp"
+                    android:textSize="15dp"
                     android:textAppearance="@style/TextAppearance.AppCompat.Medium"
                     android:textColor="#787878"
                     android:text="0"/>
