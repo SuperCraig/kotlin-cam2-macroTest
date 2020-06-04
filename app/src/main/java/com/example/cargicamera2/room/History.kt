@@ -4,7 +4,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 @Entity(tableName = History.TABLE_NAME)
-data class History(var date:String, var contrast: Int, var refreshRate: Int, var colorTemperature: String){
+data class History(var date:String, var contrast: String, var refreshRate: Int, var colorTemperature: String){
     companion object{
         const val TABLE_NAME = "HistoryTable"
     }

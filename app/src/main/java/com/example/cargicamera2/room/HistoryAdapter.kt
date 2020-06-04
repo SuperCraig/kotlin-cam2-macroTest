@@ -8,7 +8,8 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.example.cargicamera2.R
-import com.example.cargicamera2.databinding.RecViewRowLayoutBinding
+//import com.example.cargicamera2.databinding.RecViewRowLayoutBinding
+import com.example.cargicamera2.databinding.RecViewRowLayoutBindingImpl
 import kotlinx.android.synthetic.main.rec_view_row_layout.view.*
 
 
@@ -40,7 +41,7 @@ class HistoryAdapter : ListAdapter<History, HistoryAdapter.HistoryHolder>(DIFF_C
         val currentHistory: History = getItem(position)
 
         holder.textViewDate.text = currentHistory.date
-        holder.textViewContrast.text = currentHistory.contrast.toString()
+        holder.textViewContrast.text = currentHistory.contrast
         holder.textViewRefreshRate.text = currentHistory.refreshRate.toString()
         holder.textViewColorTemperature.text = currentHistory.colorTemperature
     }

@@ -34,9 +34,14 @@ class SplashScreenActivity : AppCompatActivity(),
                 val intent = Intent(applicationContext, MainActivity::class.java)
 
                 if(deviceList.size > 0){
-                    val position = 0
-                    val device: BluetoothDevice = deviceList[position]
-                    val address = device.address
+                    var device: BluetoothDevice? = null
+                    var address = ""
+                    deviceList.forEach {
+                        if (it.name.contains("DESKTOP")) {
+                            device = it
+                            address = it.address
+                        }
+                    }
                     intent.putExtra(EXTRA_ADDRESS, address)
                 }else{
                     intent.putExtra(EXTRA_ADDRESS, "")

@@ -46,8 +46,8 @@ abstract class HistoryDatabase : RoomDatabase() {
         override fun doInBackground(vararg params: Unit?) {
             val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
             val currentDateTime: String = dateFormat.format(Date()) // Find todays date
-            historyDao?.insert(History(currentDateTime,5000, 15000, "Day White"))
-            historyDao?.insert(History(currentDateTime,6000, 20000, "Day White"))
+            historyDao?.insert(History(currentDateTime,5000.toString(), 15000, "Day White"))
+            historyDao?.insert(History(currentDateTime,6000.toString(), 20000, "Day White"))
         }
     }
 }
