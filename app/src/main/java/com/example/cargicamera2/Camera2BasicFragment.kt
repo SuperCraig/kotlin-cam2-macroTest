@@ -464,10 +464,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
         textureView.setOnTouchListener(surfaceTextureTouchListener)
 
-        if (m_address.contains(":"))
-            ConnectToDevice(context!!).execute()        // connect to bluetooth device
-        else
-            Toast.makeText(this.context, "This device has not matched any bluetooth", Toast.LENGTH_LONG).show()
+//        if (m_address.contains(":"))
+//            ConnectToDevice(context!!).execute()        // connect to bluetooth device
+//        else
+//            Toast.makeText(this.context, "This device has not matched any bluetooth", Toast.LENGTH_LONG).show()
     }
 
     private fun getFingerSpacing(event: MotionEvent): Float{
@@ -510,6 +510,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 var scale = if (task != 0) 100 / task
                 else 100
 
+                var count = 0
                 // Disable click listener to prevent multiple requests simultaneously in flight
                 progressbarShutter?.max = 100
                 progressbarShutter?.progress = 0
@@ -528,7 +529,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     var refreshRate: Int = 0
 
                     if (isContrastEnable) {
-                        sendToDevice(ContrastCommand)
+                        m_isAckReceived = false
+                        count = 0
+                        while (!m_isAckReceived && count < COMMAND_RETRY) {
+                            m_bluetoothSocket = sendToDevice(ContrastCommand)
+                            readCommandHandler.post(readCommandRunnable)
+                            Thread.sleep(500)
+                            count += 1
+                        }
 
                         if (isManualEnable) {       //set iso: 50 & tv: 180 for contrast measurement
                             val ae = (10.0.pow(9) / 350).roundToLong()
@@ -575,7 +583,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                     Thread.sleep(200)
                     if (isColorTemperatureEnable) {     //set fixed iso 320 & tv 250
-                        sendToDevice(ColorTemperatureCommand)
+                        m_isAckReceived = false
+                        count = 0
+                        while (!m_isAckReceived && count < COMMAND_RETRY) {
+                            m_bluetoothSocket = sendToDevice(ColorTemperatureCommand)
+                            readCommandHandler.post(readCommandRunnable)
+                            Thread.sleep(500)
+                            count += 1
+                        }
 
                         if (isManualEnable) {
                             val iso = 50
@@ -602,7 +617,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                     Thread.sleep(200)
                     if (isRefreshRateEnable) {      //from tv: 1000 ~ 4000 and fixed iso 800
-                        sendToDevice(RefreshRateCommand)
+                        m_isAckReceived = false
+                        count = 0
+                        while (!m_isAckReceived && count < COMMAND_RETRY) {
+                            m_bluetoothSocket = sendToDevice(RefreshRateCommand)
+                            readCommandHandler.post(readCommandRunnable)
+                            Thread.sleep(500)
+                            count += 1
+                        }
 
                         val exposureTimeRange = intArrayOf(1500, 2000, 2500, 3000, 3500, 4000)
                         val fixedISO = 60
@@ -714,7 +736,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     btnContrast.setImageResource(R.drawable.ic_contrast_selection)
 
                     lifecycleScope.launch(Dispatchers.IO) {
-                        sendCommand(ContrastCommand)
+                        m_bluetoothSocket = sendToDevice(ContrastCommand)
+                        readCommandHandler.post(readCommandRunnable)
                     }
                 }else{
                     btnContrast.setImageResource(R.drawable.ic_contrast)
@@ -730,7 +753,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate_selection)
 
                     lifecycleScope.launch(Dispatchers.IO) {
-                        sendCommand(RefreshRateCommand)
+                        m_bluetoothSocket = sendToDevice(RefreshRateCommand)
+                        readCommandHandler.post(readCommandRunnable)
                     }
                 }else{
                     btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate)
@@ -746,7 +770,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     btnColorTemperature.setImageResource(R.drawable.ic_color_temperature_selection)
 
                     lifecycleScope.launch(Dispatchers.IO) {
-                        sendCommand(ColorTemperatureCommand)
+                        m_bluetoothSocket = sendToDevice(ColorTemperatureCommand)
+                        readCommandHandler.post(readCommandRunnable)
                     }
                 }else{
                     btnColorTemperature.setImageResource(R.drawable.ic_color_temperature)
@@ -2055,17 +2080,21 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         }
     }
 
-    private fun sendToDevice(bytes: ByteArray) {
-        var count = 0
-        m_isAckReceived = false
-        readCommandHandler.removeCallbacksAndMessages(null)
-        readCommandHandler.post(readCommandRunnable)
+    private fun sendToDevice(bytes: ByteArray): BluetoothSocket? {
+        try {
+            val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+            val device: BluetoothDevice = bluetoothAdapter.getRemoteDevice(m_address)
+//                    m_bluetoothSocket = device.createInsecureRfcommSocketToServiceRecord(m_myUUID)
+            val bluetoothSocket = device.createRfcommSocketToServiceRecord(m_myUUID)
+            BluetoothAdapter.getDefaultAdapter().cancelDiscovery()
+            bluetoothSocket!!.connect()
 
-        while(!m_isAckReceived  && count < 5) {      // send 3 times is because monica application BLE problem
-            sendCommand(bytes)
-
-            Thread.sleep(1000)
-            count += 1
+            val outputStream = bluetoothSocket.outputStream
+            outputStream.write(bytes)
+            return bluetoothSocket
+        }catch (e: Exception) {
+            e.printStackTrace()
+            return null
         }
     }
 
@@ -2087,17 +2116,17 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     }
 
     private val readCommandRunnable = Runnable {
-       readCommand()
+       readCommand(m_bluetoothSocket)
     }
 
-    private fun readCommand(){
-        if (m_bluetoothSocket != null) {
+    private fun readCommand(bluetoothSocket: BluetoothSocket?){
+        if (bluetoothSocket != null) {
             try {
                 val bytes: ByteArray = ByteArray(20)
                 var receivedCount = 0
                 var receivedData: String = ""
                 var done = false
-                m_bluetoothSocket!!.inputStream.read(bytes)
+                bluetoothSocket.inputStream.read(bytes)
 
                 bytes.forEach {
                     if (receivedCount < 11 && !done) {
@@ -2264,6 +2293,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
         private const val RAW_FORMAT = ImageFormat.RAW_SENSOR
         private const val JPEG_FORMAT = ImageFormat.JPEG
+
+        private const val COMMAND_RETRY = 3
 
         var m_myUUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
         var m_bluetoothSocket: BluetoothSocket? = null
