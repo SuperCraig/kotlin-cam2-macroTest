@@ -556,6 +556,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                 contrastObjectRAW = procedureContrast(result)
                             }
                             takeJPEGPhoto().use { result ->
+                                view.post {Toast.makeText(context!!, "Picture done!", Toast.LENGTH_SHORT).show()}
+
                                 contrastObjectJPEG = procedureContrast(result)
                             }
 
@@ -568,6 +570,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         } else {
                             var contrastObjectJPEG: ContrastObject? = null
                             takeJPEGPhoto().use { result ->
+                                view.post {Toast.makeText(context!!, "Picture done!", Toast.LENGTH_SHORT).show()}
+
                                 contrastObjectJPEG = procedureContrast(result)
                             }
 
@@ -602,6 +606,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         }
 
                         takeJPEGPhoto().use { result ->
+                            view.post {Toast.makeText(context!!, "Picture done!", Toast.LENGTH_SHORT).show()}
+
                             colorTemperatureObject = procedureColorTemperature(result)
 
                             if (colorTemperatureObject!!.file!!.name.contains("jpg") && isJPEGSavedEnable) {
@@ -638,6 +644,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         Thread.sleep(50)
 
                         takeJPEGPhoto().use { result ->
+                            view.post {Toast.makeText(context!!, "Picture done!", Toast.LENGTH_SHORT).show()}
+
                             val countOfBlack = procedureRefreshRate(result)
                             prevRate = countOfBlack.blackOfCount / countOfBlack.totalCount
                             Log.i(TAG, "Black rate: $prevRate")
@@ -1716,9 +1724,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         var contrast: Double = 0.0
 
         var lum1 = 0.0
-        var count = 0
+        var lum2 = 0.0
+        var count1 = 0
+        var count2 = 0
+
         for (j in 0 until height) {     //left white, right black
-            for (i in 0 until width / 2) {
+            for (i in 0 until width) {
                 argb = bitmap.getPixel(i, j)
                 r = Color.red(argb)
                 g = Color.green(argb)
@@ -1735,37 +1746,18 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 val lum = r * 0.2126 + g * 0.7152 + b * 0.0722
                 if (lum >= 10) {
                     lum1 += lum
-                    count ++
+                    count1 ++
                 }
-            }
-        }
-        lum1 /= count
 
-        var lum2 = 0.0
-        count = 0
-        for (j in 0 until height) {
-            for (i in width / 2 until width) {
-                argb = bitmap.getPixel(i, j)
-                r = Color.red(argb)
-                g = Color.green(argb)
-                b = Color.blue(argb)
-
-                if (r > max[0]) max[0] = r
-                if (g > max[1]) max[1] = g
-                if (b > max[2]) max[2] = b
-
-                if (r < min[0]) min[0] = r
-                if (g < min[1]) min[1] = g
-                if (b < min[2]) min[2] = b
-
-                val lum = r * 0.2126 + g * 0.7152 + b * 0.0722
                 if (lum < 10) {
                     lum2 += lum
-                    count ++
+                    count2 ++
                 }
             }
         }
-        lum2 /= count
+
+        lum1 /= count1
+        lum2 /= count2
 
 
         if (lum1 < 1.0) lum1 = 1.0
@@ -1798,7 +1790,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         temp.recycle()
         bitmap.recycle()
         Log.i(TAG, "Contrast: $contrastLum, lum1: $lum1 -> $luminance1, lum2: $lum2 -> $luminance2")
-        return ContrastObject(lum1.roundTo2DecimalPlaces(), lum2.roundTo2DecimalPlaces(), contrast.roundTo2DecimalPlaces())
+        return ContrastObject(luminance1.roundTo2DecimalPlaces(), luminance2.roundTo2DecimalPlaces(), contrast.roundTo2DecimalPlaces())
     }
 
     private fun calculateContrastRAW(width: Int, height: Int, bytes: ByteArray): ContrastObject {
@@ -2331,8 +2323,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             it.setDisplayHeight(1080)
             it.setDisplayStartX(0)
             it.setDisplayStartY(0)
-            it.setModuleWidth(64)
-            it.setModuleHeight(64)
+            it.setModuleWidth(128)
+            it.setModuleHeight(128)
             it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_1, 255.toByte(), 255.toByte(), 255.toByte())
             it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_2, 32.toByte(), 32.toByte(), 32.toByte())
             it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_3, 0.toByte(), 0.toByte(), 0.toByte())
