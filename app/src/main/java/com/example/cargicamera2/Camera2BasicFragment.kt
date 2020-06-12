@@ -412,8 +412,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             val imageGalleryUiModelList: MutableMap<String, ArrayList<ImageGalleryUiModel>> =
                 MediaHelper.getImageGallery(this.context!!)
 
-            val imageList:ArrayList<ImageGalleryUiModel> = imageGalleryUiModelList["Camera"]!!
-            file = File(imageList[0].imageUri)
+            val imageList:ArrayList<ImageGalleryUiModel> = imageGalleryUiModelList[ALBUM_NAME]!!
+            file = File(imageList[imageList.size - 1].imageUri)
             imageView.setImageBitmap(BitmapFactory.decodeFile(file.absolutePath))
         } catch (e: Exception) {
             e.printStackTrace()
@@ -529,14 +529,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     var refreshRate: Int = 0
 
                     if (isContrastEnable) {
-                        m_isAckReceived = false
-                        count = 0
-                        while (!m_isAckReceived && count < COMMAND_RETRY) {
-                            m_bluetoothSocket = sendToDevice(ContrastCommand)
-                            readCommandHandler.post(readCommandRunnable)
-                            Thread.sleep(500)
-                            count += 1
-                        }
+//                        m_isAckReceived = false
+//                        count = 0
+//                        while (!m_isAckReceived && count < COMMAND_RETRY) {
+//                            m_bluetoothSocket = sendToDevice(ContrastCommand)
+//                            readCommandHandler.post(readCommandRunnable)
+//                            Thread.sleep(500)
+//                            count += 1
+//                        }
 
                         if (isManualEnable) {       //set iso: 50 & tv: 180 for contrast measurement
                             val ae = (10.0.pow(9) / 350).roundToLong()
@@ -567,6 +567,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             if (contrastObjectRAW!!.contrast < 20 && (contrastObjectRAW!!.contrast.isNaN() || contrastObjectJPEG!!.contrast.isNaN()))
                                 contrastObject = ContrastObject(0.0, 0.0, lightSensorListener.getLux().toDouble())
 
+                            try {
+                                btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(contrastObjectJPEG!!.file!!.absolutePath))
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
                         } else {
                             var contrastObjectJPEG: ContrastObject? = null
                             takeJPEGPhoto().use { result ->
@@ -577,6 +582,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                             contrastObject = if (contrastObjectJPEG!!.contrast.isNaN()) ContrastObject(0.0, 0.0, lightSensorListener.getLux().toDouble())
                             else contrastObjectJPEG
+
+                            try {
+                                btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(contrastObjectJPEG!!.file!!.absolutePath))
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
                         }
 
                         scale = if (scale == 0) scale
@@ -587,14 +598,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                     Thread.sleep(200)
                     if (isColorTemperatureEnable) {     //set fixed iso 320 & tv 250
-                        m_isAckReceived = false
-                        count = 0
-                        while (!m_isAckReceived && count < COMMAND_RETRY) {
-                            m_bluetoothSocket = sendToDevice(ColorTemperatureCommand)
-                            readCommandHandler.post(readCommandRunnable)
-                            Thread.sleep(500)
-                            count += 1
-                        }
+//                        m_isAckReceived = false
+//                        count = 0
+//                        while (!m_isAckReceived && count < COMMAND_RETRY) {
+//                            m_bluetoothSocket = sendToDevice(ColorTemperatureCommand)
+//                            readCommandHandler.post(readCommandRunnable)
+//                            Thread.sleep(500)
+//                            count += 1
+//                        }
 
                         if (isManualEnable) {
                             val iso = 50
@@ -613,6 +624,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             if (colorTemperatureObject!!.file!!.name.contains("jpg") && isJPEGSavedEnable) {
                                 saveExif(colorTemperatureObject!!.file!!, aperture.toString(), (10.0.pow(9) / exposureTime).toString(), sensorSensitivity.toString())
                             }
+
+                            try {
+                                btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(colorTemperatureObject!!.file!!.absolutePath))
+                            }catch (e: Exception) {
+                                e.printStackTrace()
+                            }
                         }
 
                         scale = if (scale == 0) scale
@@ -623,14 +640,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                     Thread.sleep(200)
                     if (isRefreshRateEnable) {      //from tv: 1000 ~ 4000 and fixed iso 800
-                        m_isAckReceived = false
-                        count = 0
-                        while (!m_isAckReceived && count < COMMAND_RETRY) {
-                            m_bluetoothSocket = sendToDevice(RefreshRateCommand)
-                            readCommandHandler.post(readCommandRunnable)
-                            Thread.sleep(500)
-                            count += 1
-                        }
+//                        m_isAckReceived = false
+//                        count = 0
+//                        while (!m_isAckReceived && count < COMMAND_RETRY) {
+//                            m_bluetoothSocket = sendToDevice(RefreshRateCommand)
+//                            readCommandHandler.post(readCommandRunnable)
+//                            Thread.sleep(500)
+//                            count += 1
+//                        }
 
                         val exposureTimeRange = intArrayOf(1500, 2000, 2500, 3000, 3500, 4000)
                         val fixedISO = 60
@@ -660,6 +677,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                                     takeJPEGPhoto().use { result ->
                                         val countOfBlack = procedureRefreshRate(result)
+
                                         val curRate = countOfBlack.blackOfCount / countOfBlack.totalCount
 
                                         if (curRate > 0.2) {
@@ -668,6 +686,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                             if (it > 3000) refreshRate = 4000
                                             assigned = true
                                         }
+
+                                        try {
+                                            btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(countOfBlack.file!!.absolutePath))
+                                        } catch (e: Exception) {
+                                            e.printStackTrace()
+                                        }
+
                                         Log.i(TAG, "Black rate: $curRate")
                                     }
                                 }
@@ -695,15 +720,17 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
                     val currentDateTime: String = dateFormat.format(Date()) // Find todays date
 
-                    val contrastDescription = contrastObject!!.contrast.toInt().toString() + " -> \n" +
+                    val contrastDescription = if (isContrastEnable) contrastObject!!.contrast.toInt().toString() + " -> \n" +
                             contrastObject.lum1.toInt().toString() + ":" + contrastObject.lum2.toString()
+                    else "0"
 
-                    val colorTemperatureDescription = colorTemperatureObject!!.colorTemperature.name + " ->" +
+                    val colorTemperatureDescription = if (isColorTemperatureEnable) colorTemperatureObject!!.colorTemperature.name + " ->" +
                             colorTemperatureObject!!.cxcy[0].toString() + ", " + colorTemperatureObject!!.cxcy[1].toString()
+                    else ColorTemperature.None.name
 
                     historyViewModel.insert(History(currentDateTime, contrastDescription, refreshRate, colorTemperatureDescription))
 
-                    Log.i(TAG, "Contrast: ${contrastObject.contrast}, Refresh Rate: $refreshRate, Color Temperature: ${colorTemperatureObject!!.colorTemperature}")
+                    Log.i(TAG, "Contrast: ${contrastObject!!.contrast}, Refresh Rate: $refreshRate, Color Temperature: ${colorTemperatureObject!!.colorTemperature}")
 
                     cameraHandler.removeCallbacks(restoreButtonAction)
                     cameraHandler.post(restoreButtonAction)
@@ -743,6 +770,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 if(isContrastEnable){
                     btnContrast.setImageResource(R.drawable.ic_contrast_selection)
 
+                    isRefreshRateEnable = false
+                    btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate)
+                    isColorTemperatureEnable = false
+                    btnColorTemperature.setImageResource(R.drawable.ic_color_temperature)
+
                     lifecycleScope.launch(Dispatchers.IO) {
                         m_bluetoothSocket = sendToDevice(ContrastCommand)
                         readCommandHandler.post(readCommandRunnable)
@@ -760,6 +792,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 if(isRefreshRateEnable){
                     btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate_selection)
 
+                    isContrastEnable = false
+                    btnContrast.setImageResource(R.drawable.ic_contrast)
+                    isColorTemperatureEnable = false
+                    btnColorTemperature.setImageResource(R.drawable.ic_color_temperature)
+
                     lifecycleScope.launch(Dispatchers.IO) {
                         m_bluetoothSocket = sendToDevice(RefreshRateCommand)
                         readCommandHandler.post(readCommandRunnable)
@@ -776,6 +813,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 if(isColorTemperatureEnable){
                     btnColorTemperature.setImageResource(R.drawable.ic_color_temperature_selection)
+
+                    isContrastEnable = false
+                    btnContrast.setImageResource(R.drawable.ic_contrast)
+                    isRefreshRateEnable = false
+                    btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate)
 
                     lifecycleScope.launch(Dispatchers.IO) {
                         m_bluetoothSocket = sendToDevice(ColorTemperatureCommand)
@@ -2287,6 +2329,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         private const val JPEG_FORMAT = ImageFormat.JPEG
 
         private const val COMMAND_RETRY = 3
+
+        private const val ALBUM_NAME = "CraigCam2"
 
         var m_myUUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
         var m_bluetoothSocket: BluetoothSocket? = null

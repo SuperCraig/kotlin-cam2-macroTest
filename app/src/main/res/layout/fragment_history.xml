@@ -71,4 +71,11 @@
             android:scaleType="centerInside"
             android:layout_marginTop="5dp"/>
     </LinearLayout>
+    <FrameLayout
+        android:id="@+id/pnlFlash"
+        android:layout_width="fill_parent"
+        android:layout_height="fill_parent"
+        android:background="#FFFFFF"
+        android:visibility="gone"
+        tools:ignore="MissingConstraints" />
 </androidx.constraintlayout.widget.ConstraintLayout>

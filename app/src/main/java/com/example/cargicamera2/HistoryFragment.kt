@@ -9,6 +9,8 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.AlphaAnimation
+import android.view.animation.Animation
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
@@ -19,8 +21,10 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.cargicamera2.room.History
 import com.example.cargicamera2.room.HistoryAdapter
+import com.example.cargicamera2.room.SingleHistoryAdapter
 import com.example.cargicamera2.room.HistoryViewModel
 import com.example.cargicamera2.room.RoomRecyclerItemTouchHelper
+import com.example.cargicamera2.room.RoomRecyclerItemTouchHelper_SingleHIstory
 import com.example.recyclerswipe.adapter.RecViewAdapter
 import com.example.recyclerswipe.model.DataItem
 import com.example.recyclerswipe.uiUtils.RecyclerItemTouchHelper
@@ -32,7 +36,8 @@ import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.collections.ArrayList
 
-class HistoryFragment : Fragment(), RoomRecyclerItemTouchHelper.RecyclerItemTouchHelperListener{
+//class HistoryFragment : Fragment(), RoomRecyclerItemTouchHelper.RecyclerItemTouchHelperListener{
+class HistoryFragment: Fragment(), RoomRecyclerItemTouchHelper_SingleHIstory.RecyclerItemTouchHelperListener{
     private var mDataItem = ArrayList<DataItem>()
     private var mAdapter: RecViewAdapter?= null
 
@@ -40,6 +45,7 @@ class HistoryFragment : Fragment(), RoomRecyclerItemTouchHelper.RecyclerItemTouc
 
     private lateinit var historyViewModel: HistoryViewModel
     private lateinit var adapter: HistoryAdapter
+    private lateinit var singleAdapter: SingleHistoryAdapter
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -54,9 +60,11 @@ class HistoryFragment : Fragment(), RoomRecyclerItemTouchHelper.RecyclerItemTouc
         super.onViewCreated(view, savedInstanceState)
 
         adapter = HistoryAdapter()
+        singleAdapter = SingleHistoryAdapter()      //202000611 Craig for single history data
         historyViewModel = ViewModelProvider(this).get(HistoryViewModel::class.java)
         historyViewModel.getAllNotes().observe(this.viewLifecycleOwner, androidx.lifecycle.Observer { it ->
             adapter.submitList(it)
+            singleAdapter.submitList(it)
 //            it.forEach {
 //                Log.d("Contrast: ", it.contrast.toString())
 //                Log.d("Refresh Rate: ", it.refreshRate.toString())
@@ -69,12 +77,11 @@ class HistoryFragment : Fragment(), RoomRecyclerItemTouchHelper.RecyclerItemTouc
         recycler_view.layoutManager = LinearLayoutManager(this.context)
         recycler_view.setHasFixedSize(true)     //20200406 Craig
 
-//        recycler_view.adapter = mAdapter
-        recycler_view.adapter = adapter
+//        recycler_view.adapter = adapter
+        recycler_view.adapter = singleAdapter       //20200611 Craig
 
-
-//        val itemTouchHelperCallback = RecyclerItemTouchHelper(0, ItemTouchHelper.LEFT, this)        //old version itemList 20200406
-        val itemTouchHelperCallback = RoomRecyclerItemTouchHelper(0, ItemTouchHelper.LEFT, this)
+//        val itemTouchHelperCallback = RoomRecyclerItemTouchHelper(0, ItemTouchHelper.LEFT, this)
+        val itemTouchHelperCallback = RoomRecyclerItemTouchHelper_SingleHIstory(0, ItemTouchHelper.LEFT, this)
         ItemTouchHelper(itemTouchHelperCallback).attachToRecyclerView(recycler_view)
 
         object: ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT){
@@ -104,6 +111,23 @@ class HistoryFragment : Fragment(), RoomRecyclerItemTouchHelper.RecyclerItemTouc
 
         btn_download.setOnClickListener {
             takeScreenshot()
+
+            //screenshot effect 20200611
+            pnlFlash.visibility = View.VISIBLE
+            var fade: AlphaAnimation = AlphaAnimation(1.0f, 0.0f)
+            fade.duration = 50
+            fade.setAnimationListener(object: Animation.AnimationListener {
+                override fun onAnimationRepeat(animation: Animation?) {
+                    TODO("Not yet implemented")
+                }
+                override fun onAnimationEnd(animation: Animation?) {
+                    pnlFlash.visibility = View.INVISIBLE
+                }
+                override fun onAnimationStart(animation: Animation?) {
+                    pnlFlash.visibility = View.VISIBLE
+                }
+            })
+            pnlFlash.animation = fade
         }
 
         btn_delete_all.setOnClickListener {
@@ -186,29 +210,14 @@ class HistoryFragment : Fragment(), RoomRecyclerItemTouchHelper.RecyclerItemTouc
     }
 
     override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int, position: Int) {
-//        if(viewHolder is RecViewAdapter.RecViewHolder){           //old version itemList 20200406
-//            val name = mDataItem[viewHolder.adapterPosition].title
-//
-//            val deleteItem = mDataItem[viewHolder.adapterPosition]
-//            val delteIndex = viewHolder.adapterPosition
-//
-//            mAdapter?.removeItem(viewHolder.adapterPosition)
-//
-//            var snackbar = Snackbar.make(coordinator_layout!!, name!! + " removed from history!", Snackbar.LENGTH_LONG)
-//            snackbar.setAction("UNDO"){
-//                mAdapter?.restoreItem(deleteItem, delteIndex)
-//            }
-//            snackbar.setActionTextColor(Color.YELLOW)
-//            snackbar.show()
-//        }
-
-        val history: History = adapter.getHistoryAt(viewHolder.adapterPosition)
+//        val history: History = adapter.getHistoryAt(viewHolder.adapterPosition)
+        val history: History = singleAdapter.getHistoryAt(viewHolder.adapterPosition)       //20200611 Craig
         historyViewModel.delete(history)
         Toast.makeText(context, "Note Deleted", Toast.LENGTH_SHORT).show()
 
-        val name = history.id
-
-        var snackbar = Snackbar.make(coordinator_layout!!, name!!.toString() + " removed from history!", Snackbar.LENGTH_LONG)
+//        val name = history.id
+//        val snackbar = Snackbar.make(coordinator_layout!!, name!!.toString() + " removed from history!", Snackbar.LENGTH_LONG)
+        val snackbar = Snackbar.make(coordinator_layout!!, "History removed from history!", Snackbar.LENGTH_LONG)
         snackbar.setAction("UNDO"){
             historyViewModel.insert(history)
         }
