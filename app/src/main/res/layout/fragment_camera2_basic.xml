@@ -49,6 +49,8 @@
                 android:layout_height="30dp"
                 android:layout_marginStart="24dp"
                 android:layout_gravity="center_vertical"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="8dp"
                 android:src="@drawable/ic_exposure_time" />
 
             <ImageView
@@ -56,6 +58,8 @@
                 android:layout_width="30dp"
                 android:layout_height="30dp"
                 android:layout_gravity="center"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="8dp"
                 android:src="@drawable/ic_sensor_sensitivity" />
 
             <ImageView
@@ -64,6 +68,8 @@
                 android:layout_height="30dp"
                 android:layout_marginEnd="24dp"
                 android:layout_gravity="center_vertical|end"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="8dp"
                 android:src="@drawable/ic_aperture" />
         </FrameLayout>
     </RelativeLayout>

@@ -331,6 +331,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         view.findViewById<View>(R.id.btnPhotoBox).setOnClickListener(this)
         view.findViewById<View>(R.id.btnRecordBar).setOnClickListener(this)
         view.findViewById<View>(R.id.btnSetting).setOnClickListener(this)
+        view.findViewById<View>(R.id.btnExposure).setOnClickListener(this)
+        view.findViewById<View>(R.id.btnISO).setOnClickListener(this)
+        view.findViewById<View>(R.id.btnAperture).setOnClickListener(this)
 
         var vibrate = context?.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
         var vibrationEffect = VibrationEffect.createOneShot(2, VibrationEffect.DEFAULT_AMPLITUDE)
@@ -557,7 +560,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             takeRawPhoto().use { result ->
                                 contrastObjectRAW = procedureContrast(result)
                             }
-                            takeJPEGPhoto().use { result ->
+                            takeJPEGPhoto(false).use { result ->
                                 view.post {Toast.makeText(context!!, "Picture done!", Toast.LENGTH_SHORT).show()}
 
                                 contrastObjectJPEG = procedureContrast(result)
@@ -569,6 +572,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             if (contrastObjectRAW!!.contrast < 20 && (contrastObjectRAW!!.contrast.isNaN() || contrastObjectJPEG!!.contrast.isNaN()))
                                 contrastObject = ContrastObject(0.0, 0.0, lightSensorListener.getLux().toDouble())
 
+//                            contrastObjectJPEG!!.file!!.renameTo()
+//                            contrastObjectRAW!!.file!!.renameTo()
                             try {
                                 btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(contrastObjectJPEG!!.file!!.absolutePath))
                             } catch (e: Exception) {
@@ -585,6 +590,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             contrastObject = if (contrastObjectJPEG!!.contrast.isNaN()) ContrastObject(0.0, 0.0, lightSensorListener.getLux().toDouble())
                             else contrastObjectJPEG
 
+//                            contrastObject!!.file!!.renameTo()
                             try {
                                 btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(contrastObjectJPEG!!.file!!.absolutePath))
                             } catch (e: Exception) {
@@ -623,6 +629,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                             colorTemperatureObject = procedureColorTemperature(result)
 
+//                            colorTemperatureObject!!.file!!.renameTo()
                             if (colorTemperatureObject!!.file!!.name.contains("jpg") && isJPEGSavedEnable) {
                                 saveExif(colorTemperatureObject!!.file!!, aperture.toString(), (10.0.pow(9) / exposureTime).toString(), sensorSensitivity.toString())
                             }
@@ -677,7 +684,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                     setExposureTime(ae)
                                     Thread.sleep(50)
 
-                                    takeJPEGPhoto().use { result ->
+                                    takeJPEGPhoto(false).use { result ->
                                         val countOfBlack = procedureRefreshRate(result)
 
                                         val curRate = countOfBlack.blackOfCount / countOfBlack.totalCount
@@ -689,6 +696,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                             assigned = true
                                         }
 
+//                                        countOfBlack.file!!.renameTo("")
                                         try {
                                             btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(countOfBlack.file!!.absolutePath))
                                         } catch (e: Exception) {
@@ -889,6 +897,15 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 fragmentTransaction.addToBackStack("Camera2BasicFragment")
                 fragmentTransaction.commit()
                 Log.i(TAG, "R.id.btnSetting")
+            }
+            R.id.btnExposure -> {
+
+            }
+            R.id.btnISO -> {
+
+            }
+            R.id.btnAperture -> {
+
             }
         }
     }
@@ -1265,7 +1282,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
      * template. It performs synchronization between the [CaptureResult] and the [Image] resulting
      * from the single capture, and outputs a [CombinedCaptureResult] object.
      */
-    private suspend fun takeRawPhoto():
+    private suspend fun takeRawPhoto(isSavedEnable: Boolean = true):
             CombinedCaptureResult = suspendCoroutine { cont ->
 
         // Flush any images left in the image reader
@@ -1351,7 +1368,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                             cont.resume(
                                 CombinedCaptureResult(
-                                    image, result, ExifInterface.ORIENTATION_NORMAL, mRawImageReader!!.imageFormat
+                                    image, result, ExifInterface.ORIENTATION_NORMAL, mRawImageReader!!.imageFormat, isSavedEnable
                                 )
                             )
                         }
@@ -1362,7 +1379,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         )
     }
 
-    private suspend fun takeJPEGPhoto():
+    private suspend fun takeJPEGPhoto(isSavedEnable: Boolean = true):
             CombinedCaptureResult = suspendCoroutine { cont ->
 
         // Flush any images left in the image reader
@@ -1447,7 +1464,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                             cont.resume(
                                 CombinedCaptureResult(
-                                    image, result, ExifInterface.ORIENTATION_NORMAL, mImageReader.imageFormat
+                                    image, result, ExifInterface.ORIENTATION_NORMAL, mImageReader.imageFormat, isSavedEnable
                                 )
                             )
                         }
@@ -1467,7 +1484,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 try {
                     val output = createFile("jpg")
 
-                    if (isJPEGSavedEnable) {
+                    if (result.isSavedEnable) {
                         val temp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size).rotate(90f)
                         temp.compress(Bitmap.CompressFormat.JPEG, 100, FileOutputStream(output))
 
@@ -1508,7 +1525,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 try {
                     val output = createFile("jpg")
 
-                    if (isJPEGSavedEnable) {
+                    if (result.isSavedEnable) {
                         val temp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size).rotate(90f)
                         temp.compress(Bitmap.CompressFormat.JPEG, 100, FileOutputStream(output))
 
@@ -1550,7 +1567,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 try {
                     val output = createFile("jpg")
 
-                    if (isJPEGSavedEnable) {
+                    if (result.isSavedEnable) {
                         val temp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size).rotate(90f)
                         temp.compress(Bitmap.CompressFormat.JPEG, 100, FileOutputStream(output))
 
@@ -1582,7 +1599,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 try {
                     val output = createFile("dng")
 
-                    if (isRAWSavedEnable){
+                    if (result.isSavedEnable){
                         FileOutputStream(output).use { dngCreator.writeImage(it, result.image) }
 
                         MediaScannerConnection.scanFile(
@@ -2456,7 +2473,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             val image: Image,
             val metadata: CaptureResult,
             val orientation: Int,
-            val format: Int
+            val format: Int,
+            val isSavedEnable: Boolean = true
         ) : Closeable {
             override fun close() = image.close()
         }
