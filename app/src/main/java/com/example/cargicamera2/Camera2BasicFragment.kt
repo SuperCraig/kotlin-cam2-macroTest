@@ -572,9 +572,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             if (contrastObjectRAW!!.contrast < 20 && (contrastObjectRAW!!.contrast.isNaN() || contrastObjectJPEG!!.contrast.isNaN()))
                                 contrastObject = ContrastObject(0.0, 0.0, lightSensorListener.getLux().toDouble())
 
-//                            contrastObjectJPEG!!.file!!.renameTo()
-//                            contrastObjectRAW!!.file!!.renameTo()
                             try {
+//                                contrastObjectJPEG!!.file!!.renameTo()
+//                                contrastObjectRAW!!.file!!.renameTo()
                                 btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(contrastObjectJPEG!!.file!!.absolutePath))
                             } catch (e: Exception) {
                                 e.printStackTrace()
@@ -590,8 +590,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             contrastObject = if (contrastObjectJPEG!!.contrast.isNaN()) ContrastObject(0.0, 0.0, lightSensorListener.getLux().toDouble())
                             else contrastObjectJPEG
 
-//                            contrastObject!!.file!!.renameTo()
                             try {
+//                                contrastObject!!.file!!.renameTo()
                                 btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(contrastObjectJPEG!!.file!!.absolutePath))
                             } catch (e: Exception) {
                                 e.printStackTrace()
@@ -629,12 +629,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                             colorTemperatureObject = procedureColorTemperature(result)
 
-//                            colorTemperatureObject!!.file!!.renameTo()
-                            if (colorTemperatureObject!!.file!!.name.contains("jpg") && isJPEGSavedEnable) {
-                                saveExif(colorTemperatureObject!!.file!!, aperture.toString(), (10.0.pow(9) / exposureTime).toString(), sensorSensitivity.toString())
-                            }
-
                             try {
+//                                colorTemperatureObject!!.file!!.renameTo()
+
+                                if (colorTemperatureObject!!.file!!.name.contains("jpg") && isJPEGSavedEnable) {
+                                    saveExif(colorTemperatureObject!!.file!!, aperture.toString(), (10.0.pow(9) / exposureTime).toString(), sensorSensitivity.toString())
+                                }
+
                                 btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(colorTemperatureObject!!.file!!.absolutePath))
                             }catch (e: Exception) {
                                 e.printStackTrace()
@@ -684,7 +685,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                     setExposureTime(ae)
                                     Thread.sleep(50)
 
-                                    takeJPEGPhoto(false).use { result ->
+                                    takeJPEGPhoto().use { result ->
                                         val countOfBlack = procedureRefreshRate(result)
 
                                         val curRate = countOfBlack.blackOfCount / countOfBlack.totalCount
@@ -696,8 +697,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                             assigned = true
                                         }
 
-//                                        countOfBlack.file!!.renameTo("")
                                         try {
+//                                            countOfBlack.file!!.renameTo("")
                                             btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(countOfBlack.file!!.absolutePath))
                                         } catch (e: Exception) {
                                             e.printStackTrace()
@@ -1478,13 +1479,15 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private suspend fun procedureRefreshRate(result: CombinedCaptureResult): CountOfBlack = suspendCoroutine { cont ->
         when (result.format) {
             ImageFormat.JPEG, ImageFormat.DEPTH_JPEG -> {
-                val buffer = result.image.planes[0].buffer
-                val bytes = ByteArray(buffer.remaining()).apply { buffer.get(this) }
-
                 try {
-                    val output = createFile("jpg")
+                    val buffer = result.image.planes[0].buffer
+                    val bytes = ByteArray(buffer.remaining()).apply { buffer.get(this) }
+                    val countOfBlack = calculateRefreshRate(bytes)
+                    countOfBlack.file = null
 
                     if (result.isSavedEnable) {
+                        val output = createFile("jpg")
+
                         val temp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size).rotate(90f)
                         temp.compress(Bitmap.CompressFormat.JPEG, 100, FileOutputStream(output))
 
@@ -1494,10 +1497,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         }
 
                         temp.recycle()
-                    }
 
-                    val countOfBlack = calculateRefreshRate(bytes)
-                    countOfBlack.file = output
+                        countOfBlack.file = output
+                    }
 
                     result.image.close()
 
@@ -1519,13 +1521,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private suspend fun procedureColorTemperature(result: CombinedCaptureResult): ColorTemperatureObject = suspendCoroutine { cont ->
         when (result.format) {
             ImageFormat.JPEG, ImageFormat.DEPTH_JPEG -> {
-                val buffer = result.image.planes[0].buffer
-                val bytes = ByteArray(buffer.remaining()).apply { buffer.get(this) }
-
                 try {
-                    val output = createFile("jpg")
+                    val buffer = result.image.planes[0].buffer
+                    val bytes = ByteArray(buffer.remaining()).apply { buffer.get(this) }
+                    val colorTemperatureObject = calculateColorTemp(bytes)
+                    colorTemperatureObject.file = null
 
                     if (result.isSavedEnable) {
+                        val output = createFile("jpg")
                         val temp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size).rotate(90f)
                         temp.compress(Bitmap.CompressFormat.JPEG, 100, FileOutputStream(output))
 
@@ -1535,10 +1538,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         }
 
                         temp.recycle()
-                    }
 
-                    val colorTemperatureObject = calculateColorTemp(bytes)
-                    colorTemperatureObject.file = output
+                        colorTemperatureObject.file = output
+                    }
 
                     result.image.close()
 
@@ -1561,13 +1563,15 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         when (result.format) {
             // When the format is JPEG or DEPTH JPEG we can simply save the bytes as-is
             ImageFormat.JPEG, ImageFormat.DEPTH_JPEG -> {
-                val buffer = result.image.planes[0].buffer
-                val bytes = ByteArray(buffer.remaining()).apply { buffer.get(this) }
-
                 try {
-                    val output = createFile("jpg")
+                    val buffer = result.image.planes[0].buffer
+                    val bytes = ByteArray(buffer.remaining()).apply { buffer.get(this) }
+
+                    val contrastObject = calculateContrast(bytes)
+                    contrastObject.file = null
 
                     if (result.isSavedEnable) {
+                        val output = createFile("jpg")
                         val temp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size).rotate(90f)
                         temp.compress(Bitmap.CompressFormat.JPEG, 100, FileOutputStream(output))
 
@@ -1577,11 +1581,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         }
 
                         temp.recycle()
+
+                        contrastObject.file = output
                     }
-
-
-                    val contrastObject = calculateContrast(bytes)
-                    contrastObject.file = output
 
                     result.image.close()
 
@@ -1597,9 +1599,16 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 val dngCreator = DngCreator(characteristics, result.metadata)
                 dngCreator.setOrientation(ExifInterface.ORIENTATION_ROTATE_90)      //rotate picture
                 try {
-                    val output = createFile("dng")
+                    val byteBuffer = result.image.planes[0].buffer
+                    val byteArray = ByteArray(byteBuffer.remaining())
+                    byteBuffer.get(byteArray)
+
+                    val contrastObject = calculateContrastRAW(result.image.width, result.image.height, byteArray)
+                    contrastObject.file = null
 
                     if (result.isSavedEnable){
+                        val output = createFile("dng")
+
                         FileOutputStream(output).use { dngCreator.writeImage(it, result.image) }
 
                         MediaScannerConnection.scanFile(
@@ -1608,14 +1617,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         ) { path, _ ->
                             Log.i(TAG, "onScanCompleted : $path")
                         }
+
+                        contrastObject.file = output
                     }
-
-                    val byteBuffer = result.image.planes[0].buffer
-                    val byteArray = ByteArray(byteBuffer.remaining())
-                    byteBuffer.get(byteArray)
-
-                    val contrastObject = calculateContrastRAW(result.image.width, result.image.height, byteArray)
-                    contrastObject.file = output
 
                     result.image.close()
                     cont.resume(contrastObject)
