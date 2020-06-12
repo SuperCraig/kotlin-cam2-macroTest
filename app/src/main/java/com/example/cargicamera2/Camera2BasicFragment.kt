@@ -424,11 +424,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             avCustomSeekBar.visibility = View.VISIBLE
             tvCustomSeekBar.visibility = View.VISIBLE
             isoCustomSeekBar.visibility = View.VISIBLE
+            frameLayout3A.visibility = View.VISIBLE
         } else {
             btnManual.setImageResource(R.drawable.ic_manual)
             avCustomSeekBar.visibility = View.INVISIBLE
             tvCustomSeekBar.visibility = View.INVISIBLE
             isoCustomSeekBar.visibility = View.INVISIBLE
+            frameLayout3A.visibility = View.INVISIBLE
         }
 
 //        if (isAutoEnable)
@@ -839,12 +841,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     tvCustomSeekBar.visibility = View.VISIBLE
                     avCustomSeekBar.visibility = View.VISIBLE
                     isoCustomSeekBar.visibility = View.VISIBLE
+                    frameLayout3A.visibility = View.VISIBLE
                 }else{
                     btnManual.setImageResource(R.drawable.ic_manual)
 
                     tvCustomSeekBar.visibility = View.INVISIBLE
                     avCustomSeekBar.visibility = View.INVISIBLE
                     isoCustomSeekBar.visibility = View.INVISIBLE
+                    frameLayout3A.visibility = View.INVISIBLE
                 }
 
                 previewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)

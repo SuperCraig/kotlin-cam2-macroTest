@@ -15,7 +15,8 @@
             android:id="@+id/texture"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_centerInParent="true"/>
+            android:layout_centerInParent="true">
+        </com.example.cargicamera2.ui.AutoFitTextureView>
 
         <com.example.cargicamera2.ui.GridLineView
             android:id="@+id/grid_line"
@@ -34,6 +35,37 @@
             android:progressDrawable="@drawable/myprogressbar"
             android:visibility="invisible" />
 
+        <FrameLayout
+            android:id="@+id/frameLayout3A"
+            android:layout_height="wrap_content"
+            android:layout_width="match_parent"
+            android:layout_alignParentBottom="true"
+            android:background="#4D000000"
+            android:visibility="invisible"
+            >
+            <ImageView
+                android:id="@+id/btnExposure"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:layout_marginStart="24dp"
+                android:layout_gravity="center_vertical"
+                android:src="@drawable/ic_exposure_time" />
+
+            <ImageView
+                android:id="@+id/btnISO"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_sensor_sensitivity" />
+
+            <ImageView
+                android:id="@+id/btnAperture"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:layout_marginEnd="24dp"
+                android:layout_gravity="center_vertical|end"
+                android:src="@drawable/ic_aperture" />
+        </FrameLayout>
     </RelativeLayout>
 
     <FrameLayout
