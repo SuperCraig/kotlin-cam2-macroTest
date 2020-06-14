@@ -424,15 +424,15 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
         if (isManualEnable) {
             btnManual.setImageResource(R.drawable.ic_manual_selection)
-            avCustomSeekBar.visibility = View.VISIBLE
-            tvCustomSeekBar.visibility = View.VISIBLE
-            isoCustomSeekBar.visibility = View.VISIBLE
+//            avCustomSeekBar.visibility = View.VISIBLE
+//            tvCustomSeekBar.visibility = View.VISIBLE
+//            isoCustomSeekBar.visibility = View.VISIBLE
             frameLayout3A.visibility = View.VISIBLE
         } else {
             btnManual.setImageResource(R.drawable.ic_manual)
-            avCustomSeekBar.visibility = View.INVISIBLE
-            tvCustomSeekBar.visibility = View.INVISIBLE
-            isoCustomSeekBar.visibility = View.INVISIBLE
+//            avCustomSeekBar.visibility = View.INVISIBLE
+//            tvCustomSeekBar.visibility = View.INVISIBLE
+//            isoCustomSeekBar.visibility = View.INVISIBLE
             frameLayout3A.visibility = View.INVISIBLE
         }
 
@@ -900,13 +900,28 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 Log.i(TAG, "R.id.btnSetting")
             }
             R.id.btnExposure -> {
+                tvCustomSeekBar.visibility = if (tvCustomSeekBar.visibility == View.INVISIBLE) View.VISIBLE
+                else View.INVISIBLE
 
+                isoCustomSeekBar.visibility = View.INVISIBLE
+
+                avCustomSeekBar.visibility = View.INVISIBLE
             }
             R.id.btnISO -> {
+                tvCustomSeekBar.visibility = View.INVISIBLE
 
+                isoCustomSeekBar.visibility = if (isoCustomSeekBar.visibility == View.INVISIBLE) View.VISIBLE
+                else View.INVISIBLE
+
+                avCustomSeekBar.visibility = View.INVISIBLE
             }
             R.id.btnAperture -> {
+                tvCustomSeekBar.visibility = View.INVISIBLE
 
+                isoCustomSeekBar.visibility = View.INVISIBLE
+
+                avCustomSeekBar.visibility = if (avCustomSeekBar.visibility == View.INVISIBLE) View.VISIBLE
+                else View.INVISIBLE
             }
         }
     }
