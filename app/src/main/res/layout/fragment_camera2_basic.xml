@@ -13,8 +13,8 @@
 
         <com.example.cargicamera2.ui.AutoFitTextureView
             android:id="@+id/texture"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
             android:layout_centerInParent="true">
         </com.example.cargicamera2.ui.AutoFitTextureView>
 
@@ -140,7 +140,7 @@
             android:id="@+id/isoCustomSeekBar"
             android:layout_width="match_parent"
             android:layout_height="20dp"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="20dp"
             android:layout_marginStart="20dp"
             android:layout_marginEnd="20dp"
             android:visibility="invisible"
@@ -152,7 +152,7 @@
             android:id="@+id/tvCustomSeekBar"
             android:layout_width="match_parent"
             android:layout_height="20dp"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="20dp"
             android:layout_marginStart="20dp"
             android:layout_marginEnd="20dp"
             android:layout_gravity="center_horizontal"
@@ -165,7 +165,7 @@
             android:id="@+id/avCustomSeekBar"
             android:layout_width="match_parent"
             android:layout_height="20dp"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="20dp"
             android:layout_marginStart="20dp"
             android:layout_marginEnd="20dp"
             android:layout_gravity="end"
@@ -181,7 +181,7 @@
             android:layout_height="48dp"
             android:layout_gravity="center_vertical"
             android:layout_marginStart="24dp"
-            android:layout_marginBottom="15dp"
+            android:layout_marginBottom="5dp"
             android:background="@color/transparent"
             android:scaleType="centerInside"
             android:src="@drawable/ic_manual" />
@@ -191,7 +191,7 @@
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:layout_gravity="center"
-            android:layout_marginBottom="15dp"
+            android:layout_marginBottom="5dp"
             android:src="@drawable/ic_snapshot_circle"
             android:background="@color/transparent"
             android:scaleType="centerInside"/>
@@ -203,7 +203,7 @@
             android:layout_height="48dp"
             android:layout_marginEnd="24dp"
             android:layout_gravity="center_vertical|end"
-            android:layout_marginBottom="15dp"
+            android:layout_marginBottom="5dp"
             android:src="@drawable/ic_auto"
             android:background="@color/transparent"
             android:scaleType="centerInside"/>

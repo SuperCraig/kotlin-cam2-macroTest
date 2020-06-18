@@ -2,6 +2,7 @@ package com.example.imagegallery.fragment
 
 import android.content.Context
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -24,6 +25,7 @@ class GalleryFullscreenFragment : DialogFragment(){
 
     lateinit var tvGalleryTitle: TextView
     lateinit var viewPager: ViewPager
+    lateinit var tvGalleryBack: TextView
 
     lateinit var galleryPagerAdapter: GalleryPagerAdapter
 
@@ -33,9 +35,17 @@ class GalleryFullscreenFragment : DialogFragment(){
         viewPager = view.findViewById(R.id.viewPager)
         tvGalleryTitle = view.findViewById(R.id.tvGalleryTitle)
 
+        tvGalleryBack = view.findViewById(R.id.ivFullscreenText)
+        tvGalleryBack.setOnClickListener {
+            dismiss()
+        }
+
         galleryPagerAdapter = GalleryPagerAdapter()
 
         imageList = arguments?.getSerializable("images") as ArrayList<Image>
+        imageList.forEach {
+            Log.i("GalleryFullscreenFragment", "${it.imageUrl}")
+        }
         selectedPosition = arguments!!.getInt("position")
 
         viewPager.adapter = galleryPagerAdapter

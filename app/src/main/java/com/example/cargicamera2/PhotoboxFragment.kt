@@ -83,7 +83,12 @@ class PhotoboxFragment : Fragment(), GalleryImageAdapter.OnItemClickListener, Vi
 
         val imageList: ArrayList<ImageGalleryUiModel>? = imageGalleryUiModelList["CraigCam2"]
         imageList?.forEach{
-            this.imageList.add(Image(it.imageUri, it.imageUri.substring(it.imageUri.length-10, it.imageUri.length), false))
+            if (!it.imageUri.contains("IMG_")) {
+                val strings = it.imageUri.split('_')
+                val displayTitle = "${strings[strings.size - 2]}_${strings[strings.size - 1]}"
+//            this.imageList.add(Image(it.imageUri, it.imageUri.substring(it.imageUri.length-10, it.imageUri.length), false))
+                this.imageList.add(Image(it.imageUri, displayTitle, false))
+            }
         }
 
         galleryAdapter = GalleryImageAdapter(this.imageList)

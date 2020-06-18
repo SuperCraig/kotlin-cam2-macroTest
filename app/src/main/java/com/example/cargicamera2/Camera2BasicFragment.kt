@@ -45,9 +45,11 @@ import com.example.cargicamera2.ui.FocusView
 import com.example.cargicamera2.ui.GridLineView
 import com.example.extensions.toBitmap
 import com.example.extensions.toMat
+import com.example.imagegallery.fragment.GalleryFullscreenFragment
 import com.example.imagegallery.model.ImageGalleryUiModel
 import com.example.imagegallery.service.MediaHelper
 import com.example.lib.CustomSeekBar
+import com.example.toast.ToastView
 import kotlinx.android.synthetic.main.fragment_camera2_basic.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -280,6 +282,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     private val lightSensorListener: LightSensorListener = LightSensorListener()
 
+    private var latestFileName: String? = null
+
     /**
      * [CameraDevice.StateCallback] is called when [CameraDevice] changes its state.
      */
@@ -302,7 +306,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             this@Camera2BasicFragment.activity?.finish()
         }
     }
-
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -508,6 +511,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     override fun onClick(view: View) {
         when (view.id) {
             R.id.btnPicture -> {
+                val dateFormat = SimpleDateFormat("yyyy_MM_dd HH:mm:ss", Locale.TAIWAN)
+                val currentDateTime: String = dateFormat.format(Date()) // Find todays date
+
                 var task = 0
                 if (isColorTemperatureEnable) task += 1
                 if (isContrastEnable) task += 1
@@ -554,14 +560,17 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                         Log.i(TAG, "Lux: ${lightSensorListener.getLux()}")
                         if (mRawImageReader != null) {
-
+                            val fileName = "C_$currentDateTime"
                             var contrastObjectRAW: ContrastObject? = null
                             var contrastObjectJPEG: ContrastObject? = null
-                            takeRawPhoto().use { result ->
+
+                            takeRawPhoto(fileName).use { result ->
                                 contrastObjectRAW = procedureContrast(result)
                             }
-                            takeJPEGPhoto(false).use { result ->
-                                view.post {Toast.makeText(context!!, "Picture done!", Toast.LENGTH_SHORT).show()}
+                            takeJPEGPhoto().use { result ->
+                                view.post {
+                                    showToast("Picture Done!")
+                                }
 
                                 contrastObjectJPEG = procedureContrast(result)
                             }
@@ -570,29 +579,66 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             if (contrastObjectJPEG!!.contrast.isNaN())
                                 contrastObject = contrastObjectRAW
                             if (contrastObjectRAW!!.contrast < 20 && (contrastObjectRAW!!.contrast.isNaN() || contrastObjectJPEG!!.contrast.isNaN()))
-                                contrastObject = ContrastObject(0.0, 0.0, lightSensorListener.getLux().toDouble())
+                                contrastObject = ContrastObject(0.0, 0.0, lightSensorListener.getLux().toDouble(), contrastObjectRAW?.file)
 
                             try {
-//                                contrastObjectJPEG!!.file!!.renameTo()
-//                                contrastObjectRAW!!.file!!.renameTo()
-                                btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(contrastObjectJPEG!!.file!!.absolutePath))
+//                                val fileName = "Contrast_${contrastObject!!.contrast}"
+//                                val output1 = createFile(fileName, "jpg")
+//                                val output2 = createFile(fileName, "dng")
+//                                contrastObjectJPEG?.file!!.renameTo(output1)
+//                                contrastObjectRAW?.file!!.renameTo(output2)
+//
+//                                MediaScannerConnection.scanFile(
+//                                    context, arrayOf(output1.path, output2.path),
+//                                    arrayOf("image/", "image/x-adobe-dng", "image/jpeg")
+//                                ) { path, _ ->
+//                                    Log.i(TAG, "onScanCompleted : $path")
+//                                }
+//
+//                                view.post {
+//                                    btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(output1.absolutePath))
+//                                }
+
+                                view.post {
+                                    btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(contrastObjectRAW!!.file!!.absolutePath))
+                                    latestFileName = contrastObjectRAW!!.file!!.absolutePath
+                                }
                             } catch (e: Exception) {
                                 e.printStackTrace()
                             }
                         } else {
+                            val fileName = "C_$currentDateTime"
                             var contrastObjectJPEG: ContrastObject? = null
-                            takeJPEGPhoto().use { result ->
-                                view.post {Toast.makeText(context!!, "Picture done!", Toast.LENGTH_SHORT).show()}
+
+                            takeJPEGPhoto(fileName).use { result ->
+                                view.post {
+                                    showToast("Picture Done!")
+                                }
 
                                 contrastObjectJPEG = procedureContrast(result)
                             }
 
-                            contrastObject = if (contrastObjectJPEG!!.contrast.isNaN()) ContrastObject(0.0, 0.0, lightSensorListener.getLux().toDouble())
+                            contrastObject = if (contrastObjectJPEG!!.contrast.isNaN()) ContrastObject(0.0, 0.0, lightSensorListener.getLux().toDouble(), contrastObject?.file)
                             else contrastObjectJPEG
 
                             try {
-//                                contrastObject!!.file!!.renameTo()
-                                btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(contrastObjectJPEG!!.file!!.absolutePath))
+//                                val fileName = "Contrast_${contrastObject!!.contrast}"
+//                                val output = createFile(fileName, "jpg")
+//                                contrastObject.file!!.renameTo(output)
+//
+//                                MediaScannerConnection.scanFile(context, arrayOf(output.path),
+//                                    arrayOf("image/jpeg")) { path, _ ->
+//                                    Log.i(TAG, "onScanCompleted : $path")
+//                                }
+//
+//                                view.post {
+//                                    btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(output.absolutePath))
+//                                }
+
+                                view.post {
+                                    btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(contrastObject!!.file!!.absolutePath))
+                                    latestFileName = contrastObject!!.file!!.absolutePath
+                                }
                             } catch (e: Exception) {
                                 e.printStackTrace()
                             }
@@ -624,19 +670,37 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             Thread.sleep(50)
                         }
 
-                        takeJPEGPhoto().use { result ->
-                            view.post {Toast.makeText(context!!, "Picture done!", Toast.LENGTH_SHORT).show()}
+                        val fileName = "T_$currentDateTime"
+
+                        takeJPEGPhoto(fileName).use { result ->
+                            view.post {
+                                showToast("Picture Done!")
+                            }
 
                             colorTemperatureObject = procedureColorTemperature(result)
 
                             try {
-//                                colorTemperatureObject!!.file!!.renameTo()
+//                                val fileName = "ColorTemperature_${colorTemperatureObject!!.colorTemperature.name}"
+//                                val output = createFile(fileName, "jpg")
+//                                colorTemperatureObject!!.file!!.renameTo(output)
+//
+////                                if (colorTemperatureObject!!.file!!.name.contains("jpg") && isJPEGSavedEnable) {
+////                                    saveExif(colorTemperatureObject!!.file!!, aperture.toString(), (10.0.pow(9) / exposureTime).toString(), sensorSensitivity.toString())
+////                                }
+//
+//                                MediaScannerConnection.scanFile(context, arrayOf(output.path),
+//                                    arrayOf("image/jpeg")) { path, _ ->
+//                                    Log.i(TAG, "onScanCompleted : $path")
+//                                }
+//
+//                                view.post {
+//                                    btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(output.absolutePath))
+//                                }
 
-                                if (colorTemperatureObject!!.file!!.name.contains("jpg") && isJPEGSavedEnable) {
-                                    saveExif(colorTemperatureObject!!.file!!, aperture.toString(), (10.0.pow(9) / exposureTime).toString(), sensorSensitivity.toString())
+                                view.post {
+                                    btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(colorTemperatureObject!!.file!!.absolutePath))
+                                    latestFileName = colorTemperatureObject!!.file!!.absolutePath
                                 }
-
-                                btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(colorTemperatureObject!!.file!!.absolutePath))
                             }catch (e: Exception) {
                                 e.printStackTrace()
                             }
@@ -667,14 +731,18 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         var prevRate = 0.0
                         var assigned = false
 
+                        val files: ArrayList<File?> = ArrayList()
+
+                        val fileName = "F_$currentDateTime"
+
                         setExposureTime((10.0.pow(9) / 1000).roundToLong())      //start from 1000
                         Thread.sleep(50)
 
-                        takeJPEGPhoto().use { result ->
-                            view.post {Toast.makeText(context!!, "Picture done!", Toast.LENGTH_SHORT).show()}
-
+                        takeJPEGPhoto(fileName).use { result ->
                             val countOfBlack = procedureRefreshRate(result)
                             prevRate = countOfBlack.blackOfCount / countOfBlack.totalCount
+
+                            files.add(countOfBlack.file)
                             Log.i(TAG, "Black rate: $prevRate")
                         }
 
@@ -685,7 +753,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                     setExposureTime(ae)
                                     Thread.sleep(50)
 
-                                    takeJPEGPhoto().use { result ->
+                                    takeJPEGPhoto(fileName).use { result ->
                                         val countOfBlack = procedureRefreshRate(result)
 
                                         val curRate = countOfBlack.blackOfCount / countOfBlack.totalCount
@@ -697,12 +765,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                             assigned = true
                                         }
 
-                                        try {
-//                                            countOfBlack.file!!.renameTo("")
-                                            btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(countOfBlack.file!!.absolutePath))
-                                        } catch (e: Exception) {
-                                            e.printStackTrace()
-                                        }
+                                        files.add(countOfBlack.file)
 
                                         Log.i(TAG, "Black rate: $curRate")
                                     }
@@ -716,6 +779,34 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         if (!assigned)
                             refreshRate = 4000
 
+                        view.post {
+                            showToast("Picture Done!")
+                        }
+
+                        try {
+//                            files.forEach {
+//                                val fileName = "RefreshRate_$refreshRate"
+//                                val output = createFile(fileName, "jpg")
+//                                it!!.renameTo(output)
+//
+//                                MediaScannerConnection.scanFile(context, arrayOf(output.path),
+//                                    arrayOf("image/jpeg")) { path, _ ->
+//                                    Log.i(TAG, "onScanCompleted : $path")
+//                                }
+//
+//                                view.post {
+//                                    btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(output.absolutePath))
+//                                }
+//                            }
+
+                            view.post {
+                                btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(files[files.size - 1]!!.absolutePath))
+                                latestFileName = files[files.size - 1]!!.absolutePath
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+
                         scale = if (scale == 0) scale
                         else scale + scale
 
@@ -728,8 +819,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     if (!isRefreshRateEnable) refreshRate = 0
 
                     val historyViewModel = ViewModelProvider(this@Camera2BasicFragment).get(HistoryViewModel::class.java)
-                    val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
-                    val currentDateTime: String = dateFormat.format(Date()) // Find todays date
 
                     val contrastDescription = if (isContrastEnable) contrastObject!!.contrast.toInt().toString() + " -> \n" +
                             contrastObject.lum1.toInt().toString() + ":" + contrastObject.lum2.toString()
@@ -847,16 +936,16 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 if(isManualEnable){
                     btnManual.setImageResource(R.drawable.ic_manual_selection)
 
-                    tvCustomSeekBar.visibility = View.VISIBLE
-                    avCustomSeekBar.visibility = View.VISIBLE
-                    isoCustomSeekBar.visibility = View.VISIBLE
+//                    tvCustomSeekBar.visibility = View.VISIBLE
+//                    avCustomSeekBar.visibility = View.VISIBLE
+//                    isoCustomSeekBar.visibility = View.VISIBLE
                     frameLayout3A.visibility = View.VISIBLE
                 }else{
                     btnManual.setImageResource(R.drawable.ic_manual)
 
-                    tvCustomSeekBar.visibility = View.INVISIBLE
-                    avCustomSeekBar.visibility = View.INVISIBLE
-                    isoCustomSeekBar.visibility = View.INVISIBLE
+//                    tvCustomSeekBar.visibility = View.INVISIBLE
+//                    avCustomSeekBar.visibility = View.INVISIBLE
+//                    isoCustomSeekBar.visibility = View.INVISIBLE
                     frameLayout3A.visibility = View.INVISIBLE
                 }
 
@@ -878,6 +967,40 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 fragmentTransaction.addToBackStack("Camera2BasicFragment")
                 fragmentTransaction.commit()
                 Log.i(TAG, "R.id.btnPhotoBox")
+
+                /////////////////////////////////////////////////////////////////////////////
+                Log.i(TAG, "latestFileName: $latestFileName")
+                val images= ArrayList<com.example.imagegallery.adapter.Image>()
+                try {
+                    val imageGalleryUiModelList: MutableMap<String, ArrayList<ImageGalleryUiModel>> =
+                        MediaHelper.getImageGallery(this.context!!)
+
+                    val imageList:ArrayList<ImageGalleryUiModel> = imageGalleryUiModelList[ALBUM_NAME]!!
+                    if (latestFileName != null) {
+                        imageList.forEach {
+                            val strings = latestFileName!!.split("/")
+                            val name = strings[strings.size - 1]
+                            if (it.imageUri.contains(name))
+                                images.add(com.example.imagegallery.adapter.Image(it.imageUri, it.imageUri, false))
+                        }
+                    } else {
+                        val imageGalleryUiModel = imageList[imageList.size - 1]
+                        images.add(com.example.imagegallery.adapter.Image(imageGalleryUiModel.imageUri , imageGalleryUiModel.imageUri, false))
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+
+                val position = 0
+                val bundle = Bundle()
+                bundle.putSerializable("images", images)
+                bundle.putInt("position", position)
+
+                val galleryFullscreenManager = activity!!.supportFragmentManager
+                val galleryFullscreenTransaction = galleryFullscreenManager.beginTransaction()
+                val galleryFragment = GalleryFullscreenFragment()
+                galleryFragment.arguments = bundle
+                galleryFragment.show(galleryFullscreenTransaction, "gallery")
             }
             R.id.btnRecordBar ->{
                 val fragment = HistoryFragment()
@@ -1298,7 +1421,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
      * template. It performs synchronization between the [CaptureResult] and the [Image] resulting
      * from the single capture, and outputs a [CombinedCaptureResult] object.
      */
-    private suspend fun takeRawPhoto(isSavedEnable: Boolean = true):
+    private suspend fun takeRawPhoto(fileName: String? = null):
             CombinedCaptureResult = suspendCoroutine { cont ->
 
         // Flush any images left in the image reader
@@ -1323,6 +1446,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
 //        captureRequest.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
         captureRequest.set(CaptureRequest.SCALER_CROP_REGION, zoom)
+
+        val isSavedEnable = fileName != null            //20200617 Craig
 
         captureSession.capture(
             captureRequest.build(),
@@ -1384,7 +1509,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                             cont.resume(
                                 CombinedCaptureResult(
-                                    image, result, ExifInterface.ORIENTATION_NORMAL, mRawImageReader!!.imageFormat, isSavedEnable
+                                    image, result, ExifInterface.ORIENTATION_NORMAL, mRawImageReader!!.imageFormat, isSavedEnable, fileName
                                 )
                             )
                         }
@@ -1395,7 +1520,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         )
     }
 
-    private suspend fun takeJPEGPhoto(isSavedEnable: Boolean = true):
+    private suspend fun takeJPEGPhoto(fileName: String? = null):
             CombinedCaptureResult = suspendCoroutine { cont ->
 
         // Flush any images left in the image reader
@@ -1420,6 +1545,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
 //        captureRequest.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
         captureRequest.set(CaptureRequest.SCALER_CROP_REGION, zoom)
+
+        val isSavedEnable = fileName != null            //20200617 Craig
 
         captureSession.capture(
             captureRequest.build(),
@@ -1480,7 +1607,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                             cont.resume(
                                 CombinedCaptureResult(
-                                    image, result, ExifInterface.ORIENTATION_NORMAL, mImageReader.imageFormat, isSavedEnable
+                                    image, result, ExifInterface.ORIENTATION_NORMAL, mImageReader.imageFormat, isSavedEnable, fileName
                                 )
                             )
                         }
@@ -1501,7 +1628,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     countOfBlack.file = null
 
                     if (result.isSavedEnable) {
-                        val output = createFile("jpg")
+                        val output = createFile(result.fileName, "jpg")
 
                         val temp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size).rotate(90f)
                         temp.compress(Bitmap.CompressFormat.JPEG, 100, FileOutputStream(output))
@@ -1543,7 +1670,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     colorTemperatureObject.file = null
 
                     if (result.isSavedEnable) {
-                        val output = createFile("jpg")
+                        val output = createFile(result.fileName, "jpg")
                         val temp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size).rotate(90f)
                         temp.compress(Bitmap.CompressFormat.JPEG, 100, FileOutputStream(output))
 
@@ -1586,7 +1713,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     contrastObject.file = null
 
                     if (result.isSavedEnable) {
-                        val output = createFile("jpg")
+                        val output = createFile(result.fileName,"jpg")
                         val temp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size).rotate(90f)
                         temp.compress(Bitmap.CompressFormat.JPEG, 100, FileOutputStream(output))
 
@@ -1622,7 +1749,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     contrastObject.file = null
 
                     if (result.isSavedEnable){
-                        val output = createFile("dng")
+                        val output = createFile(result.fileName,"dng")
 
                         FileOutputStream(output).use { dngCreator.writeImage(it, result.image) }
 
@@ -1700,7 +1827,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         val countOfBlack = findBlackRate(bitmap)
 
         if (isJPEGSavedEnable)
-            countOfBlack.mat.toBitmap().compress(Bitmap.CompressFormat.JPEG, 80, FileOutputStream(createFile("jpg")))
+            countOfBlack.mat.toBitmap().compress(Bitmap.CompressFormat.JPEG, 80, FileOutputStream(createFile(null,"jpg")))
 
         temp.recycle()
         bitmap.recycle()
@@ -2063,8 +2190,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         return countOfBlack
     }
 
-    private fun createFile(extension: String): File {
+    private fun createFile(fileName: String? = null, extension: String): File {
         val sdf = SimpleDateFormat("yyyy_MM_dd_HH_mm_ss_SSS", Locale.TAIWAN)
+        val sdf1 = SimpleDateFormat("yyyy_MM_dd_HH_mm", Locale.TAIWAN)
+
         val path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM)
 
 //        path = context?.getExternalFilesDir(Environment.DIRECTORY_DCIM)     //application directory
@@ -2074,7 +2203,30 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             dir.mkdirs()
         }
 
-        return File(dir, "/IMG_${sdf.format(Date()) + "_" + tvCustomSeekBar.text.replace('.', '+').replace('/', '+')}.$extension")
+        if (fileName == null) {
+            return File(dir, "/IMG_${sdf.format(Date())}.$extension")
+        } else {
+            var file = File(dir, "/$$fileName.$extension")
+            var count = 0
+
+            while (file.exists()){
+                count += 1
+                file = File(dir, "/$fileName($count).$extension")
+            }
+            return file
+        }
+    }
+
+    private fun showToast(text: String) {
+        val toastView: ToastView = ToastView(context!!)
+        toastView.setRadius(50.0f)
+        toastView.setTextSize(50.0f)
+        toastView.setBackgroundColor(Color.argb(0xAA, 0x00, 0xAA, 0x00))
+
+        val toast = com.example.toast.Toast(context!!, toastView)
+        toast.setPosition(com.example.toast.Toast.Position.CENTER)
+        toast.toastView = toastView
+        toast.showToast(text)
     }
 
     private fun pickPictureFromGallery() {
@@ -2493,7 +2645,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             val metadata: CaptureResult,
             val orientation: Int,
             val format: Int,
-            val isSavedEnable: Boolean = true
+            val isSavedEnable: Boolean = true,
+            val fileName: String? = null
         ) : Closeable {
             override fun close() = image.close()
         }
