@@ -84,13 +84,14 @@ class PhotoboxFragment : Fragment(), GalleryImageAdapter.OnItemClickListener, Vi
         val imageList: ArrayList<ImageGalleryUiModel>? = imageGalleryUiModelList["CraigCam2"]
         imageList?.forEach{
             if (!it.imageUri.contains("IMG_")) {
-                val strings = it.imageUri.split('_')
-                val displayTitle = "${strings[strings.size - 2]}_${strings[strings.size - 1]}"
+                val strings = it.imageUri.split('/')
+                val displayTitle = "${strings[strings.size - 1]}".replace("$", "")
 //            this.imageList.add(Image(it.imageUri, it.imageUri.substring(it.imageUri.length-10, it.imageUri.length), false))
                 this.imageList.add(Image(it.imageUri, displayTitle, false))
             }
         }
 
+        this.imageList.reverse()        //order by newest one
         galleryAdapter = GalleryImageAdapter(this.imageList)
         galleryAdapter.setOnItemClickListener(this)
         galleryAdapter.notifyDataSetChanged()

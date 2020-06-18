@@ -35,7 +35,7 @@
             android:progressDrawable="@drawable/myprogressbar"
             android:visibility="invisible" />
 
-        <FrameLayout
+        <LinearLayout
             android:id="@+id/frameLayout3A"
             android:layout_height="wrap_content"
             android:layout_width="match_parent"
@@ -47,8 +47,7 @@
                 android:id="@+id/btnExposure"
                 android:layout_width="30dp"
                 android:layout_height="30dp"
-                android:layout_marginStart="24dp"
-                android:layout_gravity="center_vertical"
+                android:layout_weight=".25"
                 android:layout_marginTop="8dp"
                 android:layout_marginBottom="8dp"
                 android:src="@drawable/ic_exposure_time" />
@@ -57,7 +56,7 @@
                 android:id="@+id/btnISO"
                 android:layout_width="30dp"
                 android:layout_height="30dp"
-                android:layout_gravity="center"
+                android:layout_weight=".25"
                 android:layout_marginTop="8dp"
                 android:layout_marginBottom="8dp"
                 android:src="@drawable/ic_sensor_sensitivity" />
@@ -66,12 +65,39 @@
                 android:id="@+id/btnAperture"
                 android:layout_width="30dp"
                 android:layout_height="30dp"
-                android:layout_marginEnd="24dp"
-                android:layout_gravity="center_vertical|end"
+                android:layout_weight=".25"
                 android:layout_marginTop="8dp"
                 android:layout_marginBottom="8dp"
                 android:src="@drawable/ic_aperture" />
-        </FrameLayout>
+
+            <ImageView
+                android:id="@+id/btnFocus"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:layout_weight=".25"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="8dp"
+                android:src="@drawable/ic_crop_free_black_24dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/contrastTargetLayout"
+            android:layout_height="50dp"
+            android:layout_width="match_parent"
+            android:layout_centerInParent="true"
+            android:visibility="visible">
+
+            <ImageView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_weight=".5"
+                android:src="@drawable/ic_crop_free_black_24dp"/>
+            <ImageView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_weight=".5"
+                android:src="@drawable/ic_crop_free_black_24dp"/>
+        </LinearLayout>
     </RelativeLayout>
 
     <FrameLayout

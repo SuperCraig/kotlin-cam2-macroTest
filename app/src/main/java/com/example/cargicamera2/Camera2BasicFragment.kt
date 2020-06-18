@@ -24,12 +24,10 @@ import android.util.Range
 import android.util.Size
 import android.util.SparseIntArray
 import android.view.*
-import android.widget.ImageButton
-import android.widget.ImageView
-import android.widget.ProgressBar
-import android.widget.Toast
+import android.widget.*
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.view.size
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentTransaction
 import androidx.lifecycle.ViewModelProvider
@@ -51,6 +49,7 @@ import com.example.imagegallery.service.MediaHelper
 import com.example.lib.CustomSeekBar
 import com.example.toast.ToastView
 import kotlinx.android.synthetic.main.fragment_camera2_basic.*
+import kotlinx.android.synthetic.main.fragment_camera2_basic.view.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.opencv.core.Mat
@@ -284,6 +283,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     private var latestFileName: String? = null
 
+    private var currentFocusIconFlag = FocusIconSize.SMALL
+    private var currentFocusIconSize = 0.0
+    private var currentFocusRatioWidth = 0.0
+    private var currentFocusRatioHeight = 0.0
+
     /**
      * [CameraDevice.StateCallback] is called when [CameraDevice] changes its state.
      */
@@ -337,6 +341,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         view.findViewById<View>(R.id.btnExposure).setOnClickListener(this)
         view.findViewById<View>(R.id.btnISO).setOnClickListener(this)
         view.findViewById<View>(R.id.btnAperture).setOnClickListener(this)
+        view.findViewById<View>(R.id.btnFocus).setOnClickListener(this)
 
         var vibrate = context?.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
         var vibrationEffect = VibrationEffect.createOneShot(2, VibrationEffect.DEFAULT_AMPLITUDE)
@@ -454,10 +459,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         else
             btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate)
 
-        if (isContrastEnable)
+        if (isContrastEnable){
             btnContrast.setImageResource(R.drawable.ic_contrast_selection)
-        else
+            contrastTargetLayout.visibility = View.VISIBLE
+        }
+        else{
             btnContrast.setImageResource(R.drawable.ic_contrast)
+            contrastTargetLayout.visibility = View.INVISIBLE
+        }
 
         progressbarShutter = view.findViewById(R.id.progressBar_shutter)
 
@@ -475,7 +484,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 //        if (m_address.contains(":"))
 //            ConnectToDevice(context!!).execute()        // connect to bluetooth device
 //        else
-//            Toast.makeText(this.context, "This device has not matched any bluetooth", Toast.LENGTH_LONG).show()
+//            Toast.makeText(this.context, "This device has not matched any bluetooth", Toast.LENGTH_LONG).show()v
+
+        val displayMatrix = context!!.resources.displayMetrics          //initialize focus icon size to real size
+        val layoutParams = contrastTargetLayout.layoutParams
+        currentFocusIconSize = layoutParams.height.toDouble()
+        currentFocusIconFlag = FocusIconSize.SMALL
+        currentFocusRatioWidth = currentFocusIconSize / displayMatrix.widthPixels
+        currentFocusRatioHeight = currentFocusIconSize / displayMatrix.heightPixels
     }
 
     private fun getFingerSpacing(event: MotionEvent): Float{
@@ -869,6 +885,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 if(isContrastEnable){
                     btnContrast.setImageResource(R.drawable.ic_contrast_selection)
+                    contrastTargetLayout.visibility = View.VISIBLE
 
                     isRefreshRateEnable = false
                     btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate)
@@ -881,6 +898,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     }
                 }else{
                     btnContrast.setImageResource(R.drawable.ic_contrast)
+                    contrastTargetLayout.visibility = View.INVISIBLE
                 }
 
                 saveData()
@@ -891,6 +909,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 if(isRefreshRateEnable){
                     btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate_selection)
+                    contrastTargetLayout.visibility = View.INVISIBLE
 
                     isContrastEnable = false
                     btnContrast.setImageResource(R.drawable.ic_contrast)
@@ -913,6 +932,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 if(isColorTemperatureEnable){
                     btnColorTemperature.setImageResource(R.drawable.ic_color_temperature_selection)
+                    contrastTargetLayout.visibility = View.INVISIBLE
 
                     isContrastEnable = false
                     btnContrast.setImageResource(R.drawable.ic_contrast)
@@ -1045,6 +1065,35 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 avCustomSeekBar.visibility = if (avCustomSeekBar.visibility == View.INVISIBLE) View.VISIBLE
                 else View.INVISIBLE
+            }
+            R.id.btnFocus -> {
+                val displayMatrix = context!!.resources.displayMetrics
+                if (currentFocusIconFlag == FocusIconSize.SMALL) {
+                    val layoutParams = contrastTargetLayout.layoutParams
+                    currentFocusIconSize = (layoutParams.height * 2).toDouble()
+                    currentFocusIconFlag = FocusIconSize.BIG
+                    currentFocusRatioWidth = (currentFocusIconSize / displayMatrix.widthPixels).toDouble()
+                    currentFocusRatioHeight = (currentFocusIconSize / displayMatrix.heightPixels).toDouble()
+
+                    layoutParams.height = currentFocusIconSize.toInt()
+                    contrastTargetLayout.layoutParams = layoutParams
+                } else if (currentFocusIconFlag == FocusIconSize.BIG) {
+                    val layoutParams = contrastTargetLayout.layoutParams
+                    currentFocusIconSize = (layoutParams.height / 2).toDouble()
+                    currentFocusIconFlag = FocusIconSize.SMALL
+                    currentFocusRatioWidth = currentFocusIconSize / displayMatrix.widthPixels
+                    currentFocusRatioHeight = currentFocusIconSize / displayMatrix.heightPixels
+
+                    layoutParams.height = currentFocusIconSize.toInt()
+                    contrastTargetLayout.layoutParams = layoutParams
+                }
+
+                Log.i(TAG, "contrastTargetLayout: ${contrastTargetLayout.width} x ${contrastTargetLayout.height}")
+                Log.i(TAG, "displayMatrix: ${displayMatrix.widthPixels} x ${displayMatrix.heightPixels}")
+                Log.i(TAG, "ratio: $currentFocusRatioWidth x $currentFocusRatioHeight")
+                tvCustomSeekBar.visibility = View.INVISIBLE
+                isoCustomSeekBar.visibility = View.INVISIBLE
+                avCustomSeekBar.visibility = View.INVISIBLE
             }
         }
     }
@@ -1932,13 +1981,26 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
         var contrast: Double = 0.0
 
-        var lum1 = 0.0
-        var lum2 = 0.0
-        var count1 = 0
-        var count2 = 0
+        var lum11 = 0.0
+        var lum12 = 0.0
+        var lum21 = 0.0
+        var lum22 = 0.0
+        var count11 = 0
+        var count12 = 0
+        var count21 = 0
+        var count22 = 0
 
-        for (j in 0 until height) {     //left white, right black
-            for (i in 0 until width) {
+        val targetSizeWidth = currentFocusRatioWidth * width
+        val targetSizeHeight = currentFocusRatioHeight * height
+        val uHeight = (height / 2) - (targetSizeHeight / 2)
+        val dHeight = (height / 2) + (targetSizeHeight / 2)
+        var lWidht = (width / 4) - (targetSizeWidth / 2)
+        var rWidth = (width / 4) + (targetSizeWidth / 2)
+        Log.i(TAG, "targetSize: $targetSizeWidth x $targetSizeHeight")
+
+        //Lum1
+        for (j in uHeight.toInt() until dHeight.toInt()) {     //left white, right black
+            for (i in lWidht.toInt() until rWidth.toInt()) {
                 argb = bitmap.getPixel(i, j)
                 r = Color.red(argb)
                 g = Color.green(argb)
@@ -1953,46 +2015,85 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 if (b < min[2]) min[2] = b
 
                 val lum = r * 0.2126 + g * 0.7152 + b * 0.0722
-                if (lum >= 10) {
-                    lum1 += lum
-                    count1 ++
+                if (lum >= 50) {
+                    lum11 += lum
+                    count11 ++
                 }
-
-                if (lum < 10) {
-                    lum2 += lum
-                    count2 ++
+                if (lum <= 50) {
+                    lum12 += lum
+                    count12 ++
                 }
             }
         }
 
-        lum1 /= count1
-        lum2 /= count2
+        lWidht = (width * 3 / 4) - (targetSizeWidth / 2)
+        rWidth = (width * 3 / 4) + (targetSizeWidth / 2)
+        //Lum2
+        for (j in uHeight.toInt() until dHeight.toInt()) {     //left white, right black
+            for (i in lWidht.toInt() until rWidth.toInt()) {
+                argb = bitmap.getPixel(i, j)
+                r = Color.red(argb)
+                g = Color.green(argb)
+                b = Color.blue(argb)
 
+                if (r > max[0]) max[0] = r
+                if (g > max[1]) max[1] = g
+                if (b > max[2]) max[2] = b
 
-        if (lum1 < 1.0) lum1 = 1.0
-        if (lum2 < 1.0) lum2 = 1.0
+                if (r < min[0]) min[0] = r
+                if (g < min[1]) min[1] = g
+                if (b < min[2]) min[2] = b
 
-        var luminance1 = 0.0
-        var luminance2 = 0.0
-        if (lum1 > lum2) {          //gamma 1.8
-            luminance1 = 65536.0 / 1.8.pow((256 + lum1) / 2 / lum1)
-            luminance1 = if (luminance1 < 65536) luminance1
-            else 65536.0
-
-            luminance2 = Math.log10((256 + lum2) / 2 / lum2)
+                val lum = r * 0.2126 + g * 0.7152 + b * 0.0722
+                if (lum > 50) {
+                    lum21 += lum
+                    count21 ++
+                }
+                if (lum < 50) {
+                    lum22 += lum
+                    count22 ++
+                }
+            }
         }
-        else {
-            luminance2 = 65536.0 / 1.8.pow((256 + lum2) / 2 / lum2)
-            luminance2 = if (luminance2 < 65536) luminance2
-            else 65536.0
 
-            luminance1 = Math.log10((256 + lum1) / 2 / lum1)
+        lum11 = if (count11 > 0) lum11/count11
+        else 1.0
+        lum12 = if (count12 > 0) lum12 / count12
+        else 1.0
+        lum21 = if (count21 > 0) lum21 / count21
+        else 1.0
+        lum22 = if (count22 > 0) lum22 / count22
+        else 1.0
+
+        Log.i(TAG, "lum11: $lum11 count11: $count11, lum12: $lum12 count12: $count12, lum21: $lum21 count21: $count21, lum22: $lum22 count22: $count22")
+        var lum1 = 0.0
+        var lum2 = 0.0
+
+        if ((abs(lum11 - lum21) / 256) < 0.1) {
+            if (lum12 > lum22) {
+                lum1 = lum12
+                lum2 = lum22
+            } else {
+                lum1 = lum22
+                lum2 = lum12
+            }
+        } else {
+            if (lum11 > lum21) {
+                lum1 = lum11
+                lum2 = lum22
+            } else {
+                lum1 = lum21
+                lum2 = lum12
+            }
         }
 
+        var luminance1 = (lum1 * 65535 + 500) / 256
+        var luminance2 = (lum2 * 65535 + 500) / 256
 
-        val contrastLum = if (luminance1 > luminance2) luminance1 / luminance2
-        else luminance2 / luminance1
+        var contrastLum = (luminance1 / luminance2)
 
+        contrastLum = if(contrastLum > 65535.0) 65535.0
+        else contrastLum
 
         contrast = contrastLum
 
@@ -2536,6 +2637,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             NormalColorTemperature,
             ColdColorTemperature,
             None
+        }
+
+        enum class FocusIconSize {
+            BIG,
+            SMALL
         }
 
         private val RefreshRateCommand = MBITSP2020().let{
