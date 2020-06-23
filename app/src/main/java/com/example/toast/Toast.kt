@@ -84,7 +84,7 @@ class Toast(context: Context, toastView: ToastView) {
     }
 
     fun showToast(text: String) {
-        showToast(text, android.widget.Toast.LENGTH_LONG)
+        showToast(text, android.widget.Toast.LENGTH_SHORT)
     }
 
     fun makeText(text: String, duration: Int): android.widget.Toast {

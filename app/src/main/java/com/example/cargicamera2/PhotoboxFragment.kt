@@ -1,5 +1,7 @@
 package com.example.cargicamera2
 
+import android.app.AlertDialog
+import android.content.DialogInterface
 import android.graphics.Color
 import android.media.ExifInterface
 import android.media.MediaScannerConnection
@@ -68,7 +70,7 @@ class PhotoboxFragment : Fragment(), GalleryImageAdapter.OnItemClickListener, Vi
 //        galleryAdapter.listener = this
 
         // load images
-        loadExtenalImages()
+        loadExternalImages()
 
         // init recyclerview
         recyclerView.layoutManager = GridLayoutManager(this.context, SPAN_COUNT)
@@ -76,7 +78,7 @@ class PhotoboxFragment : Fragment(), GalleryImageAdapter.OnItemClickListener, Vi
 
     }
 
-    private fun loadExtenalImages(){
+    private fun loadExternalImages(){
         imageGalleryUiModelList = MediaHelper.getImageGallery(this.context!!)
 
         if(imageList.size > 0) imageList.clear()
@@ -198,6 +200,8 @@ class PhotoboxFragment : Fragment(), GalleryImageAdapter.OnItemClickListener, Vi
 
             }
             R.id.btn_delete_trash -> {      //delete select picture
+                showDialog()
+
                 if (isMultiSelectable) {
                     imageUrlList.forEach {imageUrl ->
                         try {
@@ -232,10 +236,36 @@ class PhotoboxFragment : Fragment(), GalleryImageAdapter.OnItemClickListener, Vi
                 imageUrlList.clear()
                 isMultiSelectable = false
                 btnSelect.setImageResource(R.drawable.ic_select)
-                loadExtenalImages()
+                loadExternalImages()
                 recyclerView.adapter = galleryAdapter
             }
         }
+    }
+
+    private fun showDialog() {
+        lateinit var dialog: AlertDialog
+
+        var  builder = AlertDialog.Builder(this.context, AlertDialog.THEME_HOLO_DARK)
+
+        builder.setTitle("Delete Picture")
+
+        builder.setMessage("Do you want to delete?")
+
+        val dialogClickListener = DialogInterface.OnClickListener { _, which ->
+            when (which) {
+                DialogInterface.BUTTON_POSITIVE -> {
+
+                }
+                DialogInterface.BUTTON_NEGATIVE -> {
+
+                }
+            }
+        }
+
+        builder.setPositiveButton("Yes", dialogClickListener)
+        builder.setNegativeButton("No", dialogClickListener)
+        dialog = builder.create()
+        dialog.show()
     }
 
     override fun onItemClick(position: Int, v: View) {
@@ -254,7 +284,16 @@ class PhotoboxFragment : Fragment(), GalleryImageAdapter.OnItemClickListener, Vi
                 galleryAdapter.notifyDataSetChanged()
             }
         }else{
+            if (currentPosition != null) {
+                if (imageList[currentPosition!!].isSelected)
+                    imageList[currentPosition!!].isSelected = false
+                galleryAdapter.notifyDataSetChanged()
+            }
+
             currentPosition = position
+
+            imageList[position].isSelected = true
+            galleryAdapter.notifyDataSetChanged()
 
             val bundle = Bundle()
             bundle.putSerializable("images", imageList)

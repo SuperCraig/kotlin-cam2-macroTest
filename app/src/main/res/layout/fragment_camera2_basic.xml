@@ -35,6 +35,24 @@
             android:progressDrawable="@drawable/myprogressbar"
             android:visibility="invisible" />
 
+        <FrameLayout
+            android:id="@+id/frameLayout3AValue"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_above="@+id/frameLayout3A"
+            android:layout_centerInParent="true"
+            android:background="#4D000000"
+            android:visibility="invisible">
+            <TextView
+                android:id="@+id/txt_3AValue"
+                android:layout_width="120dp"
+                android:layout_height="40dp"
+                android:text="ISO 50"
+                android:textAlignment="center"
+                android:textSize="30dp"
+                android:textColor="@android:color/white"/>
+        </FrameLayout>
+
         <LinearLayout
             android:id="@+id/frameLayout3A"
             android:layout_height="wrap_content"
@@ -81,23 +99,36 @@
         </LinearLayout>
 
         <LinearLayout
-            android:id="@+id/contrastTargetLayout"
-            android:layout_height="50dp"
+            android:id="@+id/focusAreaLayout"
             android:layout_width="match_parent"
-            android:layout_centerInParent="true"
-            android:visibility="visible">
+            android:layout_height="50dp"
+            android:layout_centerInParent="true">
 
             <ImageView
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:layout_weight=".5"
-                android:src="@drawable/ic_crop_free_black_24dp"/>
-            <ImageView
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:layout_weight=".5"
-                android:src="@drawable/ic_crop_free_black_24dp"/>
+                android:src="@drawable/ic_crop_free_black_24dp"
+                />
         </LinearLayout>
+
+<!--        <LinearLayout-->
+<!--            android:id="@+id/contrastTargetLayout"-->
+<!--            android:layout_height="50dp"-->
+<!--            android:layout_width="match_parent"-->
+<!--            android:layout_centerInParent="true"-->
+<!--            android:visibility="visible">-->
+
+<!--            <ImageView-->
+<!--                android:layout_width="match_parent"-->
+<!--                android:layout_height="match_parent"-->
+<!--                android:layout_weight=".5"-->
+<!--                android:src="@drawable/ic_crop_free_black_24dp"/>-->
+<!--            <ImageView-->
+<!--                android:layout_width="match_parent"-->
+<!--                android:layout_height="match_parent"-->
+<!--                android:layout_weight=".5"-->
+<!--                android:src="@drawable/ic_crop_free_black_24dp"/>-->
+<!--        </LinearLayout>-->
     </RelativeLayout>
 
     <FrameLayout
@@ -166,7 +197,7 @@
             android:id="@+id/isoCustomSeekBar"
             android:layout_width="match_parent"
             android:layout_height="20dp"
-            android:layout_marginTop="20dp"
+            android:layout_marginTop="10dp"
             android:layout_marginStart="20dp"
             android:layout_marginEnd="20dp"
             android:visibility="invisible"
@@ -178,7 +209,7 @@
             android:id="@+id/tvCustomSeekBar"
             android:layout_width="match_parent"
             android:layout_height="20dp"
-            android:layout_marginTop="20dp"
+            android:layout_marginTop="10dp"
             android:layout_marginStart="20dp"
             android:layout_marginEnd="20dp"
             android:layout_gravity="center_horizontal"
@@ -191,7 +222,7 @@
             android:id="@+id/avCustomSeekBar"
             android:layout_width="match_parent"
             android:layout_height="20dp"
-            android:layout_marginTop="20dp"
+            android:layout_marginTop="10dp"
             android:layout_marginStart="20dp"
             android:layout_marginEnd="20dp"
             android:layout_gravity="end"

@@ -18,11 +18,125 @@
         app:layout_constraintTop_toTopOf="parent" />
 
     <RelativeLayout
-        android:id="@+id/layout_grid"
+        android:id="@+id/layout_whitePeak"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         app:layout_constraintTop_toBottomOf="@+id/txt_setting">
+
+        <ImageView
+            android:id="@+id/btn_whitePeak"
+            android:layout_width="@dimen/setting_button_size"
+            android:layout_height="@dimen/setting_button_size"
+            android:layout_alignParentStart="true"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="8dp"
+            android:src="@drawable/ic_white_peak" />
+
+        <TextView
+            android:id="@+id/txt_whitePeak"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="20dp"
+            android:layout_marginTop="20dp"
+            android:layout_toEndOf="@+id/btn_whitePeak"
+            android:text="@string/setting_whitePeak"
+            android:textColor="#FFFF"
+            android:textSize="@dimen/setting_text_size" />
+
+        <EditText
+            android:id="@+id/edit_whitePeak"
+            android:layout_width="50dp"
+            android:layout_height="wrap_content"
+            android:layout_alignEnd="@id/txt_whitePeak"
+            android:layout_marginTop="12dp"
+            android:layout_marginEnd="20dp"
+            android:inputType="number" />
+    </RelativeLayout>
+
+    <RelativeLayout
+        android:id="@+id/layout_blackNadir"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="10dp"
+        app:layout_constraintTop_toBottomOf="@+id/layout_whitePeak">
+
+        <ImageView
+            android:id="@+id/btn_blackNadir"
+            android:layout_width="@dimen/setting_button_size"
+            android:layout_height="@dimen/setting_button_size"
+            android:layout_alignParentStart="true"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="8dp"
+            android:src="@drawable/ic_black_nadir" />
+
+        <TextView
+            android:id="@+id/txt_blackNadir"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="20dp"
+            android:layout_marginTop="20dp"
+            android:layout_toEndOf="@+id/btn_blackNadir"
+            android:text="@string/setting_blackNadir"
+            android:textColor="#FFFF"
+            android:textSize="@dimen/setting_text_size" />
+
+        <EditText
+            android:id="@+id/edit_blackNadir"
+            android:layout_width="50dp"
+            android:layout_height="wrap_content"
+            android:layout_alignEnd="@id/txt_blackNadir"
+            android:layout_marginTop="12dp"
+            android:layout_marginEnd="20dp"
+            android:inputType="number" />
+    </RelativeLayout>
+
+    <RelativeLayout
+        android:id="@+id/layout_darkNoise"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="10dp"
+        app:layout_constraintTop_toBottomOf="@+id/layout_blackNadir">
+
+        <ImageView
+            android:id="@+id/btn_darkNoise"
+            android:layout_width="@dimen/setting_button_size"
+            android:layout_height="@dimen/setting_button_size"
+            android:layout_alignParentStart="true"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="8dp"
+            android:src="@drawable/ic_dark_noise" />
+
+        <TextView
+            android:id="@+id/txt_darkNoise"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="20dp"
+            android:layout_marginTop="20dp"
+            android:layout_toEndOf="@+id/btn_darkNoise"
+            android:text="@string/setting_darkNoise"
+            android:textColor="#FFFF"
+            android:textSize="@dimen/setting_text_size" />
+
+        <EditText
+            android:id="@+id/edit_darkNoise"
+            android:layout_width="50dp"
+            android:layout_height="wrap_content"
+            android:layout_alignEnd="@id/txt_darkNoise"
+            android:layout_marginTop="12dp"
+            android:layout_marginEnd="20dp"
+            android:inputType="number" />
+    </RelativeLayout>
+
+    <RelativeLayout
+        android:id="@+id/layout_grid"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="10dp"
+        app:layout_constraintTop_toBottomOf="@+id/layout_darkNoise">
 
         <ImageView
             android:id="@+id/btn_grid"

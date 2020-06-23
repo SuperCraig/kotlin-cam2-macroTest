@@ -444,28 +444,36 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             frameLayout3A.visibility = View.INVISIBLE
         }
 
-//        if (isAutoEnable)
-//            btnAuto.setImageResource(R.drawable.ic_auto_selection)
-//        else
-//            btnAuto.setImageResource(R.drawable.ic_auto)
+        isAutoEnable = true
+        btnAuto.setImageResource(R.drawable.ic_auto_selection)
 
-        if (isColorTemperatureEnable)
+        if (isColorTemperatureEnable){
             btnColorTemperature.setImageResource(R.drawable.ic_color_temperature_selection)
-        else
+            focusAreaLayout.visibility = View.VISIBLE
+        }
+        else{
             btnColorTemperature.setImageResource(R.drawable.ic_color_temperature)
+            focusAreaLayout.visibility = View.INVISIBLE
+        }
 
-        if (isRefreshRateEnable)
+        if (isRefreshRateEnable){
             btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate_selection)
-        else
+            focusAreaLayout.visibility = View.VISIBLE
+        }
+        else{
             btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate)
+            focusAreaLayout.visibility = View.INVISIBLE
+        }
 
         if (isContrastEnable){
             btnContrast.setImageResource(R.drawable.ic_contrast_selection)
-            contrastTargetLayout.visibility = View.VISIBLE
+//            contrastTargetLayout.visibility = View.VISIBLE
+            focusAreaLayout.visibility = View.VISIBLE
         }
         else{
             btnContrast.setImageResource(R.drawable.ic_contrast)
-            contrastTargetLayout.visibility = View.INVISIBLE
+//            contrastTargetLayout.visibility = View.INVISIBLE
+            focusAreaLayout.visibility = View.INVISIBLE
         }
 
         progressbarShutter = view.findViewById(R.id.progressBar_shutter)
@@ -487,7 +495,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 //            Toast.makeText(this.context, "This device has not matched any bluetooth", Toast.LENGTH_LONG).show()v
 
         val displayMatrix = context!!.resources.displayMetrics          //initialize focus icon size to real size
-        val layoutParams = contrastTargetLayout.layoutParams
+//        val layoutParams = contrastTargetLayout.layoutParams
+        val layoutParams = focusAreaLayout.layoutParams
         currentFocusIconSize = layoutParams.height.toDouble()
         currentFocusIconFlag = FocusIconSize.SMALL
         currentFocusRatioWidth = currentFocusIconSize / displayMatrix.widthPixels
@@ -537,6 +546,24 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 var scale = if (task != 0) 100 / task
                 else 100
 
+                if (task == 0) {        //20200623 no measurement item selected
+                    view.post {
+                        showToast(50.0f, "No Selected!", Color.argb(0xAA, 0xAA, 0x00, 0x00))
+                    }
+
+                    val fileName = "$currentDateTime"
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        takeRawPhoto(fileName).use { result ->
+                            procedureTakePicture(result)
+                        }
+                        takeJPEGPhoto(fileName).use { result ->
+                            procedureTakePicture(result)
+                        }
+                    }
+
+                    return
+                }
+
                 var count = 0
                 // Disable click listener to prevent multiple requests simultaneously in flight
                 progressbarShutter?.max = 100
@@ -556,45 +583,43 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     var refreshRate: Int = 0
 
                     if (isContrastEnable) {
-//                        m_isAckReceived = false
-//                        count = 0
-//                        while (!m_isAckReceived && count < COMMAND_RETRY) {
-//                            m_bluetoothSocket = sendToDevice(ContrastCommand)
-//                            readCommandHandler.post(readCommandRunnable)
-//                            Thread.sleep(500)
-//                            count += 1
-//                        }
-
-                        if (isManualEnable) {       //set iso: 50 & tv: 180 for contrast measurement
-                            val ae = (10.0.pow(9) / 350).roundToLong()
-                            val iso = 50
-                            setExposureTime(ae)
-                            setSensorSensitivity(iso)
-
-                            Thread.sleep(50)
-                        }
-
                         Log.i(TAG, "Lux: ${lightSensorListener.getLux()}")
                         if (mRawImageReader != null) {
                             val fileName = "C_$currentDateTime"
                             var contrastObjectRAW: ContrastObject? = null
-                            var contrastObjectJPEG: ContrastObject? = null
+                            var contrastObjectJPEGWhite: ContrastObject? = null
+                            var contrastObjectJPEGBlack: ContrastObject? = null
+
+                            m_bluetoothSocket = sendToDevice(ContrastCommandWhite)
+                            readCommandHandler.post(readCommandRunnable)
+                            Thread.sleep(1000)
 
                             takeRawPhoto(fileName).use { result ->
                                 contrastObjectRAW = procedureContrast(result)
                             }
                             takeJPEGPhoto().use { result ->
+                                contrastObjectJPEGWhite = procedureContrast(result)
+                            }
+
+                            m_bluetoothSocket = sendToDevice(ContrastCommandBlack)
+                            readCommandHandler.post(readCommandRunnable)
+                            Thread.sleep(1000)
+
+                            takeJPEGPhoto().use { result ->
                                 view.post {
                                     showToast("Picture Done!")
                                 }
 
-                                contrastObjectJPEG = procedureContrast(result)
+                                contrastObjectJPEGBlack = procedureContrast(result)
                             }
 
-                            contrastObject = contrastObjectJPEG
-                            if (contrastObjectJPEG!!.contrast.isNaN())
-                                contrastObject = contrastObjectRAW
-                            if (contrastObjectRAW!!.contrast < 20 && (contrastObjectRAW!!.contrast.isNaN() || contrastObjectJPEG!!.contrast.isNaN()))
+                            contrastObject = contrastObjectRAW
+                            contrastObject!!.lum1 = contrastObjectJPEGWhite!!.lum1
+                            contrastObject.lum2 = contrastObjectJPEGBlack!!.lum1
+                            contrastObject.contrast = if (contrastObject.lum1 > contrastObject.lum2) contrastObject.lum1 / contrastObject.lum2
+                            else contrastObject.lum2 / contrastObject.lum1
+
+                            if (contrastObject.contrast < 20 && (contrastObject.contrast.isNaN() || contrastObject.contrast.isNaN()))
                                 contrastObject = ContrastObject(0.0, 0.0, lightSensorListener.getLux().toDouble(), contrastObjectRAW?.file)
 
                             try {
@@ -624,18 +649,37 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             }
                         } else {
                             val fileName = "C_$currentDateTime"
-                            var contrastObjectJPEG: ContrastObject? = null
+                            var contrastObjectJPEGWhite: ContrastObject? = null
+                            var contrastObjectJPEGBlack: ContrastObject? = null
+
+                            m_bluetoothSocket = sendToDevice(ContrastCommandWhite)
+                            readCommandHandler.post(readCommandRunnable)
+                            Thread.sleep(1000)
+
+                            takeJPEGPhoto(fileName).use { result ->
+                                contrastObjectJPEGWhite = procedureContrast(result)
+                            }
+
+                            m_bluetoothSocket = sendToDevice(ContrastCommandBlack)
+                            readCommandHandler.post(readCommandRunnable)
+                            Thread.sleep(1000)
 
                             takeJPEGPhoto(fileName).use { result ->
                                 view.post {
                                     showToast("Picture Done!")
                                 }
 
-                                contrastObjectJPEG = procedureContrast(result)
+                                contrastObjectJPEGBlack = procedureContrast(result)
                             }
 
-                            contrastObject = if (contrastObjectJPEG!!.contrast.isNaN()) ContrastObject(0.0, 0.0, lightSensorListener.getLux().toDouble(), contrastObject?.file)
-                            else contrastObjectJPEG
+                            contrastObject = contrastObjectJPEGWhite
+                            contrastObject!!.lum2 = contrastObjectJPEGBlack!!.lum1
+                            contrastObject.contrast = if(contrastObject.lum1 > contrastObject.lum2) contrastObject.lum1 / contrastObject.lum2
+                            else contrastObject.lum2 / contrastObject.lum1
+                            contrastObject.file = contrastObjectJPEGBlack!!.file
+
+                            contrastObject = if (contrastObject.contrast.isNaN()) ContrastObject(0.0, 0.0, lightSensorListener.getLux().toDouble(), contrastObject.file)
+                            else contrastObject
 
                             try {
 //                                val fileName = "Contrast_${contrastObject!!.contrast}"
@@ -668,24 +712,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                     Thread.sleep(200)
                     if (isColorTemperatureEnable) {     //set fixed iso 320 & tv 250
-//                        m_isAckReceived = false
-//                        count = 0
-//                        while (!m_isAckReceived && count < COMMAND_RETRY) {
-//                            m_bluetoothSocket = sendToDevice(ColorTemperatureCommand)
-//                            readCommandHandler.post(readCommandRunnable)
-//                            Thread.sleep(500)
-//                            count += 1
-//                        }
-
-                        if (isManualEnable) {
-                            val iso = 50
-                            setSensorSensitivity(iso)
-                            val ae = (10.0.pow(9) / 350).roundToLong()
-                            setExposureTime(ae)
-
-                            Thread.sleep(50)
-                        }
-
                         val fileName = "T_$currentDateTime"
 
                         takeJPEGPhoto(fileName).use { result ->
@@ -730,15 +756,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                     Thread.sleep(200)
                     if (isRefreshRateEnable) {      //from tv: 1000 ~ 4000 and fixed iso 800
-//                        m_isAckReceived = false
-//                        count = 0
-//                        while (!m_isAckReceived && count < COMMAND_RETRY) {
-//                            m_bluetoothSocket = sendToDevice(RefreshRateCommand)
-//                            readCommandHandler.post(readCommandRunnable)
-//                            Thread.sleep(500)
-//                            count += 1
-//                        }
-
                         val exposureTimeRange = intArrayOf(1500, 2000, 2500, 3000, 3500, 4000)
                         val fixedISO = 60
                         val circleCount = ArrayList<Int>()
@@ -829,6 +846,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         progressbarShutter?.progress = scale
                     }
 
+
                     if (!isContrastEnable) contrastObject = ContrastObject(0.0, 0.0, 0.0)
                     if (!isColorTemperatureEnable) colorTemperatureObject = ColorTemperatureObject(
                         doubleArrayOf(0.0, 0.0), 0.0, ColorTemperature.None)
@@ -863,14 +881,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     btnAuto.setImageResource(R.drawable.ic_auto)
                 }
 
-                if (flashSupported)
-                    previewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
-                    CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH)
-                else
-                    previewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
-
-                previewRequestBuilder.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO)
-                captureSession.setRepeatingRequest(previewRequestBuilder.build(), null, backgroundHandler)
+                automate3A()
 
                 isManualEnable = false
                 avCustomSeekBar.visibility = View.INVISIBLE
@@ -884,21 +895,33 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 isContrastEnable = !isContrastEnable
 
                 if(isContrastEnable){
+                    manual3A(Measurement.Contrast)
+
                     btnContrast.setImageResource(R.drawable.ic_contrast_selection)
-                    contrastTargetLayout.visibility = View.VISIBLE
+//                    contrastTargetLayout.visibility = View.VISIBLE
+                    focusAreaLayout.visibility = View.VISIBLE
 
                     isRefreshRateEnable = false
                     btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate)
                     isColorTemperatureEnable = false
                     btnColorTemperature.setImageResource(R.drawable.ic_color_temperature)
 
+                    isAutoEnable = false
+                    btnAuto.setImageResource(R.drawable.ic_auto)
+
                     lifecycleScope.launch(Dispatchers.IO) {
-                        m_bluetoothSocket = sendToDevice(ContrastCommand)
+                        m_bluetoothSocket = sendToDevice(ContrastCommandWhite)
                         readCommandHandler.post(readCommandRunnable)
                     }
                 }else{
+                    automate3A()
+
                     btnContrast.setImageResource(R.drawable.ic_contrast)
-                    contrastTargetLayout.visibility = View.INVISIBLE
+//                    contrastTargetLayout.visibility = View.INVISIBLE
+                    focusAreaLayout.visibility = View.INVISIBLE
+
+                    isAutoEnable = true
+                    btnAuto.setImageResource(R.drawable.ic_auto_selection)
                 }
 
                 saveData()
@@ -908,20 +931,32 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 isRefreshRateEnable = !isRefreshRateEnable
 
                 if(isRefreshRateEnable){
+                    manual3A(Measurement.RefreshRate)
+
                     btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate_selection)
-                    contrastTargetLayout.visibility = View.INVISIBLE
+//                    contrastTargetLayout.visibility = View.INVISIBLE
+                    focusAreaLayout.visibility = View.VISIBLE
 
                     isContrastEnable = false
                     btnContrast.setImageResource(R.drawable.ic_contrast)
                     isColorTemperatureEnable = false
                     btnColorTemperature.setImageResource(R.drawable.ic_color_temperature)
 
+                    isAutoEnable = false
+                    btnAuto.setImageResource(R.drawable.ic_auto)
+
                     lifecycleScope.launch(Dispatchers.IO) {
                         m_bluetoothSocket = sendToDevice(RefreshRateCommand)
                         readCommandHandler.post(readCommandRunnable)
                     }
                 }else{
+                    automate3A()
+
                     btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate)
+                    focusAreaLayout.visibility = View.INVISIBLE
+
+                    isAutoEnable = true
+                    btnAuto.setImageResource(R.drawable.ic_auto_selection)
                 }
 
                 saveData()
@@ -931,20 +966,32 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 isColorTemperatureEnable = !isColorTemperatureEnable
 
                 if(isColorTemperatureEnable){
+                    manual3A(Measurement.ColorTemperature)
+
                     btnColorTemperature.setImageResource(R.drawable.ic_color_temperature_selection)
-                    contrastTargetLayout.visibility = View.INVISIBLE
+//                    contrastTargetLayout.visibility = View.INVISIBLE
+                    focusAreaLayout.visibility = View.VISIBLE
 
                     isContrastEnable = false
                     btnContrast.setImageResource(R.drawable.ic_contrast)
                     isRefreshRateEnable = false
                     btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate)
 
+                    isAutoEnable = false
+                    btnAuto.setImageResource(R.drawable.ic_auto)
+
                     lifecycleScope.launch(Dispatchers.IO) {
                         m_bluetoothSocket = sendToDevice(ColorTemperatureCommand)
                         readCommandHandler.post(readCommandRunnable)
                     }
                 }else{
+                    automate3A()
+
                     btnColorTemperature.setImageResource(R.drawable.ic_color_temperature)
+                    focusAreaLayout.visibility = View.INVISIBLE
+
+                    isAutoEnable = true
+                    btnAuto.setImageResource(R.drawable.ic_auto_selection)
                 }
 
                 saveData()
@@ -969,8 +1016,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     frameLayout3A.visibility = View.INVISIBLE
                 }
 
-                previewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
-                captureSession.setRepeatingRequest(previewRequestBuilder.build(), null, backgroundHandler)
+                manual3A(Measurement.None)
 
                 isAutoEnable = false
                 btnAuto.setImageResource(R.drawable.ic_auto)
@@ -1069,26 +1115,40 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             R.id.btnFocus -> {
                 val displayMatrix = context!!.resources.displayMetrics
                 if (currentFocusIconFlag == FocusIconSize.SMALL) {
-                    val layoutParams = contrastTargetLayout.layoutParams
+//                    val layoutParams = contrastTargetLayout.layoutParams
+                    val layoutParams = focusAreaLayout.layoutParams
                     currentFocusIconSize = (layoutParams.height * 2).toDouble()
                     currentFocusIconFlag = FocusIconSize.BIG
                     currentFocusRatioWidth = (currentFocusIconSize / displayMatrix.widthPixels).toDouble()
                     currentFocusRatioHeight = (currentFocusIconSize / displayMatrix.heightPixels).toDouble()
 
                     layoutParams.height = currentFocusIconSize.toInt()
-                    contrastTargetLayout.layoutParams = layoutParams
+//                    contrastTargetLayout.layoutParams = layoutParams
+                    focusAreaLayout.layoutParams = layoutParams
                 } else if (currentFocusIconFlag == FocusIconSize.BIG) {
-                    val layoutParams = contrastTargetLayout.layoutParams
-                    currentFocusIconSize = (layoutParams.height / 2).toDouble()
+//                    val layoutParams = contrastTargetLayout.layoutParams
+                    val layoutParams = focusAreaLayout.layoutParams
+                    currentFocusIconSize = (layoutParams.height * 2).toDouble()
+                    currentFocusIconFlag = FocusIconSize.ULTRA
+                    currentFocusRatioWidth = currentFocusIconSize / displayMatrix.widthPixels
+                    currentFocusRatioHeight = currentFocusIconSize / displayMatrix.heightPixels
+
+                    layoutParams.height = currentFocusIconSize.toInt()
+//                    contrastTargetLayout.layoutParams = layoutParams
+                    focusAreaLayout.layoutParams = layoutParams
+                } else if (currentFocusIconFlag == FocusIconSize.ULTRA) {
+                    val layoutParams = focusAreaLayout.layoutParams
+                    currentFocusIconSize = (layoutParams.height / 4).toDouble()
                     currentFocusIconFlag = FocusIconSize.SMALL
                     currentFocusRatioWidth = currentFocusIconSize / displayMatrix.widthPixels
                     currentFocusRatioHeight = currentFocusIconSize / displayMatrix.heightPixels
 
                     layoutParams.height = currentFocusIconSize.toInt()
-                    contrastTargetLayout.layoutParams = layoutParams
+                    focusAreaLayout.layoutParams = layoutParams
                 }
 
-                Log.i(TAG, "contrastTargetLayout: ${contrastTargetLayout.width} x ${contrastTargetLayout.height}")
+//                Log.i(TAG, "contrastTargetLayout: ${contrastTargetLayout.width} x ${contrastTargetLayout.height}")
+                Log.i(TAG, "focusAreaLayout: ${focusAreaLayout.width} x ${focusAreaLayout.height}")
                 Log.i(TAG, "displayMatrix: ${displayMatrix.widthPixels} x ${displayMatrix.heightPixels}")
                 Log.i(TAG, "ratio: $currentFocusRatioWidth x $currentFocusRatioHeight")
                 tvCustomSeekBar.visibility = View.INVISIBLE
@@ -1108,7 +1168,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         }
     }
 
-
     override fun onPause() {
         super.onPause()
         sensorManager!!.unregisterListener(lightSensorListener)
@@ -1117,6 +1176,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     override fun onStop() {
         super.onStop()
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            m_bluetoothSocket = sendToDevice(MinimumTestPattern)
+            readCommandHandler.post(readCommandRunnable)
+        }
         Log.i(TAG, "onStop")
     }
 
@@ -1400,7 +1464,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             )
             previewRequestBuilder.addTarget(surface)
 
-            initialize3A()
+            //initialize3A()            //20200622 Craig
 
             val outputs = if(mRawImageReader == null) {
                 listOf(surface, mImageReader.surface)
@@ -1436,6 +1500,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                 null, backgroundHandler
                             )
 
+                            automate3A()                //20200622 Craig
                             Log.i(TAG, "CameraCaptureSession.StateCallback")
                         } catch (e: CameraAccessException) {
                             Log.e(TAG, e.toString())
@@ -1667,6 +1732,68 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         )
     }
 
+    private suspend fun procedureTakePicture(result: CombinedCaptureResult) {
+        when (result.format) {
+            ImageFormat.JPEG, ImageFormat.DEPTH_JPEG -> {
+                try {
+                    val buffer = result.image.planes[0].buffer
+                    val bytes = ByteArray(buffer.remaining()).apply { buffer.get(this) }
+
+                    if (result.isSavedEnable) {
+                        val output = createFile(result.fileName,"jpg")
+                        val temp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size).rotate(90f)
+                        temp.compress(Bitmap.CompressFormat.JPEG, 100, FileOutputStream(output))
+
+                        MediaScannerConnection.scanFile(context, arrayOf(output.path),
+                            arrayOf("image/jpeg")) { path, _ ->
+                            Log.i(TAG, "onScanCompleted : $path")
+                        }
+
+                        temp.recycle()
+                    }
+
+                    result.image.close()
+                } catch (exc: IOException) {
+                    Log.e(TAG, "Unable to write JPEG image to file", exc)
+                }
+            }
+
+            // When the format is RAW we use the DngCreator utility library
+            ImageFormat.RAW_SENSOR -> {
+                val dngCreator = DngCreator(characteristics, result.metadata)
+                dngCreator.setOrientation(ExifInterface.ORIENTATION_ROTATE_90)      //rotate picture
+                try {
+                    val byteBuffer = result.image.planes[0].buffer
+                    val byteArray = ByteArray(byteBuffer.remaining())
+                    byteBuffer.get(byteArray)
+
+                    if (result.isSavedEnable){
+                        val output = createFile(result.fileName,"dng")
+
+                        FileOutputStream(output).use { dngCreator.writeImage(it, result.image) }
+
+                        MediaScannerConnection.scanFile(
+                            context, arrayOf(output.path),
+                            arrayOf("image/", "image/x-adobe-dng")
+                        ) { path, _ ->
+                            Log.i(TAG, "onScanCompleted : $path")
+                        }
+                    }
+
+                    result.image.close()
+                } catch (exc: IOException) {
+                    Log.e(TAG, "Unable to write DNG image to file", exc)
+                    exc.printStackTrace()
+                }
+            }
+            // No other formats are supported by this sample
+            else -> {
+                val exc = RuntimeException("Unknown image format: ${result.image.format}")
+                Log.e(TAG, exc.message, exc)
+            }
+        }
+    }
+
     private suspend fun procedureRefreshRate(result: CombinedCaptureResult): CountOfBlack = suspendCoroutine { cont ->
         when (result.format) {
             ImageFormat.JPEG, ImageFormat.DEPTH_JPEG -> {
@@ -1890,8 +2017,17 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         var red: Float = 0f
         var green: Float = 0f
         var blue: Float = 0f
-        for (j in bitmap.height / 4 .. bitmap.height * 3 / 4) {      //consider 1 / 4 picture of luminace to speed up calculation
-            for (i in bitmap.width / 4 .. bitmap.width * 3 / 4) {
+
+        val width = bitmap.width
+        val height = bitmap.height
+        val targetSizeWidth = currentFocusRatioWidth * width
+        val targetSizeHeight = currentFocusRatioHeight * height
+
+        val startX = (width / 2) - (targetSizeWidth / 2)
+        val startY = (height / 2) + (targetSizeHeight / 2)
+
+        for (j in startY.toInt() .. (startY + targetSizeHeight).toInt()) {      //consider 1 / 4 picture of luminace to speed up calculation
+            for (i in startX.toInt() .. (startX + targetSizeWidth).toInt()) {
                 val argb = bitmap.getPixel(i, j)
                 val r = Color.red(argb)
                 val g = Color.green(argb)
@@ -1949,9 +2085,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     }
 
     private fun calculateXY(r: Float, g: Float, b: Float):DoubleArray {
-        val X = (0.4125 * r) + (0.3576 * g) + (0.1804 * b)
-        val Y = (0.2127 * r) + (0.7125 * g) + (0.0722 * b)      //luminance
-        val Z = (0.0193 * r) + (0.1192 * g) + (0.9503 * b)
+        val X = (412.5 * r) + (357.6 * g) + (180.4 * b)
+        val Y = (212.7 * r) + (712.5 * g) + (72.2 * b)      //luminance
+        val Z = (19.3 * r) + (119.2 * g) + (950.3 * b)
 
         val cx = X / (X + Y + Z)
         val cy = Y / (X + Y + Z)
@@ -1981,26 +2117,19 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
         var contrast: Double = 0.0
 
-        var lum11 = 0.0
-        var lum12 = 0.0
-        var lum21 = 0.0
-        var lum22 = 0.0
-        var count11 = 0
-        var count12 = 0
-        var count21 = 0
-        var count22 = 0
+        var lum1 = 0.0
+        var count1 = 0
 
         val targetSizeWidth = currentFocusRatioWidth * width
         val targetSizeHeight = currentFocusRatioHeight * height
-        val uHeight = (height / 2) - (targetSizeHeight / 2)
-        val dHeight = (height / 2) + (targetSizeHeight / 2)
-        var lWidht = (width / 4) - (targetSizeWidth / 2)
-        var rWidth = (width / 4) + (targetSizeWidth / 2)
+        val startX = (width / 2) - (targetSizeWidth / 2)
+        val startY = (height / 2) + (targetSizeHeight / 2)
+
         Log.i(TAG, "targetSize: $targetSizeWidth x $targetSizeHeight")
 
         //Lum1
-        for (j in uHeight.toInt() until dHeight.toInt()) {     //left white, right black
-            for (i in lWidht.toInt() until rWidth.toInt()) {
+        for (j in startY.toInt() until (startY + targetSizeHeight).toInt()) {     //left white, right black
+            for (i in startX.toInt() until (startX + targetSizeWidth).toInt()) {
                 argb = bitmap.getPixel(i, j)
                 r = Color.red(argb)
                 g = Color.green(argb)
@@ -2015,92 +2144,28 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 if (b < min[2]) min[2] = b
 
                 val lum = r * 0.2126 + g * 0.7152 + b * 0.0722
-                if (lum >= 50) {
-                    lum11 += lum
-                    count11 ++
-                }
-                if (lum <= 50) {
-                    lum12 += lum
-                    count12 ++
-                }
+                lum1 += lum
+                count1 ++
             }
         }
 
-        lWidht = (width * 3 / 4) - (targetSizeWidth / 2)
-        rWidth = (width * 3 / 4) + (targetSizeWidth / 2)
-        //Lum2
-        for (j in uHeight.toInt() until dHeight.toInt()) {     //left white, right black
-            for (i in lWidht.toInt() until rWidth.toInt()) {
-                argb = bitmap.getPixel(i, j)
-                r = Color.red(argb)
-                g = Color.green(argb)
-                b = Color.blue(argb)
-
-                if (r > max[0]) max[0] = r
-                if (g > max[1]) max[1] = g
-                if (b > max[2]) max[2] = b
-
-                if (r < min[0]) min[0] = r
-                if (g < min[1]) min[1] = g
-                if (b < min[2]) min[2] = b
-
-                val lum = r * 0.2126 + g * 0.7152 + b * 0.0722
-                if (lum > 50) {
-                    lum21 += lum
-                    count21 ++
-                }
-                if (lum < 50) {
-                    lum22 += lum
-                    count22 ++
-                }
-            }
-        }
-
-        lum11 = if (count11 > 0) lum11/count11
-        else 1.0
-        lum12 = if (count12 > 0) lum12 / count12
-        else 1.0
-        lum21 = if (count21 > 0) lum21 / count21
-        else 1.0
-        lum22 = if (count22 > 0) lum22 / count22
+        lum1 = if (count1 > 0) lum1/count1
         else 1.0
 
-        Log.i(TAG, "lum11: $lum11 count11: $count11, lum12: $lum12 count12: $count12, lum21: $lum21 count21: $count21, lum22: $lum22 count22: $count22")
-        var lum1 = 0.0
-        var lum2 = 0.0
+        var luminance1 = (lum1 * 65535) / 256
 
-        if ((abs(lum11 - lum21) / 256) < 0.1) {
-            if (lum12 > lum22) {
-                lum1 = lum12
-                lum2 = lum22
-            } else {
-                lum1 = lum22
-                lum2 = lum12
-            }
-        } else {
-            if (lum11 > lum21) {
-                lum1 = lum11
-                lum2 = lum22
-            } else {
-                lum1 = lum21
-                lum2 = lum12
-            }
-        }
+        luminance1 = if (luminance1 > 125) luminance1 - 125         //125 is black offset
+        else if (luminance1 > 65535.0) 65535.0
+        else luminance1
 
-        var luminance1 = (lum1 * 65535 + 500) / 256
-        var luminance2 = (lum2 * 65535 + 500) / 256
-
-        var contrastLum = (luminance1 / luminance2)
-
-        contrastLum = if(contrastLum > 65535.0) 65535.0
-        else contrastLum
+        val contrastLum = luminance1
 
         contrast = contrastLum
 
         temp.recycle()
         bitmap.recycle()
-        Log.i(TAG, "Contrast: $contrastLum, lum1: $lum1 -> $luminance1, lum2: $lum2 -> $luminance2")
-        return ContrastObject(luminance1.roundTo2DecimalPlaces(), luminance2.roundTo2DecimalPlaces(), contrast.roundTo2DecimalPlaces())
+        Log.i(TAG, "contrast: $lum1: -> $luminance1, $contrast")
+        return ContrastObject(luminance1.roundTo2DecimalPlaces(), 0.0.roundTo2DecimalPlaces(), contrast.roundTo2DecimalPlaces())
     }
 
     private fun calculateContrastRAW(width: Int, height: Int, bytes: ByteArray): ContrastObject {
@@ -2115,18 +2180,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 pixels[i / 2] += value
         }
 
-//        val redBuffer: IntArray = IntArray(width * height)
-//        val greenBuffer: IntArray = IntArray(width * height)
-//        val blueBuffer: IntArray = IntArray(width * height)
         val luminanceBuffer: IntArray = IntArray(width * height)
         val rawConverter: RawConverter = RawConverter(pixels, width, height)
         val colorFilterArrangement = characteristics.get(CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT)
         for(j in 0 until height) {
             for (i in 0 until width) {
                 val p = rawConverter.debay(colorFilterArrangement!!, i, j)
-//                redBuffer[rawConverter.getPixel(i, j)] = p[0]
-//                greenBuffer[rawConverter.getPixel(i, j)] = p[1]
-//                blueBuffer[rawConverter.getPixel(i, j)] = p[2]
                 luminanceBuffer[rawConverter.getPixel(i, j)] = luminance(p[0], p[1], p[2]).toInt()
             }
         }
@@ -2318,16 +2377,20 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         }
     }
 
-    private fun showToast(text: String) {
+    private fun showToast(textSize: Float, text: String, backgroundColor: Int) {
         val toastView: ToastView = ToastView(context!!)
-        toastView.setRadius(50.0f)
-        toastView.setTextSize(50.0f)
-        toastView.setBackgroundColor(Color.argb(0xAA, 0x00, 0xAA, 0x00))
+        toastView.setRadius(textSize)
+        toastView.setTextSize(textSize)
+        toastView.setBackgroundColor(backgroundColor)
 
         val toast = com.example.toast.Toast(context!!, toastView)
         toast.setPosition(com.example.toast.Toast.Position.CENTER)
         toast.toastView = toastView
         toast.showToast(text)
+    }
+
+    private fun showToast(text: String) {
+        showToast(50.0f, text, Color.argb(0xAA, 0x00, 0xAA, 0x00))
     }
 
     private fun pickPictureFromGallery() {
@@ -2381,9 +2444,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         aperture = settings.getFloat(APERTURE, 0f)
         isManualEnable = settings.getBoolean(MANUAL_ENABLE, false)
 //        isAutoEnable = settings.getBoolean(AUTO_ENABLE, false)
-        isColorTemperatureEnable = settings.getBoolean(COLOR_TEMPERATURE_ENABLE, false)
-        isRefreshRateEnable = settings.getBoolean(REFRESH_RATE_ENABLE, false)
-        isContrastEnable = settings.getBoolean(CONTRAST_ENABLE, false)
+//        isColorTemperatureEnable = settings.getBoolean(COLOR_TEMPERATURE_ENABLE, false)
+//        isRefreshRateEnable = settings.getBoolean(REFRESH_RATE_ENABLE, false)
+//        isContrastEnable = settings.getBoolean(CONTRAST_ENABLE, false)
         apertureProgress = settings.getInt(APERTURE_PROGRESS, 0)
         exposureProgress = settings.getInt(EXPOSURE_PROGRESS, 0)
         sensorSensitivityProgress = settings.getInt(SENSOR_SENSITIVITY_PROGRESS, 0)
@@ -2547,6 +2610,46 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         if (zoom != null)   previewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, zoom)
     }
 
+    private fun automate3A() {
+        if (flashSupported)
+            previewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
+                CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH)
+        else
+            previewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
+
+        previewRequestBuilder.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO)
+
+        captureSession.setRepeatingRequest(previewRequestBuilder.build(), null, backgroundHandler)
+    }
+
+    private fun manual3A(measurementItem: Measurement) {
+        previewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
+        captureSession.setRepeatingRequest(previewRequestBuilder.build(), null, backgroundHandler)
+
+        when(measurementItem) {
+            Measurement.Contrast -> {           //iso 50, tv 350
+                val ae = (10.0.pow(9) / 350).roundToLong()
+                val iso = 50
+                setExposureTime(ae)
+                setSensorSensitivity(iso)
+            }
+            Measurement.ColorTemperature -> {
+                val iso = 50
+                val ae = (10.0.pow(9) / 350).roundToLong()
+                setExposureTime(ae)
+                setSensorSensitivity(iso)
+            }
+            Measurement.RefreshRate -> {
+            }
+            Measurement.None -> {
+                val iso = 50
+                val ae = (10.0.pow(9) / 350).roundToLong()
+                setExposureTime(ae)
+                setSensorSensitivity(iso)
+            }
+        }
+    }
+
     inner class LightSensorListener: SensorEventListener {
         private var lux = 0f
         override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
@@ -2640,8 +2743,24 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         }
 
         enum class FocusIconSize {
+            ULTRA,
             BIG,
-            SMALL
+            SMALL,
+            ZOOM1_8,
+            ZOOM2_8,
+            ZOOM3_8,
+            ZOOM4_8,
+            ZOOM5_8,
+            ZOOM6_8,
+            ZOOM7_8,
+            ZOOM8_8
+        }
+
+        enum class Measurement {
+            RefreshRate,
+            ColorTemperature,
+            Contrast,
+            None
         }
 
         private val RefreshRateCommand = MBITSP2020().let{
@@ -2659,18 +2778,33 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             it.composeCommand()
         }
 
-        private val ContrastCommand = MBITSP2020().let{
-            it.setMode(MBITSP2020.Mode.MODE3)
+        private val ContrastCommandWhite = MBITSP2020().let{
+            it.setMode(MBITSP2020.Mode.MODE2)
             it.setDisplayWidth(1920)
             it.setDisplayHeight(1080)
             it.setDisplayStartX(0)
             it.setDisplayStartY(0)
-            it.setModuleWidth(128)
-            it.setModuleHeight(128)
+            it.setModuleWidth(1920)
+            it.setModuleHeight(1080)
             it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_1, 255.toByte(), 255.toByte(), 255.toByte())
-            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_2, 32.toByte(), 32.toByte(), 32.toByte())
+            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_2, 0.toByte(), 0.toByte(), 0.toByte())
             it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_3, 0.toByte(), 0.toByte(), 0.toByte())
-            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, 255.toByte(), 255.toByte(), 255.toByte())
+            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, 0.toByte(), 0.toByte(), 0.toByte())
+            it.composeCommand()
+        }
+
+        private val ContrastCommandBlack = MBITSP2020().let{
+            it.setMode(MBITSP2020.Mode.MODE2)
+            it.setDisplayWidth(1920)
+            it.setDisplayHeight(1080)
+            it.setDisplayStartX(0)
+            it.setDisplayStartY(0)
+            it.setModuleWidth(1920)
+            it.setModuleHeight(1080)
+            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_1, 0.toByte(), 0.toByte(), 0.toByte())
+            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_2, 0.toByte(), 0.toByte(), 0.toByte())
+            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_3, 0.toByte(), 0.toByte(), 0.toByte())
+            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, 0.toByte(), 0.toByte(), 0.toByte())
             it.composeCommand()
         }
 
@@ -2689,6 +2823,20 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             it.composeCommand()
         }
 
+        private val MinimumTestPattern = MBITSP2020().let{
+            it.setMode(MBITSP2020.Mode.MODE2)
+            it.setDisplayWidth(0)
+            it.setDisplayHeight(0)
+            it.setDisplayStartX(0)
+            it.setDisplayStartY(0)
+            it.setModuleWidth(0 )
+            it.setModuleHeight(0)
+            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_1, 255.toByte(), 255.toByte(), 255.toByte())
+            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_2, 0.toByte(), 0.toByte(), 0.toByte())
+            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_3, 0.toByte(), 0.toByte(), 0.toByte())
+            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, 0.toByte(), 0.toByte(), 0.toByte())
+            it.composeCommand()
+        }
         /**
          * Given `choices` of `Size`s supported by a camera, choose the smallest one that
          * is at least as large as the respective texture view size, and that is at most as large as
@@ -2763,7 +2911,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
         data class CountOfBlack(val mat: Mat, val blackOfCount: Double, val totalCount: Double, var file: File? = null)
 
-        data class ContrastObject(val lum1: Double, val lum2: Double, val contrast: Double, var file: File? = null)
+        data class ContrastObject(var lum1: Double, var lum2: Double, var contrast: Double, var file: File? = null)
 
         data class ColorTemperatureObject(val cxcy: DoubleArray, val cct: Double, val colorTemperature: ColorTemperature, var file: File? = null)
 

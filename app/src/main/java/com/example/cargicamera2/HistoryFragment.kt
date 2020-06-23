@@ -1,5 +1,8 @@
 package com.example.cargicamera2
 
+import android.app.AlertDialog
+import android.app.Dialog
+import android.content.DialogInterface
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -135,7 +138,8 @@ class HistoryFragment: Fragment(), RoomRecyclerItemTouchHelper_SingleHIstory.Rec
             val currentDateTime: String = dateFormat.format(Date()) // Find todays date
 //            historyViewModel.insert(History(currentDateTime,17000, 20020, "Warm White"))
 
-            historyViewModel.deleteAllHistories()
+            showDialog(historyViewModel)
+//            historyViewModel.deleteAllHistories()
         }
     }
 
@@ -207,6 +211,32 @@ class HistoryFragment: Fragment(), RoomRecyclerItemTouchHelper_SingleHIstory.Rec
             mDataItem.add(dataItem)
         }
         return mDataItem
+    }
+
+    private fun showDialog(historyViewModel: HistoryViewModel) {
+        lateinit var dialog: AlertDialog
+
+        var  builder = AlertDialog.Builder(this.context, AlertDialog.THEME_HOLO_DARK)
+
+        builder.setTitle("Clear All Histories")
+
+        builder.setMessage("Do you want to clear all histories.")
+
+        val dialogClickListener = DialogInterface.OnClickListener { _, which ->
+            when (which) {
+                DialogInterface.BUTTON_POSITIVE -> {
+                    historyViewModel.deleteAllHistories()
+                }
+                DialogInterface.BUTTON_NEGATIVE -> {
+
+                }
+            }
+        }
+
+        builder.setPositiveButton("Yes", dialogClickListener)
+        builder.setNegativeButton("No", dialogClickListener)
+        dialog = builder.create()
+        dialog.show()
     }
 
     override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int, position: Int) {
