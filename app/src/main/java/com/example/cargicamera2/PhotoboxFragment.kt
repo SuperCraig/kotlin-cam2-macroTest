@@ -201,43 +201,6 @@ class PhotoboxFragment : Fragment(), GalleryImageAdapter.OnItemClickListener, Vi
             }
             R.id.btn_delete_trash -> {      //delete select picture
                 showDialog()
-
-                if (isMultiSelectable) {
-                    imageUrlList.forEach {imageUrl ->
-                        try {
-                            if (File(imageUrl).exists()) {
-                                context?.contentResolver?.delete(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                                    MediaStore.Images.ImageColumns.DATA + "=?", arrayOf(imageUrl)
-                                )
-                            }
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    }
-                } else {
-                    if (currentPosition != null) {
-                        if (currentPosition!! < imageList.size && File(imageList[currentPosition!!].imageUrl).exists()) {
-                            context?.contentResolver?.delete(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                                MediaStore.Images.ImageColumns.DATA + "=?", arrayOf(imageList[currentPosition!!].imageUrl)
-                            )
-                            imageList.remove(imageList[currentPosition!!])
-                        }
-                        currentPosition = null
-                    }
-                }
-
-                val path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM)
-
-                val dir = File(path, "/CraigCam2")
-                MediaScannerConnection.scanFile(context, arrayOf(dir.toString()), arrayOf("image/jpeg", "image/dng")) { p, _ ->
-                    Log.i(TAG, "onScanCompleted : $p")
-                }
-
-                imageUrlList.clear()
-                isMultiSelectable = false
-                btnSelect.setImageResource(R.drawable.ic_select)
-                loadExternalImages()
-                recyclerView.adapter = galleryAdapter
             }
         }
     }
@@ -253,8 +216,43 @@ class PhotoboxFragment : Fragment(), GalleryImageAdapter.OnItemClickListener, Vi
 
         val dialogClickListener = DialogInterface.OnClickListener { _, which ->
             when (which) {
-                DialogInterface.BUTTON_POSITIVE -> {
+                DialogInterface.BUTTON_POSITIVE -> {        //delete_trash button function into button_positive
+                    if (isMultiSelectable) {
+                        imageUrlList.forEach {imageUrl ->
+                            try {
+                                if (File(imageUrl).exists()) {
+                                    context?.contentResolver?.delete(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                                        MediaStore.Images.ImageColumns.DATA + "=?", arrayOf(imageUrl)
+                                    )
+                                }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+                    } else {
+                        if (currentPosition != null) {
+                            if (currentPosition!! < imageList.size && File(imageList[currentPosition!!].imageUrl).exists()) {
+                                context?.contentResolver?.delete(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                                    MediaStore.Images.ImageColumns.DATA + "=?", arrayOf(imageList[currentPosition!!].imageUrl)
+                                )
+                                imageList.remove(imageList[currentPosition!!])
+                            }
+                            currentPosition = null
+                        }
+                    }
 
+                    val path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM)
+
+                    val dir = File(path, "/CraigCam2")
+                    MediaScannerConnection.scanFile(context, arrayOf(dir.toString()), arrayOf("image/jpeg", "image/dng")) { p, _ ->
+                        Log.i(TAG, "onScanCompleted : $p")
+                    }
+
+                    imageUrlList.clear()
+                    isMultiSelectable = false
+                    btnSelect.setImageResource(R.drawable.ic_select)
+                    loadExternalImages()
+                    recyclerView.adapter = galleryAdapter
                 }
                 DialogInterface.BUTTON_NEGATIVE -> {
 

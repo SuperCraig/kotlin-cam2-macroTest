@@ -258,6 +258,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private var isGridEnable: Boolean = false
     private var isSoundEnable: Boolean = false
     private var isCloudSyncEnable: Boolean = false
+    private var whitePeakValue: Int = 0
+    private var blackNadirValue: Int = 0
+    private var darkNoiseValue: Int = 0
 
     private var isJPEGSavedEnable: Boolean = true
     private var isRAWSavedEnable: Boolean = true
@@ -564,6 +567,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     return
                 }
 
+                readSettingData()
+
                 var count = 0
                 // Disable click listener to prevent multiple requests simultaneously in flight
                 progressbarShutter?.max = 100
@@ -583,6 +588,18 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     var refreshRate: Int = 0
 
                     if (isContrastEnable) {
+                        val commandWhite = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0, 0, 0,
+                            Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
+                            Color.argb(0, 0, 0, 0),
+                            Color.argb(0, 0, 0, 0),
+                            Color.argb(0, 0, 0, 0))
+
+                        val commandBlack = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0, 0, 0,
+                            Color.argb(0, blackNadirValue, blackNadirValue, blackNadirValue),
+                            Color.argb(0, 0, 0, 0),
+                            Color.argb(0, 0, 0, 0),
+                            Color.argb(0, 0, 0, 0))
+
                         Log.i(TAG, "Lux: ${lightSensorListener.getLux()}")
                         if (mRawImageReader != null) {
                             val fileName = "C_$currentDateTime"
@@ -590,7 +607,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             var contrastObjectJPEGWhite: ContrastObject? = null
                             var contrastObjectJPEGBlack: ContrastObject? = null
 
-                            m_bluetoothSocket = sendToDevice(ContrastCommandWhite)
+                            m_bluetoothSocket = sendToDevice(commandWhite)
                             readCommandHandler.post(readCommandRunnable)
                             Thread.sleep(1000)
 
@@ -601,7 +618,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                 contrastObjectJPEGWhite = procedureContrast(result)
                             }
 
-                            m_bluetoothSocket = sendToDevice(ContrastCommandBlack)
+                            m_bluetoothSocket = sendToDevice(commandBlack)
                             readCommandHandler.post(readCommandRunnable)
                             Thread.sleep(1000)
 
@@ -652,7 +669,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             var contrastObjectJPEGWhite: ContrastObject? = null
                             var contrastObjectJPEGBlack: ContrastObject? = null
 
-                            m_bluetoothSocket = sendToDevice(ContrastCommandWhite)
+                            m_bluetoothSocket = sendToDevice(commandWhite)
                             readCommandHandler.post(readCommandRunnable)
                             Thread.sleep(1000)
 
@@ -660,7 +677,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                 contrastObjectJPEGWhite = procedureContrast(result)
                             }
 
-                            m_bluetoothSocket = sendToDevice(ContrastCommandBlack)
+                            m_bluetoothSocket = sendToDevice(commandBlack)
                             readCommandHandler.post(readCommandRunnable)
                             Thread.sleep(1000)
 
@@ -894,6 +911,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 val btnContrast = view.findViewById<ImageView>(R.id.btnContrast)
                 isContrastEnable = !isContrastEnable
 
+                readSettingData()
+
                 if(isContrastEnable){
                     manual3A(Measurement.Contrast)
 
@@ -910,7 +929,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     btnAuto.setImageResource(R.drawable.ic_auto)
 
                     lifecycleScope.launch(Dispatchers.IO) {
-                        m_bluetoothSocket = sendToDevice(ContrastCommandWhite)
+                        val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
+                            0, 0,
+                            Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
+                            Color.argb(0, 0, 0, 0),
+                            Color.argb(0, 0, 0, 0),
+                            Color.argb(0, 0, 0, 0))
+                        m_bluetoothSocket = sendToDevice(command)
                         readCommandHandler.post(readCommandRunnable)
                     }
                 }else{
@@ -930,6 +955,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 val btnRefreshRate = view.findViewById<ImageView>(R.id.btnRefreshRate)
                 isRefreshRateEnable = !isRefreshRateEnable
 
+                readSettingData()
+
                 if(isRefreshRateEnable){
                     manual3A(Measurement.RefreshRate)
 
@@ -946,7 +973,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     btnAuto.setImageResource(R.drawable.ic_auto)
 
                     lifecycleScope.launch(Dispatchers.IO) {
-                        m_bluetoothSocket = sendToDevice(RefreshRateCommand)
+                        val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
+                            0, 0,
+                            Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
+                            Color.argb(0, 0, 0, 0),
+                            Color.argb(0, 0, 0, 0),
+                            Color.argb(0, 0, 0, 0))
+                        m_bluetoothSocket = sendToDevice(command)
                         readCommandHandler.post(readCommandRunnable)
                     }
                 }else{
@@ -965,6 +998,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 val btnColorTemperature = view.findViewById<ImageView>(R.id.btnColorTemperature)
                 isColorTemperatureEnable = !isColorTemperatureEnable
 
+                readSettingData()
+
                 if(isColorTemperatureEnable){
                     manual3A(Measurement.ColorTemperature)
 
@@ -981,7 +1016,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     btnAuto.setImageResource(R.drawable.ic_auto)
 
                     lifecycleScope.launch(Dispatchers.IO) {
-                        m_bluetoothSocket = sendToDevice(ColorTemperatureCommand)
+                        val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
+                            0, 0,
+                            Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
+                            Color.argb(0, 0, 0, 0),
+                            Color.argb(0, 0, 0, 0),
+                            Color.argb(0, 0, 0, 0))
+                        m_bluetoothSocket = sendToDevice(command)
                         readCommandHandler.post(readCommandRunnable)
                     }
                 }else{
@@ -2460,6 +2501,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         isGridEnable = settings.getBoolean(SettingFragment.GRID, false)
         isSoundEnable = settings.getBoolean(SettingFragment.SOUND, false)
         isCloudSyncEnable = settings.getBoolean(SettingFragment.CLOUD_SYNC, false)
+        whitePeakValue = settings.getInt(SettingFragment.WHITE_PEAK, 255)
+        blackNadirValue = settings.getInt(SettingFragment.BLACK_NADIR, 0)
+        darkNoiseValue = settings.getInt(SettingFragment.DARK_NOISE, 70)
 
         gridLineView = view!!.findViewById(R.id.grid_line)
 
@@ -2761,66 +2805,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             ColorTemperature,
             Contrast,
             None
-        }
-
-        private val RefreshRateCommand = MBITSP2020().let{
-            it.setMode(MBITSP2020.Mode.MODE2)
-            it.setDisplayWidth(1920)
-            it.setDisplayHeight(1080)
-            it.setDisplayStartX(0)
-            it.setDisplayStartY(0)
-            it.setModuleWidth(1920)
-            it.setModuleHeight(1080)
-            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_1, 255.toByte(), 255.toByte(), 255.toByte())
-            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_2, 0.toByte(), 0.toByte(), 0.toByte())
-            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_3, 0.toByte(), 0.toByte(), 0.toByte())
-            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, 0.toByte(), 0.toByte(), 0.toByte())
-            it.composeCommand()
-        }
-
-        private val ContrastCommandWhite = MBITSP2020().let{
-            it.setMode(MBITSP2020.Mode.MODE2)
-            it.setDisplayWidth(1920)
-            it.setDisplayHeight(1080)
-            it.setDisplayStartX(0)
-            it.setDisplayStartY(0)
-            it.setModuleWidth(1920)
-            it.setModuleHeight(1080)
-            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_1, 255.toByte(), 255.toByte(), 255.toByte())
-            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_2, 0.toByte(), 0.toByte(), 0.toByte())
-            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_3, 0.toByte(), 0.toByte(), 0.toByte())
-            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, 0.toByte(), 0.toByte(), 0.toByte())
-            it.composeCommand()
-        }
-
-        private val ContrastCommandBlack = MBITSP2020().let{
-            it.setMode(MBITSP2020.Mode.MODE2)
-            it.setDisplayWidth(1920)
-            it.setDisplayHeight(1080)
-            it.setDisplayStartX(0)
-            it.setDisplayStartY(0)
-            it.setModuleWidth(1920)
-            it.setModuleHeight(1080)
-            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_1, 0.toByte(), 0.toByte(), 0.toByte())
-            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_2, 0.toByte(), 0.toByte(), 0.toByte())
-            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_3, 0.toByte(), 0.toByte(), 0.toByte())
-            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, 0.toByte(), 0.toByte(), 0.toByte())
-            it.composeCommand()
-        }
-
-        private val ColorTemperatureCommand = MBITSP2020().let{
-            it.setMode(MBITSP2020.Mode.MODE2)
-            it.setDisplayWidth(1920)
-            it.setDisplayHeight(1080)
-            it.setDisplayStartX(0)
-            it.setDisplayStartY(0)
-            it.setModuleWidth(1920)
-            it.setModuleHeight(1080)
-            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_1, 255.toByte(), 255.toByte(), 255.toByte())
-            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_2, 0.toByte(), 0.toByte(), 0.toByte())
-            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_3, 0.toByte(), 0.toByte(), 0.toByte())
-            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, 0.toByte(), 0.toByte(), 0.toByte())
-            it.composeCommand()
         }
 
         private val MinimumTestPattern = MBITSP2020().let{

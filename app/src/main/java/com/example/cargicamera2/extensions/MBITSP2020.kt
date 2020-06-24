@@ -1,5 +1,10 @@
 package com.example.cargicamera2.extensions
 
+import android.graphics.Color
+import androidx.core.graphics.blue
+import androidx.core.graphics.green
+import androidx.core.graphics.red
+
 class MBITSP2020 {
     private val header = byteArrayOf(
         'M'.toByte(), 'B'.toByte(),
@@ -223,5 +228,23 @@ class MBITSP2020 {
             index += 1
         }
         return bytes[index + 1] == 0x06.toByte()
+    }
+
+    fun produceCommand(mode: Mode, displayW: Int, displayH: Int, displayStartX: Int, displayStartY: Int, moduleW: Int, moduleH: Int,
+                       color1: Int, color2: Int, color3: Int, color4: Int): ByteArray {
+        return let {
+            it.setMode(mode)
+            it.setDisplayWidth(displayW)
+            it.setDisplayHeight(displayH)
+            it.setDisplayStartX(displayStartX)
+            it.setDisplayStartY(displayStartY)
+            it.setModuleWidth(moduleW)
+            it.setModuleHeight(moduleH)
+            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_1, color1.red.toByte(), color1.green.toByte(), color1.blue.toByte())
+            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_2, color2.red.toByte(), color2.green.toByte(), color2.blue.toByte())
+            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_3, color3.red.toByte(), color3.green.toByte(), color3.blue.toByte())
+            it.setGrayScale(MBITSP2020.GrayScaleSets.GRAY_SCALE_4, color4.red.toByte(), color4.green.toByte(), color4.blue.toByte())
+            it.composeCommand()
+        }
     }
 }
