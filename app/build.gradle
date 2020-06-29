@@ -76,4 +76,5 @@ dependencies {
     kapt 'com.github.bumptech.glide:compiler:4.11.0'
     implementation project(path: ':openCVLibrary349')
     implementation project(path: ':app:customedittext')
+    implementation project(path: ':mruler')
 }

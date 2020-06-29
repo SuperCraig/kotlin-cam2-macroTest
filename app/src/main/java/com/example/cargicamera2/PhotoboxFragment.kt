@@ -212,7 +212,16 @@ class PhotoboxFragment : Fragment(), GalleryImageAdapter.OnItemClickListener, Vi
 
         builder.setTitle("Delete Picture")
 
-        builder.setMessage("Do you want to delete?")
+        if (isMultiSelectable) {
+            builder.setMessage("Do you want to delete selected files?")
+
+        } else {
+            try {
+                builder.setMessage("Do you want to delete ${imageList[currentPosition!!].imageUrl.split("$")[1]}?")
+            } catch (e: Exception) {
+                builder.setMessage("Do you want to delete this file?")
+            }
+        }
 
         val dialogClickListener = DialogInterface.OnClickListener { _, which ->
             when (which) {

@@ -86,6 +86,11 @@ class SettingFragment : Fragment(){
             Log.i(TAG, "layout_about.setOnClickListener")
         }
 
+        layout_reset.setOnClickListener{
+            Log.i(TAG, "layout_reset.setOnClickListener")
+            saveData()
+        }
+
         container.setOnClickListener {
 
         }

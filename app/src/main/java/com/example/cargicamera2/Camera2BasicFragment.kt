@@ -2,6 +2,7 @@ package com.example.cargicamera2
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.ActionBar
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
@@ -47,6 +48,7 @@ import com.example.imagegallery.fragment.GalleryFullscreenFragment
 import com.example.imagegallery.model.ImageGalleryUiModel
 import com.example.imagegallery.service.MediaHelper
 import com.example.lib.CustomSeekBar
+import com.example.mruler.RulerView
 import com.example.toast.ToastView
 import kotlinx.android.synthetic.main.fragment_camera2_basic.*
 import kotlinx.android.synthetic.main.fragment_camera2_basic.view.*
@@ -275,9 +277,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     private val mediaActionSound: MediaActionSound = MediaActionSound()
 
-    private lateinit var isoCustomSeekBar: CustomSeekBar
-    private lateinit var tvCustomSeekBar: CustomSeekBar
-    private lateinit var avCustomSeekBar: CustomSeekBar
+//    private lateinit var isoCustomSeekBar: CustomSeekBar
+//    private lateinit var tvCustomSeekBar: CustomSeekBar
+//    private lateinit var avCustomSeekBar: CustomSeekBar
+
+    private lateinit var isoCustomSeekBar: RulerView
+    private lateinit var tvCustomSeekBar: RulerView
+    private lateinit var avCustomSeekBar: RulerView
+    private lateinit var focusCustomSeekBar: RulerView
 
     private var sensorManager: SensorManager? = null
     private var lightSensor: Sensor? = null
@@ -287,9 +294,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private var latestFileName: String? = null
 
     private var currentFocusIconFlag = FocusIconSize.SMALL
-    private var currentFocusIconSize = 0.0
-    private var currentFocusRatioWidth = 0.0
-    private var currentFocusRatioHeight = 0.0
+    private var currentFocusIconSizeWidth = 0.0
+    private var currentFocusIconSizeHeight = 0.0
 
     /**
      * [CameraDevice.StateCallback] is called when [CameraDevice] changes its state.
@@ -353,72 +359,206 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         readSettingData()
 
         isoCustomSeekBar = view.findViewById(R.id.isoCustomSeekBar)
-        isoCustomSeekBar.progress = sensorSensitivityProgress
-        isoCustomSeekBar.text = "ISO $sensorSensitivity"
-        isoCustomSeekBar.setOnTouchListener { _, _ ->
-            val progress = isoCustomSeekBar.progress
+        isoCustomSeekBar.setValue(sensorSensitivityProgress.toFloat())
+        txt_3AValue.text = "ISO $sensorSensitivity"
+        isoCustomSeekBar.setValueListener {
+            var progress = isoCustomSeekBar.getValue()
             val range = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)
             val max1 = range!!.upper //10000
             val min1 = range.lower //100
-//            val iso: Int = progress * (max1 - min1) / 100 + min1
             val isoList = getISOList(min1, max1)
-            val index = progress * (isoList.size - 1) / isoCustomSeekBar.maxProgress
-            val iso = isoList[index]
 
+            if (isoCustomSeekBar.getMaxValue() != isoList.size) {
+                isoCustomSeekBar.setMaxValue(isoList.size)
+                isoCustomSeekBar.setNumShow(isoList.size / 2)
+            }
+
+            if (progress.toInt() >= isoList.size)
+                progress = (isoList.size - 1).toFloat()
+
+            val iso = isoList[progress.toInt()]
             if (sensorSensitivity != iso)
                 vibrate.vibrate(vibrationEffect)
-
             setSensorSensitivity(iso)
             sensorSensitivity = iso
-            sensorSensitivityProgress = progress
+            sensorSensitivityProgress = progress.toInt()
             saveData()      //save shared preferences
-            false
+            Log.i(TAG, "progress: $progress")
         }
+//        isoCustomSeekBar = view.findViewById(R.id.isoCustomSeekBar)
+//        isoCustomSeekBar.progress = sensorSensitivityProgress
+//        isoCustomSeekBar.text = "ISO $sensorSensitivity"
+//        isoCustomSeekBar.setOnTouchListener { _, _ ->
+//            val progress = isoCustomSeekBar.progress
+//            val range = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)
+//            val max1 = range!!.upper //10000
+//            val min1 = range.lower //100
+////            val iso: Int = progress * (max1 - min1) / 100 + min1
+//            val isoList = getISOList(min1, max1)
+//            val index = progress * (isoList.size - 1) / isoCustomSeekBar.maxProgress
+//            val iso = isoList[index]
+//
+//            if (sensorSensitivity != iso)
+//                vibrate.vibrate(vibrationEffect)
+//
+//            setSensorSensitivity(iso)
+//            sensorSensitivity = iso
+//            sensorSensitivityProgress = progress
+//            saveData()      //save shared preferences
+//            false
+//        }
 
         tvCustomSeekBar = view.findViewById(R.id.tvCustomSeekBar)
-        tvCustomSeekBar.progress = exposureProgress
-        tvCustomSeekBar.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / exposureTime)}s"
-        tvCustomSeekBar.setOnTouchListener{_, _ ->
-            val progress = tvCustomSeekBar.progress
+        tvCustomSeekBar.setValue(exposureProgress.toFloat())
+        txt_3AValue.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / exposureTime)}s"
+        tvCustomSeekBar.setValueListener {
+            var progress = tvCustomSeekBar.getValue()
+
             val range = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
             val max = range!!.upper
             val min = range.lower
-//            val ae: Long = progress * (max - min) / 100 + min
             val tvList = getTvList(min, max)
-            val index = progress * (tvList.size - 1) / tvCustomSeekBar.maxProgress
-            var ae: Long = (10.0.pow(9) / tvList[index]).roundToLong()
+
+            if (tvCustomSeekBar.getMaxValue() != tvList.size) {
+                tvCustomSeekBar.setMaxValue(tvList.size)
+                tvCustomSeekBar.setNumShow(tvList.size / 2)
+            }
+
+            if (progress.toInt() >= tvList.size)
+                progress = (tvList.size - 1).toFloat()
+
+            var ae: Long = (10.0.pow(9) / tvList[progress.toInt()]).roundToLong()
             if (ae < min) ae = min
             if (ae > max) ae = max
-
             if (exposureTime != ae)
                 vibrate.vibrate(vibrationEffect)
-
             setExposureTime(ae)
             exposureTime = ae
-            exposureProgress = progress
-            saveData()      //save shared preferences
-            false
+            exposureProgress = progress.toInt()
+            saveData()
+            Log.i(TAG, "progress: $progress, ae: $ae")
         }
+//        tvCustomSeekBar = view.findViewById(R.id.tvCustomSeekBar)
+//        tvCustomSeekBar.progress = exposureProgress
+//        tvCustomSeekBar.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / exposureTime)}s"
+//        tvCustomSeekBar.setOnTouchListener{_, _ ->
+//            val progress = tvCustomSeekBar.progress
+//            val range = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
+//            val max = range!!.upper
+//            val min = range.lower
+////            val ae: Long = progress * (max - min) / 100 + min
+//            val tvList = getTvList(min, max)
+//            val index = progress * (tvList.size - 1) / tvCustomSeekBar.maxProgress
+//            var ae: Long = (10.0.pow(9) / tvList[index]).roundToLong()
+//            if (ae < min) ae = min
+//            if (ae > max) ae = max
+//
+//            if (exposureTime != ae)
+//                vibrate.vibrate(vibrationEffect)
+//
+//            setExposureTime(ae)
+//            exposureTime = ae
+//            exposureProgress = progress
+//            saveData()      //save shared preferences
+//            false
+//        }
 
         avCustomSeekBar = view.findViewById(R.id.avCustomSeekBar)
-        avCustomSeekBar.progress = apertureProgress
-        avCustomSeekBar.text = "F$aperture"
-        avCustomSeekBar.setOnTouchListener{_, _ ->
-            val apertures = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES)
-            val apertureScale = avCustomSeekBar.maxProgress / (apertures?.size ?: 1)
-            val apertureIndex = avCustomSeekBar.progress/apertureScale
+        avCustomSeekBar.setValueListener {
 
-            if(apertureIndex < apertures?.size ?: 1)
-                aperture = apertures?.get(apertureIndex)!!
+        }
 
-            if (this.aperture != aperture)
+//        avCustomSeekBar = view.findViewById(R.id.avCustomSeekBar)
+//        avCustomSeekBar.progress = apertureProgress
+//        avCustomSeekBar.text = "F$aperture"
+//        avCustomSeekBar.setOnTouchListener{_, _ ->
+//            val apertures = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES)
+//            val apertureScale = avCustomSeekBar.maxProgress / (apertures?.size ?: 1)
+//            val apertureIndex = avCustomSeekBar.progress/apertureScale
+//
+//            if(apertureIndex < apertures?.size ?: 1)
+//                aperture = apertures?.get(apertureIndex)!!
+//
+//            if (this.aperture != aperture)
+//                vibrate.vibrate(vibrationEffect)
+//
+//            setApertureSize(aperture)
+//            this.aperture = aperture
+//            apertureProgress = avCustomSeekBar.progress
+//            saveData()
+//            false
+//        }
+
+        focusCustomSeekBar = view.findViewById(R.id.focusCustomSeekBar)
+        focusCustomSeekBar.setValueListener {
+            focusAreaLayout.layoutParams.width = 1440
+            focusAreaLayout.layoutParams.height = 1896
+
+            Log.i(TAG, "focusAreaLayout: ${focusAreaLayout.width} x ${focusAreaLayout.height}")
+
+            val progress = focusCustomSeekBar.getValue().toInt() - 1
+            val layoutParams = focusAreaLayout.layoutParams
+
+            var focusIconFlag: FocusIconSize = FocusIconSize.ZOOM1_8
+            var ratio = 8.0
+
+            when (progress % 8) {
+                0 -> {
+                    ratio = 1 / 8.0
+                    focusIconFlag = FocusIconSize.ZOOM1_8
+                    txt_3AValue.text = "1/8"
+                }
+                1 -> {
+                    ratio = 2 / 8.0
+                    focusIconFlag = FocusIconSize.ZOOM2_8
+                    txt_3AValue.text = "2/8"
+                }
+                2 -> {
+                    ratio = 3 / 8.0
+                    focusIconFlag = FocusIconSize.ZOOM3_8
+                    txt_3AValue.text = "3/8"
+                }
+                3 -> {
+                    ratio = 4 / 8.0
+                    focusIconFlag = FocusIconSize.ZOOM4_8
+                    txt_3AValue.text = "4/8"
+                }
+                4 -> {
+                    ratio = 5 / 8.0
+                    focusIconFlag = FocusIconSize.ZOOM5_8
+                    txt_3AValue.text = "5/8"
+                }
+                5 -> {
+                    ratio = 6 / 8.0
+                    focusIconFlag = FocusIconSize.ZOOM6_8
+                    txt_3AValue.text = "6/8"
+                }
+                6 -> {
+                    ratio = 7 / 8.0
+                    focusIconFlag = FocusIconSize.ZOOM7_8
+                    txt_3AValue.text = "7/8"
+                }
+                7 -> {
+                    ratio = 8 / 8.0
+                    focusIconFlag = FocusIconSize.ZOOM8_8
+                    txt_3AValue.text = "8/8"
+                }
+            }
+
+            if (currentFocusIconFlag != focusIconFlag)
                 vibrate.vibrate(vibrationEffect)
 
-            setApertureSize(aperture)
-            this.aperture = aperture
-            apertureProgress = avCustomSeekBar.progress
-            saveData()
-            false
+            currentFocusIconFlag = focusIconFlag
+
+            currentFocusIconSizeWidth = layoutParams.width * ratio
+            currentFocusIconSizeHeight = layoutParams.height * ratio
+
+            layoutParams.width = currentFocusIconSizeWidth.toInt()
+            layoutParams.height = currentFocusIconSizeHeight.toInt()
+            focusAreaLayout.layoutParams = layoutParams
+
+//            Log.i(TAG, "displayMatrix: ${displayMatrix.widthPixels} x ${displayMatrix.heightPixels}")
+//            Log.i(TAG, "ratio: $currentFocusRatioWidth x $currentFocusRatioHeight")
         }
 
         val imageView: ImageView = view.findViewById(R.id.btnPhotoBox)
@@ -433,51 +573,16 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             e.printStackTrace()
         }
 
-        if (isManualEnable) {
-            btnManual.setImageResource(R.drawable.ic_manual_selection)
-//            avCustomSeekBar.visibility = View.VISIBLE
-//            tvCustomSeekBar.visibility = View.VISIBLE
-//            isoCustomSeekBar.visibility = View.VISIBLE
-            frameLayout3A.visibility = View.VISIBLE
-        } else {
-            btnManual.setImageResource(R.drawable.ic_manual)
-//            avCustomSeekBar.visibility = View.INVISIBLE
-//            tvCustomSeekBar.visibility = View.INVISIBLE
-//            isoCustomSeekBar.visibility = View.INVISIBLE
-            frameLayout3A.visibility = View.INVISIBLE
-        }
+//        if (isManualEnable) {
+//            btnManual.setImageResource(R.drawable.ic_manual_selection)
+//            frameLayout3A.visibility = View.VISIBLE
+//        } else {
+//            btnManual.setImageResource(R.drawable.ic_manual)
+//            frameLayout3A.visibility = View.INVISIBLE
+//        }
 
         isAutoEnable = true
         btnAuto.setImageResource(R.drawable.ic_auto_selection)
-
-        if (isColorTemperatureEnable){
-            btnColorTemperature.setImageResource(R.drawable.ic_color_temperature_selection)
-            focusAreaLayout.visibility = View.VISIBLE
-        }
-        else{
-            btnColorTemperature.setImageResource(R.drawable.ic_color_temperature)
-            focusAreaLayout.visibility = View.INVISIBLE
-        }
-
-        if (isRefreshRateEnable){
-            btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate_selection)
-            focusAreaLayout.visibility = View.VISIBLE
-        }
-        else{
-            btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate)
-            focusAreaLayout.visibility = View.INVISIBLE
-        }
-
-        if (isContrastEnable){
-            btnContrast.setImageResource(R.drawable.ic_contrast_selection)
-//            contrastTargetLayout.visibility = View.VISIBLE
-            focusAreaLayout.visibility = View.VISIBLE
-        }
-        else{
-            btnContrast.setImageResource(R.drawable.ic_contrast)
-//            contrastTargetLayout.visibility = View.INVISIBLE
-            focusAreaLayout.visibility = View.INVISIBLE
-        }
 
         progressbarShutter = view.findViewById(R.id.progressBar_shutter)
 
@@ -497,13 +602,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 //        else
 //            Toast.makeText(this.context, "This device has not matched any bluetooth", Toast.LENGTH_LONG).show()v
 
-        val displayMatrix = context!!.resources.displayMetrics          //initialize focus icon size to real size
-//        val layoutParams = contrastTargetLayout.layoutParams
         val layoutParams = focusAreaLayout.layoutParams
-        currentFocusIconSize = layoutParams.height.toDouble()
+        currentFocusIconSizeHeight = layoutParams.height.toDouble()
+        currentFocusIconSizeWidth = layoutParams.width.toDouble()
         currentFocusIconFlag = FocusIconSize.SMALL
-        currentFocusRatioWidth = currentFocusIconSize / displayMatrix.widthPixels
-        currentFocusRatioHeight = currentFocusIconSize / displayMatrix.heightPixels
     }
 
     private fun getFingerSpacing(event: MotionEvent): Float{
@@ -894,17 +996,20 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 if(isAutoEnable){
                     btnAuto.setImageResource(R.drawable.ic_auto_selection)
+
+                    btnManual.setImageResource(R.drawable.ic_manual)
+                    frameLayout3A.visibility = View.INVISIBLE
+                    frameLayout3AValue.visibility = View.INVISIBLE
+                    //avCustomSeekBar.visibility = View.INVISIBLE
+                    tvCustomSeekBar.visibility = View.INVISIBLE
+                    isoCustomSeekBar.visibility = View.INVISIBLE
+                    focusCustomSeekBar.visibility = View.INVISIBLE
                 }else{
                     btnAuto.setImageResource(R.drawable.ic_auto)
                 }
 
-                automate3A()
-
                 isManualEnable = false
-                avCustomSeekBar.visibility = View.INVISIBLE
-                tvCustomSeekBar.visibility = View.INVISIBLE
-                isoCustomSeekBar.visibility = View.INVISIBLE
-                btnManual.setImageResource(R.drawable.ic_manual)
+                automate3A()
                 saveData()
             }
             R.id.btnContrast -> {
@@ -1039,22 +1144,15 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             }
             R.id.btnManual ->{
                 val btnManual = view.findViewById<ImageButton>(R.id.btnManual)
+                frameLayout3A.visibility = View.VISIBLE
+                frameLayout3AValue.visibility = View.VISIBLE
+
                 isManualEnable = !isManualEnable
 
                 if(isManualEnable){
                     btnManual.setImageResource(R.drawable.ic_manual_selection)
-
-//                    tvCustomSeekBar.visibility = View.VISIBLE
-//                    avCustomSeekBar.visibility = View.VISIBLE
-//                    isoCustomSeekBar.visibility = View.VISIBLE
-                    frameLayout3A.visibility = View.VISIBLE
                 }else{
                     btnManual.setImageResource(R.drawable.ic_manual)
-
-//                    tvCustomSeekBar.visibility = View.INVISIBLE
-//                    avCustomSeekBar.visibility = View.INVISIBLE
-//                    isoCustomSeekBar.visibility = View.INVISIBLE
-                    frameLayout3A.visibility = View.INVISIBLE
                 }
 
                 manual3A(Measurement.None)
@@ -1135,7 +1233,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 isoCustomSeekBar.visibility = View.INVISIBLE
 
-                avCustomSeekBar.visibility = View.INVISIBLE
+//                avCustomSeekBar.visibility = View.INVISIBLE
+                focusCustomSeekBar.visibility = View.INVISIBLE
             }
             R.id.btnISO -> {
                 tvCustomSeekBar.visibility = View.INVISIBLE
@@ -1143,7 +1242,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 isoCustomSeekBar.visibility = if (isoCustomSeekBar.visibility == View.INVISIBLE) View.VISIBLE
                 else View.INVISIBLE
 
-                avCustomSeekBar.visibility = View.INVISIBLE
+//                avCustomSeekBar.visibility = View.INVISIBLE
+                focusCustomSeekBar.visibility = View.INVISIBLE
             }
             R.id.btnAperture -> {
                 tvCustomSeekBar.visibility = View.INVISIBLE
@@ -1152,49 +1252,18 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 avCustomSeekBar.visibility = if (avCustomSeekBar.visibility == View.INVISIBLE) View.VISIBLE
                 else View.INVISIBLE
+
+                focusCustomSeekBar.visibility = View.INVISIBLE
             }
             R.id.btnFocus -> {
-                val displayMatrix = context!!.resources.displayMetrics
-                if (currentFocusIconFlag == FocusIconSize.SMALL) {
-//                    val layoutParams = contrastTargetLayout.layoutParams
-                    val layoutParams = focusAreaLayout.layoutParams
-                    currentFocusIconSize = (layoutParams.height * 2).toDouble()
-                    currentFocusIconFlag = FocusIconSize.BIG
-                    currentFocusRatioWidth = (currentFocusIconSize / displayMatrix.widthPixels).toDouble()
-                    currentFocusRatioHeight = (currentFocusIconSize / displayMatrix.heightPixels).toDouble()
-
-                    layoutParams.height = currentFocusIconSize.toInt()
-//                    contrastTargetLayout.layoutParams = layoutParams
-                    focusAreaLayout.layoutParams = layoutParams
-                } else if (currentFocusIconFlag == FocusIconSize.BIG) {
-//                    val layoutParams = contrastTargetLayout.layoutParams
-                    val layoutParams = focusAreaLayout.layoutParams
-                    currentFocusIconSize = (layoutParams.height * 2).toDouble()
-                    currentFocusIconFlag = FocusIconSize.ULTRA
-                    currentFocusRatioWidth = currentFocusIconSize / displayMatrix.widthPixels
-                    currentFocusRatioHeight = currentFocusIconSize / displayMatrix.heightPixels
-
-                    layoutParams.height = currentFocusIconSize.toInt()
-//                    contrastTargetLayout.layoutParams = layoutParams
-                    focusAreaLayout.layoutParams = layoutParams
-                } else if (currentFocusIconFlag == FocusIconSize.ULTRA) {
-                    val layoutParams = focusAreaLayout.layoutParams
-                    currentFocusIconSize = (layoutParams.height / 4).toDouble()
-                    currentFocusIconFlag = FocusIconSize.SMALL
-                    currentFocusRatioWidth = currentFocusIconSize / displayMatrix.widthPixels
-                    currentFocusRatioHeight = currentFocusIconSize / displayMatrix.heightPixels
-
-                    layoutParams.height = currentFocusIconSize.toInt()
-                    focusAreaLayout.layoutParams = layoutParams
-                }
-
-//                Log.i(TAG, "contrastTargetLayout: ${contrastTargetLayout.width} x ${contrastTargetLayout.height}")
-                Log.i(TAG, "focusAreaLayout: ${focusAreaLayout.width} x ${focusAreaLayout.height}")
-                Log.i(TAG, "displayMatrix: ${displayMatrix.widthPixels} x ${displayMatrix.heightPixels}")
-                Log.i(TAG, "ratio: $currentFocusRatioWidth x $currentFocusRatioHeight")
                 tvCustomSeekBar.visibility = View.INVISIBLE
+
                 isoCustomSeekBar.visibility = View.INVISIBLE
-                avCustomSeekBar.visibility = View.INVISIBLE
+
+//                avCustomSeekBar.visibility = View.INVISIBLE
+
+                focusCustomSeekBar.visibility = if (focusCustomSeekBar.visibility == View.INVISIBLE) View.VISIBLE
+                else View.INVISIBLE
             }
         }
     }
@@ -2061,13 +2130,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
         val width = bitmap.width
         val height = bitmap.height
-        val targetSizeWidth = currentFocusRatioWidth * width
-        val targetSizeHeight = currentFocusRatioHeight * height
+
+        val targetSizeWidth = width * getFocusRatio(currentFocusIconFlag) * 0.9
+        val targetSizeHeight = height * getFocusRatio(currentFocusIconFlag) * 0.9
 
         val startX = (width / 2) - (targetSizeWidth / 2)
-        val startY = (height / 2) + (targetSizeHeight / 2)
+        val startY = (height / 2) - (targetSizeHeight / 2)
 
-        for (j in startY.toInt() .. (startY + targetSizeHeight).toInt()) {      //consider 1 / 4 picture of luminace to speed up calculation
+        for (j in startY.toInt() .. (startY + targetSizeHeight).toInt()) {
             for (i in startX.toInt() .. (startX + targetSizeWidth).toInt()) {
                 val argb = bitmap.getPixel(i, j)
                 val r = Color.red(argb)
@@ -2116,7 +2186,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             Log.i(TAG, "No color temperature")
         }
 
-
 //        bitmap.compress(Bitmap.CompressFormat.PNG, 85, FileOutputStream(file))
 
         temp.recycle()
@@ -2161,12 +2230,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         var lum1 = 0.0
         var count1 = 0
 
-        val targetSizeWidth = currentFocusRatioWidth * width
-        val targetSizeHeight = currentFocusRatioHeight * height
+        val targetSizeWidth = getFocusRatio(currentFocusIconFlag) * width * 0.9
+        val targetSizeHeight = getFocusRatio(currentFocusIconFlag) * height * 0.9
         val startX = (width / 2) - (targetSizeWidth / 2)
-        val startY = (height / 2) + (targetSizeHeight / 2)
-
-        Log.i(TAG, "targetSize: $targetSizeWidth x $targetSizeHeight")
+        val startY = (height / 2) - (targetSizeHeight / 2)
 
         //Lum1
         for (j in startY.toInt() until (startY + targetSizeHeight).toInt()) {     //left white, right black
@@ -2206,6 +2273,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         temp.recycle()
         bitmap.recycle()
         Log.i(TAG, "contrast: $lum1: -> $luminance1, $contrast")
+
         return ContrastObject(luminance1.roundTo2DecimalPlaces(), 0.0.roundTo2DecimalPlaces(), contrast.roundTo2DecimalPlaces())
     }
 
@@ -2632,19 +2700,21 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private fun setSensorSensitivity(iso: Int) {
         previewRequestBuilder.set(CaptureRequest.SENSOR_SENSITIVITY, iso)
         captureSession.setRepeatingRequest(previewRequestBuilder.build(), null, backgroundHandler)
-        isoCustomSeekBar.text = "ISO $iso"
+//        isoCustomSeekBar.text = "ISO $iso"
+        txt_3AValue.text = "ISO $iso"
     }
 
     private fun setExposureTime(ae: Long) {
         previewRequestBuilder.set(CaptureRequest.SENSOR_EXPOSURE_TIME, ae)      //shutter speed = 1 / (10^9 / ae) sec.
         captureSession.setRepeatingRequest(previewRequestBuilder.build(), null, backgroundHandler)
-        tvCustomSeekBar.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / ae)}s"
+//        tvCustomSeekBar.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / ae)}s"
+        txt_3AValue.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / ae)}s"
     }
 
     private fun setApertureSize(aperture: Float) {
         previewRequestBuilder.set(CaptureRequest.LENS_APERTURE, aperture)
         captureSession.setRepeatingRequest(previewRequestBuilder.build(), null, backgroundHandler)
-        avCustomSeekBar.text = "F$aperture"
+//        avCustomSeekBar.text = "F$aperture"
     }
 
     private fun initialize3A() {
@@ -2709,6 +2779,20 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
         fun getLux(): Float {
             return lux
+        }
+    }
+
+    private fun getFocusRatio(focusIconSize: FocusIconSize): Double {
+        return when (focusIconSize) {
+            FocusIconSize.ZOOM1_8 -> 1 / 8.0
+            FocusIconSize.ZOOM2_8 -> 2 / 8.0
+            FocusIconSize.ZOOM3_8 -> 3 / 8.0
+            FocusIconSize.ZOOM4_8 -> 4 / 8.0
+            FocusIconSize.ZOOM5_8 -> 5 / 8.0
+            FocusIconSize.ZOOM6_8 -> 6 / 8.0
+            FocusIconSize.ZOOM7_8 -> 7 / 8.0
+            FocusIconSize.ZOOM8_8 -> 8 / 8.0
+            else -> 8 / 8.0
         }
     }
 

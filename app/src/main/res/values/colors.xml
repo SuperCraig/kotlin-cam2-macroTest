@@ -7,4 +7,5 @@
     <color name="halfTransparent">#e0000000</color>
     <color name="softGray">#e8e8e8</color>
 
+    <color name="secondary_text">#aab8c2</color>
 </resources>

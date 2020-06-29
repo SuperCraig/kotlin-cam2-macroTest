@@ -1,3 +1,4 @@
 rootProject.name='cargiCamera2'
 include ':app', ':customSeekBarLib', ':easy_toggle', ':openCVLibrary349'
 include ':app:customedittext'
+include ':mruler'
