@@ -349,7 +349,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         view.findViewById<View>(R.id.btnSetting).setOnClickListener(this)
         view.findViewById<View>(R.id.btnExposure).setOnClickListener(this)
         view.findViewById<View>(R.id.btnISO).setOnClickListener(this)
-        view.findViewById<View>(R.id.btnAperture).setOnClickListener(this)
+//        view.findViewById<View>(R.id.btnAperture).setOnClickListener(this)
         view.findViewById<View>(R.id.btnFocus).setOnClickListener(this)
 
         var vibrate = context?.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
@@ -463,10 +463,20 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 //            false
 //        }
 
-        avCustomSeekBar = view.findViewById(R.id.avCustomSeekBar)
-        avCustomSeekBar.setValueListener {
-
-        }
+//        avCustomSeekBar = view.findViewById(R.id.avCustomSeekBar)
+//        avCustomSeekBar.setValueListener {
+//            val apertures = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES)
+//            val apertureIndex = avCustomSeekBar.getValue()
+//            if(apertureIndex < apertures?.size ?: 1)
+//                aperture = apertures?.get(apertureIndex.toInt())!!
+//            if (this.aperture != aperture)
+//                vibrate.vibrate(vibrationEffect)
+//
+//            setApertureSize(aperture)
+//            this.aperture = aperture
+//            apertureProgress = avCustomSeekBar.getValue().toInt()
+//            saveData()
+//        }
 
 //        avCustomSeekBar = view.findViewById(R.id.avCustomSeekBar)
 //        avCustomSeekBar.progress = apertureProgress
@@ -493,6 +503,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         focusCustomSeekBar.setValueListener {
             focusAreaLayout.layoutParams.width = 1440
             focusAreaLayout.layoutParams.height = 1896
+
+            focusAreaLayout.visibility = View.VISIBLE
 
             Log.i(TAG, "focusAreaLayout: ${focusAreaLayout.width} x ${focusAreaLayout.height}")
 
@@ -1245,16 +1257,16 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 //                avCustomSeekBar.visibility = View.INVISIBLE
                 focusCustomSeekBar.visibility = View.INVISIBLE
             }
-            R.id.btnAperture -> {
-                tvCustomSeekBar.visibility = View.INVISIBLE
-
-                isoCustomSeekBar.visibility = View.INVISIBLE
-
-                avCustomSeekBar.visibility = if (avCustomSeekBar.visibility == View.INVISIBLE) View.VISIBLE
-                else View.INVISIBLE
-
-                focusCustomSeekBar.visibility = View.INVISIBLE
-            }
+//            R.id.btnAperture -> {
+//                tvCustomSeekBar.visibility = View.INVISIBLE
+//
+//                isoCustomSeekBar.visibility = View.INVISIBLE
+//
+//                avCustomSeekBar.visibility = if (avCustomSeekBar.visibility == View.INVISIBLE) View.VISIBLE
+//                else View.INVISIBLE
+//
+//                focusCustomSeekBar.visibility = View.INVISIBLE
+//            }
             R.id.btnFocus -> {
                 tvCustomSeekBar.visibility = View.INVISIBLE
 
@@ -2262,7 +2274,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
         var luminance1 = (lum1 * 65535) / 256
 
-        luminance1 = if (luminance1 > 125) luminance1 - 125         //125 is black offset
+        luminance1 = if (luminance1 > darkNoiseValue) luminance1 - darkNoiseValue         //125 is black offset
         else if (luminance1 > 65535.0) 65535.0
         else luminance1
 

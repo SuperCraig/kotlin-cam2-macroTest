@@ -79,14 +79,14 @@
                 android:layout_marginBottom="8dp"
                 android:src="@drawable/ic_sensor_sensitivity" />
 
-            <ImageView
-                android:id="@+id/btnAperture"
-                android:layout_width="30dp"
-                android:layout_height="30dp"
-                android:layout_weight=".25"
-                android:layout_marginTop="8dp"
-                android:layout_marginBottom="8dp"
-                android:src="@drawable/ic_aperture" />
+<!--            <ImageView-->
+<!--                android:id="@+id/btnAperture"-->
+<!--                android:layout_width="30dp"-->
+<!--                android:layout_height="30dp"-->
+<!--                android:layout_weight=".25"-->
+<!--                android:layout_marginTop="8dp"-->
+<!--                android:layout_marginBottom="8dp"-->
+<!--                android:src="@drawable/ic_aperture" />-->
 
             <ImageView
                 android:id="@+id/btnFocus"
@@ -247,7 +247,7 @@
             app:numValue="15"
             app:numMinValue="0"
             app:numMaxValue="30"
-            app:numDefaultValue="15"
+            app:numDefaultValue="16"
             app:numTextColor="@color/secondary_text"
             app:textSize="12sp"
             app:textSpaceHeight="6dp"
@@ -270,7 +270,7 @@
             app:numValue="8"
             app:numMinValue="0"
             app:numMaxValue="15"
-            app:numDefaultValue="8"
+            app:numDefaultValue="0"
             app:numTextColor="@color/secondary_text"
             app:textSize="12sp"
             app:textSpaceHeight="6dp"
@@ -280,28 +280,28 @@
             app:sideLineHeight="8dp"
             />
 
-        <com.example.mruler.RulerView
-            android:id="@+id/avCustomSeekBar"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:layout_marginBottom="10dp"
-            android:layout_gravity="end"
-            android:visibility="invisible"
-            app:numShow="1"
-            app:numDigits="0"
-            app:numValue="0"
-            app:numMinValue="0"
-            app:numMaxValue="2"
-            app:numDefaultValue="1"
-            app:numTextColor="@color/secondary_text"
-            app:textSize="12sp"
-            app:textSpaceHeight="6dp"
-            app:centerLineColor="#f24b16"
-            app:sideLineColor="#bcbcbc"
-            app:centerLineHeight="16dp"
-            app:sideLineHeight="8dp"
-            />
+<!--        <com.example.mruler.RulerView-->
+<!--            android:id="@+id/avCustomSeekBar"-->
+<!--            android:layout_width="match_parent"-->
+<!--            android:layout_height="wrap_content"-->
+<!--            android:layout_marginTop="10dp"-->
+<!--            android:layout_marginBottom="10dp"-->
+<!--            android:layout_gravity="end"-->
+<!--            android:visibility="invisible"-->
+<!--            app:numShow="1"-->
+<!--            app:numDigits="0"-->
+<!--            app:numValue="0"-->
+<!--            app:numMinValue="0"-->
+<!--            app:numMaxValue="2"-->
+<!--            app:numDefaultValue="1"-->
+<!--            app:numTextColor="@color/secondary_text"-->
+<!--            app:textSize="12sp"-->
+<!--            app:textSpaceHeight="6dp"-->
+<!--            app:centerLineColor="#f24b16"-->
+<!--            app:sideLineColor="#bcbcbc"-->
+<!--            app:centerLineHeight="16dp"-->
+<!--            app:sideLineHeight="8dp"-->
+<!--            />-->
 
         <com.example.mruler.RulerView
             android:id="@+id/focusCustomSeekBar"
