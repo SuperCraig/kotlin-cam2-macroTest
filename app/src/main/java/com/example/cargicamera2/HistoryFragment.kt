@@ -220,7 +220,7 @@ class HistoryFragment: Fragment(), RoomRecyclerItemTouchHelper_SingleHIstory.Rec
 
         builder.setTitle("Clear All Histories")
 
-        builder.setMessage("Do you want to clear all histories.")
+        builder.setMessage("Are you sure?")
 
         val dialogClickListener = DialogInterface.OnClickListener { _, which ->
             when (which) {

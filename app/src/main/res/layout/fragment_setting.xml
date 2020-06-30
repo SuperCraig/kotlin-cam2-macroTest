@@ -50,7 +50,7 @@
                     android:id="@+id/txt_whitePeak"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="32dp"
+                    android:layout_marginStart="20dp"
                     android:layout_marginTop="13dp"
                     android:layout_toEndOf="@+id/btn_whitePeak"
                     android:text="@string/setting_whitePeak"
@@ -69,7 +69,7 @@
                     app:custom_component_editText_hint="@string/edt_hint_number"
                     app:custom_component_error_text_bg_color="@android:color/white"
                     app:custom_component_maxValue="255"
-                    app:custom_component_minValue="0"
+                    app:custom_component_minValue="128"
                     app:custom_component_title_color="@color/color_brownish_grey_two"
                     app:custom_component_title_error_color="@color/color_error" />
             </RelativeLayout>
@@ -198,7 +198,8 @@
                     android:layout_height="wrap_content"
                     android:layout_alignEnd="@id/txt_grid"
                     android:layout_marginTop="12dp"
-                    android:layout_marginEnd="20dp" />
+                    android:layout_marginEnd="20dp"
+                    app:etBgTopColor="#000000" />
             </RelativeLayout>
 
             <RelativeLayout
@@ -235,7 +236,8 @@
                     android:layout_height="wrap_content"
                     android:layout_alignEnd="@id/txt_sound"
                     android:layout_marginTop="12dp"
-                    android:layout_marginEnd="20dp" />
+                    android:layout_marginEnd="20dp"
+                    app:etBgTopColor="#000000" />
             </RelativeLayout>
 
             <RelativeLayout
@@ -273,9 +275,7 @@
                     android:layout_alignEnd="@id/txt_cloud"
                     android:layout_marginTop="12dp"
                     android:layout_marginEnd="20dp"
-                    app:etBgOffColor="#EEE9E9"
-                    app:etBgOnColor="#00BCD4"
-                    app:etButtonColor="@color/colorPrimaryDark" />
+                    app:etBgTopColor="#000000" />
             </RelativeLayout>
 
             <RelativeLayout

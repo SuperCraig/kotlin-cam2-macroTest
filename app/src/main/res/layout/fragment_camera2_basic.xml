@@ -103,15 +103,20 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:layout_centerInParent="true"
-            android:visibility="invisible">
+            android:visibility="visible">
 
-            <ImageView
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:scaleType="fitXY"
-                android:layout_gravity="fill_horizontal|fill_vertical"
-                android:src="@drawable/ic_crop_free_black_24dp"
+            <com.example.cargicamera2.ui.CornerOfRectangleView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 />
+
+<!--            <ImageView-->
+<!--                android:layout_width="match_parent"-->
+<!--                android:layout_height="match_parent"-->
+<!--                android:scaleType="fitXY"-->
+<!--                android:layout_gravity="fill_horizontal|fill_vertical"-->
+<!--                android:src="@drawable/ic_crop_free_black_24dp"-->
+<!--                />-->
         </LinearLayout>
 
 <!--        <LinearLayout-->
@@ -246,7 +251,7 @@
             app:numDigits="0"
             app:numValue="15"
             app:numMinValue="0"
-            app:numMaxValue="30"
+            app:numMaxValue="29"
             app:numDefaultValue="16"
             app:numTextColor="@color/secondary_text"
             app:textSize="12sp"
@@ -265,11 +270,11 @@
             android:layout_marginBottom="10dp"
             android:layout_gravity="end"
             android:visibility="invisible"
-            app:numShow="7"
+            app:numShow="6"
             app:numDigits="0"
             app:numValue="8"
             app:numMinValue="0"
-            app:numMaxValue="15"
+            app:numMaxValue="14"
             app:numDefaultValue="0"
             app:numTextColor="@color/secondary_text"
             app:textSize="12sp"
@@ -326,16 +331,16 @@
             app:sideLineHeight="8dp"
             />
 
-        <ImageButton
-            android:id="@+id/btnManual"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_gravity="center_vertical"
-            android:layout_marginStart="24dp"
-            android:layout_marginBottom="5dp"
-            android:background="@color/transparent"
-            android:scaleType="centerInside"
-            android:src="@drawable/ic_manual" />
+<!--        <ImageButton-->
+<!--            android:id="@+id/btnManual"-->
+<!--            android:layout_width="48dp"-->
+<!--            android:layout_height="48dp"-->
+<!--            android:layout_gravity="center_vertical"-->
+<!--            android:layout_marginStart="24dp"-->
+<!--            android:layout_marginBottom="5dp"-->
+<!--            android:background="@color/transparent"-->
+<!--            android:scaleType="centerInside"-->
+<!--            android:src="@drawable/ic_manual" />-->
 
         <ImageButton
             android:id="@+id/btnPicture"
@@ -347,17 +352,17 @@
             android:background="@color/transparent"
             android:scaleType="centerInside"/>
 
-        <ImageButton
-            android:id="@+id/btnAuto"
-            style="@android:style/Widget.Material.Light.Button.Borderless"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginEnd="24dp"
-            android:layout_gravity="center_vertical|end"
-            android:layout_marginBottom="5dp"
-            android:src="@drawable/ic_auto"
-            android:background="@color/transparent"
-            android:scaleType="centerInside"/>
+<!--        <ImageButton-->
+<!--            android:id="@+id/btnAuto"-->
+<!--            style="@android:style/Widget.Material.Light.Button.Borderless"-->
+<!--            android:layout_width="48dp"-->
+<!--            android:layout_height="48dp"-->
+<!--            android:layout_marginEnd="24dp"-->
+<!--            android:layout_gravity="center_vertical|end"-->
+<!--            android:layout_marginBottom="5dp"-->
+<!--            android:src="@drawable/ic_auto"-->
+<!--            android:background="@color/transparent"-->
+<!--            android:scaleType="centerInside"/>-->
 
         <ImageView
             android:id="@+id/btnPhotoBox"

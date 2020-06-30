@@ -8,6 +8,7 @@ import android.graphics.Paint
 import android.text.Layout
 import android.text.TextPaint
 import android.util.AttributeSet
+import android.util.Log
 import android.view.*
 import android.widget.Scroller
 import androidx.appcompat.widget.TintTypedArray
@@ -328,6 +329,8 @@ class RulerView @JvmOverloads constructor(
             MotionEvent.ACTION_MOVE -> {
                 mMove += (mLastX - xPosition)
                 changeMoveAndValue()
+                if (mMove < 10 && mMove > 0 && mValue == 0)
+                    setValue(1f)
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 countMoveEnd()

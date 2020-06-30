@@ -5,6 +5,8 @@ import android.graphics.Typeface
 import android.graphics.drawable.DrawableContainer
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.StateListDrawable
+import android.os.Handler
+import android.os.HandlerThread
 import android.text.Editable
 import android.text.InputFilter
 import android.text.TextWatcher
@@ -29,6 +31,9 @@ class SSCustomEdittextOutlinedBorder @JvmOverloads constructor(context: Context,
     private var borderWidth = 1
     private var maxValue = 0
     private var minValue = 0
+
+    private val changeNumberThread = HandlerThread("readCommandThread").apply { start() }
+    private val changeNumberHandler = Handler(changeNumberThread.looper)
 
     val getTextValue: String
         get() {
@@ -91,6 +96,11 @@ class SSCustomEdittextOutlinedBorder @JvmOverloads constructor(context: Context,
         editText.doAfterTextChanged {
             if (it.isNullOrBlank()) {
                 modifyText("0")
+
+                changeNumberHandler.postDelayed(Runnable {
+                    if (editText.text.toString().toInt() < minValue)
+                        modifyText(minValue.toString())
+                }, 3000)
                 return@doAfterTextChanged
             }
             val originalText = it.toString()
@@ -102,6 +112,13 @@ class SSCustomEdittextOutlinedBorder @JvmOverloads constructor(context: Context,
                 if (numberText.toInt() > maxValue) {
                     modifyText(maxValue.toString())
                 }
+//                if (numberText.toInt() < minValue) {
+//                    modifyText(minValue.toString())
+//                }
+                changeNumberHandler.postDelayed(Runnable {
+                    if (editText.text.toString().toInt() < minValue)
+                        modifyText(minValue.toString())
+                }, 3000)
             } catch (e: Exception) {
                 modifyText("0")
             }
@@ -138,6 +155,7 @@ class SSCustomEdittextOutlinedBorder @JvmOverloads constructor(context: Context,
     private fun modifyText(numberText: String) {
         editText.setText(numberText)
         editText.setSelection(numberText.length)
+        changeNumberHandler.removeCallbacksAndMessages(null)
     }
 
     fun String.toInt0() = try {

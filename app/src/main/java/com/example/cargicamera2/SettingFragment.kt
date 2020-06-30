@@ -1,13 +1,18 @@
 package com.example.cargicamera2
 
+import android.app.AlertDialog
+import android.content.DialogInterface
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ToggleButton
 import androidx.core.view.get
 import androidx.fragment.app.Fragment
+import com.example.easy_toggle.EasyToggle
 import kotlinx.android.synthetic.main.fragment_setting.*
 import java.lang.NumberFormatException
 
@@ -88,8 +93,7 @@ class SettingFragment : Fragment(){
 
         layout_reset.setOnClickListener{
             Log.i(TAG, "layout_reset.setOnClickListener")
-            setToDefault()
-            saveData()
+            showDialog()
         }
 
         container.setOnClickListener {
@@ -99,6 +103,33 @@ class SettingFragment : Fragment(){
         edtWhitePeak.setTextValue(whitePeakValue.toString())
         edtBlackNadir.setTextValue(blackNadirValue.toString())
         edtDarkNoise.setTextValue(darkNoiseValue.toString())
+    }
+
+    private fun showDialog() {
+        lateinit var dialog: AlertDialog
+
+        var  builder = AlertDialog.Builder(this.context, AlertDialog.THEME_HOLO_DARK)
+
+        builder.setTitle("Reset All Settings")
+
+        builder.setMessage("Are you sure?")
+
+        val dialogClickListener = DialogInterface.OnClickListener { _, which ->
+            when (which) {
+                DialogInterface.BUTTON_POSITIVE -> {
+                    setToDefault()
+                    saveData()
+                }
+                DialogInterface.BUTTON_NEGATIVE -> {
+
+                }
+            }
+        }
+
+        builder.setPositiveButton("Yes", dialogClickListener)
+        builder.setNegativeButton("No", dialogClickListener)
+        dialog = builder.create()
+        dialog.show()
     }
 
     override fun onPause() {
@@ -137,6 +168,29 @@ class SettingFragment : Fragment(){
         edtWhitePeak.setTextValue("255")
         edtDarkNoise.setTextValue("0")
         edtBlackNadir.setTextValue("0")
+
+        isGridEnable = false
+        isSoundEnable = false
+        isCloudSyncEnable = false
+
+        with(toggle_btn_grid){
+            currentState = if(isGridEnable) 1 else 0
+            reset()
+            toggleImmediately()
+            invalidate()
+        }
+        with(toggle_btn_sound){
+            currentState = if(isSoundEnable) 1 else 0
+            reset()
+            toggleImmediately()
+            invalidate()
+        }
+        with(toggle_btn_cloud){
+            currentState = if(isCloudSyncEnable) 1 else 0
+            reset()
+            toggleImmediately()
+            invalidate()
+        }
     }
 
     private fun readData(){

@@ -251,6 +251,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private var exposureProgress: Int = 0
     private var sensorSensitivityProgress: Int = 0
 
+    private var focusZoomScale: Int = 0
+
     private var isAutoEnable: Boolean = false
     private var isManualEnable: Boolean = false
     private var isContrastEnable: Boolean = false
@@ -339,8 +341,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     @SuppressLint("ClickableViewAccessibility")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         view.findViewById<View>(R.id.btnPicture).setOnClickListener(this)
-        view.findViewById<View>(R.id.btnManual).setOnClickListener(this)
-        view.findViewById<View>(R.id.btnAuto).setOnClickListener(this)
+//        view.findViewById<View>(R.id.btnManual).setOnClickListener(this)
+//        view.findViewById<View>(R.id.btnAuto).setOnClickListener(this)
         view.findViewById<View>(R.id.btnContrast).setOnClickListener(this)
         view.findViewById<View>(R.id.btnRefreshRate).setOnClickListener(this)
         view.findViewById<View>(R.id.btnColorTemperature).setOnClickListener(this)
@@ -369,7 +371,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             val isoList = getISOList(min1, max1)
 
             if (isoCustomSeekBar.getMaxValue() != isoList.size) {
-                isoCustomSeekBar.setMaxValue(isoList.size)
+                isoCustomSeekBar.setMaxValue(isoList.size - 1)
                 isoCustomSeekBar.setNumShow(isoList.size / 2)
             }
 
@@ -420,7 +422,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             val tvList = getTvList(min, max)
 
             if (tvCustomSeekBar.getMaxValue() != tvList.size) {
-                tvCustomSeekBar.setMaxValue(tvList.size)
+                tvCustomSeekBar.setMaxValue(tvList.size - 1)
                 tvCustomSeekBar.setNumShow(tvList.size / 2)
             }
 
@@ -499,76 +501,66 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 //            false
 //        }
 
+        setZoomArea(focusZoomScale - 1)
         focusCustomSeekBar = view.findViewById(R.id.focusCustomSeekBar)
+        focusCustomSeekBar.setValue(focusZoomScale.toFloat())
         focusCustomSeekBar.setValueListener {
-            focusAreaLayout.layoutParams.width = 1440
-            focusAreaLayout.layoutParams.height = 1896
-
             focusAreaLayout.visibility = View.VISIBLE
 
-            Log.i(TAG, "focusAreaLayout: ${focusAreaLayout.width} x ${focusAreaLayout.height}")
-
             val progress = focusCustomSeekBar.getValue().toInt() - 1
-            val layoutParams = focusAreaLayout.layoutParams
 
             var focusIconFlag: FocusIconSize = FocusIconSize.ZOOM1_8
-            var ratio = 8.0
-
             when (progress % 8) {
                 0 -> {
-                    ratio = 1 / 8.0
                     focusIconFlag = FocusIconSize.ZOOM1_8
+                    focusZoomScale = 1
                     txt_3AValue.text = "1/8"
                 }
                 1 -> {
-                    ratio = 2 / 8.0
                     focusIconFlag = FocusIconSize.ZOOM2_8
+                    focusZoomScale = 2
                     txt_3AValue.text = "2/8"
                 }
                 2 -> {
-                    ratio = 3 / 8.0
                     focusIconFlag = FocusIconSize.ZOOM3_8
+                    focusZoomScale = 3
                     txt_3AValue.text = "3/8"
                 }
                 3 -> {
-                    ratio = 4 / 8.0
                     focusIconFlag = FocusIconSize.ZOOM4_8
+                    focusZoomScale = 4
                     txt_3AValue.text = "4/8"
                 }
                 4 -> {
-                    ratio = 5 / 8.0
                     focusIconFlag = FocusIconSize.ZOOM5_8
+                    focusZoomScale = 5
                     txt_3AValue.text = "5/8"
                 }
                 5 -> {
-                    ratio = 6 / 8.0
                     focusIconFlag = FocusIconSize.ZOOM6_8
+                    focusZoomScale = 6
                     txt_3AValue.text = "6/8"
                 }
                 6 -> {
-                    ratio = 7 / 8.0
                     focusIconFlag = FocusIconSize.ZOOM7_8
+                    focusZoomScale = 7
                     txt_3AValue.text = "7/8"
                 }
                 7 -> {
-                    ratio = 8 / 8.0
                     focusIconFlag = FocusIconSize.ZOOM8_8
+                    focusZoomScale = 8
                     txt_3AValue.text = "8/8"
                 }
             }
+
+            setZoomArea(focusZoomScale - 1)
 
             if (currentFocusIconFlag != focusIconFlag)
                 vibrate.vibrate(vibrationEffect)
 
             currentFocusIconFlag = focusIconFlag
 
-            currentFocusIconSizeWidth = layoutParams.width * ratio
-            currentFocusIconSizeHeight = layoutParams.height * ratio
-
-            layoutParams.width = currentFocusIconSizeWidth.toInt()
-            layoutParams.height = currentFocusIconSizeHeight.toInt()
-            focusAreaLayout.layoutParams = layoutParams
-
+            saveData()
 //            Log.i(TAG, "displayMatrix: ${displayMatrix.widthPixels} x ${displayMatrix.heightPixels}")
 //            Log.i(TAG, "ratio: $currentFocusRatioWidth x $currentFocusRatioHeight")
         }
@@ -594,7 +586,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 //        }
 
         isAutoEnable = true
-        btnAuto.setImageResource(R.drawable.ic_auto_selection)
+//        btnAuto.setImageResource(R.drawable.ic_auto_selection)
 
         progressbarShutter = view.findViewById(R.id.progressBar_shutter)
 
@@ -613,11 +605,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 //            ConnectToDevice(context!!).execute()        // connect to bluetooth device
 //        else
 //            Toast.makeText(this.context, "This device has not matched any bluetooth", Toast.LENGTH_LONG).show()v
-
-        val layoutParams = focusAreaLayout.layoutParams
-        currentFocusIconSizeHeight = layoutParams.height.toDouble()
-        currentFocusIconSizeWidth = layoutParams.width.toDouble()
-        currentFocusIconFlag = FocusIconSize.SMALL
     }
 
     private fun getFingerSpacing(event: MotionEvent): Float{
@@ -1002,28 +989,28 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 }
 
             }
-            R.id.btnAuto -> {
-                val btnAuto = view.findViewById<ImageButton>(R.id.btnAuto)
-                isAutoEnable = !isAutoEnable
-
-                if(isAutoEnable){
-                    btnAuto.setImageResource(R.drawable.ic_auto_selection)
-
-                    btnManual.setImageResource(R.drawable.ic_manual)
-                    frameLayout3A.visibility = View.INVISIBLE
-                    frameLayout3AValue.visibility = View.INVISIBLE
-                    //avCustomSeekBar.visibility = View.INVISIBLE
-                    tvCustomSeekBar.visibility = View.INVISIBLE
-                    isoCustomSeekBar.visibility = View.INVISIBLE
-                    focusCustomSeekBar.visibility = View.INVISIBLE
-                }else{
-                    btnAuto.setImageResource(R.drawable.ic_auto)
-                }
-
-                isManualEnable = false
-                automate3A()
-                saveData()
-            }
+//            R.id.btnAuto -> {
+//                val btnAuto = view.findViewById<ImageButton>(R.id.btnAuto)
+//                isAutoEnable = !isAutoEnable
+//
+//                if(isAutoEnable){
+//                    btnAuto.setImageResource(R.drawable.ic_auto_selection)
+//
+//                    btnManual.setImageResource(R.drawable.ic_manual)
+//                    frameLayout3A.visibility = View.INVISIBLE
+//                    frameLayout3AValue.visibility = View.INVISIBLE
+//                    //avCustomSeekBar.visibility = View.INVISIBLE
+//                    tvCustomSeekBar.visibility = View.INVISIBLE
+//                    isoCustomSeekBar.visibility = View.INVISIBLE
+//                    focusCustomSeekBar.visibility = View.INVISIBLE
+//                }else{
+//                    btnAuto.setImageResource(R.drawable.ic_auto)
+//                }
+//
+//                isManualEnable = false
+//                automate3A()
+//                saveData()
+//            }
             R.id.btnContrast -> {
                 val btnContrast = view.findViewById<ImageView>(R.id.btnContrast)
                 isContrastEnable = !isContrastEnable
@@ -1036,6 +1023,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     btnContrast.setImageResource(R.drawable.ic_contrast_selection)
 //                    contrastTargetLayout.visibility = View.VISIBLE
                     focusAreaLayout.visibility = View.VISIBLE
+                    frameLayout3A.visibility = View.VISIBLE
+                    frameLayout3AValue.visibility = View.VISIBLE
+                    tvCustomSeekBar.visibility = View.VISIBLE
+                    isoCustomSeekBar.visibility = View.INVISIBLE
+                    focusCustomSeekBar.visibility = View.INVISIBLE
+                    txt_3AValue.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / exposureTime)}s"
 
                     isRefreshRateEnable = false
                     btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate)
@@ -1043,7 +1036,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     btnColorTemperature.setImageResource(R.drawable.ic_color_temperature)
 
                     isAutoEnable = false
-                    btnAuto.setImageResource(R.drawable.ic_auto)
+//                    btnAuto.setImageResource(R.drawable.ic_auto)
 
                     lifecycleScope.launch(Dispatchers.IO) {
                         val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
@@ -1061,9 +1054,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     btnContrast.setImageResource(R.drawable.ic_contrast)
 //                    contrastTargetLayout.visibility = View.INVISIBLE
                     focusAreaLayout.visibility = View.INVISIBLE
+                    frameLayout3A.visibility = View.INVISIBLE
+                    frameLayout3AValue.visibility = View.INVISIBLE
+                    tvCustomSeekBar.visibility = View.INVISIBLE
+                    isoCustomSeekBar.visibility = View.INVISIBLE
+                    focusCustomSeekBar.visibility = View.INVISIBLE
 
                     isAutoEnable = true
-                    btnAuto.setImageResource(R.drawable.ic_auto_selection)
+//                    btnAuto.setImageResource(R.drawable.ic_auto_selection)
                 }
 
                 saveData()
@@ -1080,6 +1078,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate_selection)
 //                    contrastTargetLayout.visibility = View.INVISIBLE
                     focusAreaLayout.visibility = View.VISIBLE
+                    frameLayout3A.visibility = View.VISIBLE
+                    frameLayout3AValue.visibility = View.VISIBLE
+                    tvCustomSeekBar.visibility = View.VISIBLE
+                    isoCustomSeekBar.visibility = View.INVISIBLE
+                    focusCustomSeekBar.visibility = View.INVISIBLE
+                    txt_3AValue.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / exposureTime)}s"
 
                     isContrastEnable = false
                     btnContrast.setImageResource(R.drawable.ic_contrast)
@@ -1087,7 +1091,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     btnColorTemperature.setImageResource(R.drawable.ic_color_temperature)
 
                     isAutoEnable = false
-                    btnAuto.setImageResource(R.drawable.ic_auto)
+//                    btnAuto.setImageResource(R.drawable.ic_auto)
 
                     lifecycleScope.launch(Dispatchers.IO) {
                         val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
@@ -1104,9 +1108,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                     btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate)
                     focusAreaLayout.visibility = View.INVISIBLE
+                    frameLayout3A.visibility = View.INVISIBLE
+                    frameLayout3AValue.visibility = View.INVISIBLE
+                    tvCustomSeekBar.visibility = View.INVISIBLE
+                    isoCustomSeekBar.visibility = View.INVISIBLE
+                    focusCustomSeekBar.visibility = View.INVISIBLE
 
                     isAutoEnable = true
-                    btnAuto.setImageResource(R.drawable.ic_auto_selection)
+//                    btnAuto.setImageResource(R.drawable.ic_auto_selection)
                 }
 
                 saveData()
@@ -1123,6 +1132,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     btnColorTemperature.setImageResource(R.drawable.ic_color_temperature_selection)
 //                    contrastTargetLayout.visibility = View.INVISIBLE
                     focusAreaLayout.visibility = View.VISIBLE
+                    frameLayout3A.visibility = View.VISIBLE
+                    frameLayout3AValue.visibility = View.VISIBLE
+                    tvCustomSeekBar.visibility = View.VISIBLE
+                    isoCustomSeekBar.visibility = View.INVISIBLE
+                    focusCustomSeekBar.visibility = View.INVISIBLE
+                    txt_3AValue.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / exposureTime)}s"
 
                     isContrastEnable = false
                     btnContrast.setImageResource(R.drawable.ic_contrast)
@@ -1130,7 +1145,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate)
 
                     isAutoEnable = false
-                    btnAuto.setImageResource(R.drawable.ic_auto)
+//                    btnAuto.setImageResource(R.drawable.ic_auto)
 
                     lifecycleScope.launch(Dispatchers.IO) {
                         val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
@@ -1147,32 +1162,37 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                     btnColorTemperature.setImageResource(R.drawable.ic_color_temperature)
                     focusAreaLayout.visibility = View.INVISIBLE
+                    frameLayout3A.visibility = View.INVISIBLE
+                    frameLayout3AValue.visibility = View.INVISIBLE
+                    tvCustomSeekBar.visibility = View.INVISIBLE
+                    isoCustomSeekBar.visibility = View.INVISIBLE
+                    focusCustomSeekBar.visibility = View.INVISIBLE
 
                     isAutoEnable = true
-                    btnAuto.setImageResource(R.drawable.ic_auto_selection)
+//                    btnAuto.setImageResource(R.drawable.ic_auto_selection)
                 }
 
                 saveData()
             }
-            R.id.btnManual ->{
-                val btnManual = view.findViewById<ImageButton>(R.id.btnManual)
-                frameLayout3A.visibility = View.VISIBLE
-                frameLayout3AValue.visibility = View.VISIBLE
-
-                isManualEnable = !isManualEnable
-
-                if(isManualEnable){
-                    btnManual.setImageResource(R.drawable.ic_manual_selection)
-                }else{
-                    btnManual.setImageResource(R.drawable.ic_manual)
-                }
-
-                manual3A(Measurement.None)
-
-                isAutoEnable = false
-                btnAuto.setImageResource(R.drawable.ic_auto)
-                saveData()
-            }
+//            R.id.btnManual ->{
+//                val btnManual = view.findViewById<ImageButton>(R.id.btnManual)
+//                frameLayout3A.visibility = View.VISIBLE
+//                frameLayout3AValue.visibility = View.VISIBLE
+//
+//                isManualEnable = !isManualEnable
+//
+//                if(isManualEnable){
+//                    btnManual.setImageResource(R.drawable.ic_manual_selection)
+//                }else{
+//                    btnManual.setImageResource(R.drawable.ic_manual)
+//                }
+//
+//                manual3A(Measurement.None)
+//
+//                isAutoEnable = false
+//                btnAuto.setImageResource(R.drawable.ic_auto)
+//                saveData()
+//            }
             R.id.btnPhotoBox -> {
 //                pickPictureFromGallery()
 
@@ -1240,22 +1260,24 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 Log.i(TAG, "R.id.btnSetting")
             }
             R.id.btnExposure -> {
-                tvCustomSeekBar.visibility = if (tvCustomSeekBar.visibility == View.INVISIBLE) View.VISIBLE
-                else View.INVISIBLE
+                tvCustomSeekBar.visibility = View.VISIBLE
 
                 isoCustomSeekBar.visibility = View.INVISIBLE
 
 //                avCustomSeekBar.visibility = View.INVISIBLE
                 focusCustomSeekBar.visibility = View.INVISIBLE
+
+                txt_3AValue.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / exposureTime)}s"
             }
             R.id.btnISO -> {
                 tvCustomSeekBar.visibility = View.INVISIBLE
 
-                isoCustomSeekBar.visibility = if (isoCustomSeekBar.visibility == View.INVISIBLE) View.VISIBLE
-                else View.INVISIBLE
+                isoCustomSeekBar.visibility = View.VISIBLE
 
 //                avCustomSeekBar.visibility = View.INVISIBLE
                 focusCustomSeekBar.visibility = View.INVISIBLE
+
+                txt_3AValue.text = "ISO $sensorSensitivity"
             }
 //            R.id.btnAperture -> {
 //                tvCustomSeekBar.visibility = View.INVISIBLE
@@ -1274,8 +1296,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
 //                avCustomSeekBar.visibility = View.INVISIBLE
 
-                focusCustomSeekBar.visibility = if (focusCustomSeekBar.visibility == View.INVISIBLE) View.VISIBLE
-                else View.INVISIBLE
+                focusCustomSeekBar.visibility = View.VISIBLE
+
+                txt_3AValue.text = "$focusZoomScale/8"
             }
         }
     }
@@ -2555,6 +2578,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             .putInt(APERTURE_PROGRESS, apertureProgress)
             .putInt(EXPOSURE_PROGRESS, exposureProgress)
             .putInt(SENSOR_SENSITIVITY_PROGRESS, sensorSensitivityProgress)
+            .putInt(FOCUS_ZOOM_SCALE, focusZoomScale)
             .apply()
     }
 
@@ -2571,6 +2595,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         apertureProgress = settings.getInt(APERTURE_PROGRESS, 0)
         exposureProgress = settings.getInt(EXPOSURE_PROGRESS, 0)
         sensorSensitivityProgress = settings.getInt(SENSOR_SENSITIVITY_PROGRESS, 0)
+        focusZoomScale = settings.getInt(FOCUS_ZOOM_SCALE, 1)
     }
 
     fun readSettingData(){
@@ -2752,28 +2777,30 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         previewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
         captureSession.setRepeatingRequest(previewRequestBuilder.build(), null, backgroundHandler)
 
-        when(measurementItem) {
-            Measurement.Contrast -> {           //iso 50, tv 350
-                val ae = (10.0.pow(9) / 350).roundToLong()
-                val iso = 50
-                setExposureTime(ae)
-                setSensorSensitivity(iso)
-            }
-            Measurement.ColorTemperature -> {
-                val iso = 50
-                val ae = (10.0.pow(9) / 350).roundToLong()
-                setExposureTime(ae)
-                setSensorSensitivity(iso)
-            }
-            Measurement.RefreshRate -> {
-            }
-            Measurement.None -> {
-                val iso = 50
-                val ae = (10.0.pow(9) / 350).roundToLong()
-                setExposureTime(ae)
-                setSensorSensitivity(iso)
-            }
-        }
+        setExposureTime(exposureTime)
+        setSensorSensitivity(sensorSensitivity)
+//        when(measurementItem) {
+//            Measurement.Contrast -> {           //iso 50, tv 350
+//                val ae = (10.0.pow(9) / 350).roundToLong()
+//                val iso = 50
+//                setExposureTime(ae)
+//                setSensorSensitivity(iso)
+//            }
+//            Measurement.ColorTemperature -> {
+//                val iso = 50
+//                val ae = (10.0.pow(9) / 350).roundToLong()
+//                setExposureTime(ae)
+//                setSensorSensitivity(iso)
+//            }
+//            Measurement.RefreshRate -> {
+//            }
+//            Measurement.None -> {
+//                val iso = 50
+//                val ae = (10.0.pow(9) / 350).roundToLong()
+//                setExposureTime(ae)
+//                setSensorSensitivity(iso)
+//            }
+//        }
     }
 
     inner class LightSensorListener: SensorEventListener {
@@ -2806,6 +2833,48 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             FocusIconSize.ZOOM8_8 -> 8 / 8.0
             else -> 8 / 8.0
         }
+    }
+
+    private fun setZoomArea(focusZoomScale: Int) {
+        focusAreaLayout.layoutParams.width = 1440
+        focusAreaLayout.layoutParams.height = 1896
+
+        Log.i(TAG, "focusAreaLayout: ${focusAreaLayout.width} x ${focusAreaLayout.height}")
+
+        val layoutParams = focusAreaLayout.layoutParams
+        var ratio = 8.0
+        when (focusZoomScale % 8) {
+            0 -> {
+                ratio = 1 / 8.0
+            }
+            1 -> {
+                ratio = 2 / 8.0
+            }
+            2 -> {
+                ratio = 3 / 8.0
+            }
+            3 -> {
+                ratio = 4 / 8.0
+            }
+            4 -> {
+                ratio = 5 / 8.0
+            }
+            5 -> {
+                ratio = 6 / 8.0
+            }
+            6 -> {
+                ratio = 7 / 8.0
+            }
+            7 -> {
+                ratio = 8 / 8.0
+            }
+        }
+        currentFocusIconSizeWidth = layoutParams.width * ratio
+        currentFocusIconSizeHeight = layoutParams.height * ratio
+
+        layoutParams.width = currentFocusIconSizeWidth.toInt()
+        layoutParams.height = currentFocusIconSizeHeight.toInt()
+        focusAreaLayout.layoutParams = layoutParams
     }
 
     companion object {
@@ -2854,6 +2923,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         private const val SENSOR_SENSITIVITY = "SENSOR_SENSITIVITY"
         private const val MANUAL_ENABLE = "MANUAL_ENABLE"
 //        private const val AUTO_ENABLE = "AUTO_ENABLE"
+        private const val FOCUS_ZOOM_SCALE = "FOCUS_ZOOM_SCALE"
         private const val COLOR_TEMPERATURE_ENABLE = "COLOR_TEMPERATURE_ENABLE"
         private const val REFRESH_RATE_ENABLE = "REFRESH_RATE_ENABLE"
         private const val CONTRAST_ENABLE = "CONTRAST_ENABLE"
