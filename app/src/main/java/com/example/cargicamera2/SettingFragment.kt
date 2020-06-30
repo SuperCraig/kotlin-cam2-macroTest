@@ -88,6 +88,7 @@ class SettingFragment : Fragment(){
 
         layout_reset.setOnClickListener{
             Log.i(TAG, "layout_reset.setOnClickListener")
+            setToDefault()
             saveData()
         }
 
@@ -128,6 +129,15 @@ class SettingFragment : Fragment(){
         }
     }
 
+
+    private fun setToDefault() {
+        whitePeakValue = 255
+        blackNadirValue = 0
+        darkNoiseValue = 0
+        edtWhitePeak.setTextValue("255")
+        edtDarkNoise.setTextValue("0")
+        edtBlackNadir.setTextValue("0")
+    }
 
     private fun readData(){
         settings = this.context!!.getSharedPreferences(PREF_NAME, PRIVATE_MODE)

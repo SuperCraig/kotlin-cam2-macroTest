@@ -17,6 +17,7 @@ import android.widget.LinearLayout
 import androidx.annotation.ColorInt
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
+import androidx.core.widget.doAfterTextChanged
 import kotlinx.android.synthetic.main.layout_custom_edittext.view.*
 import java.lang.NumberFormatException
 
@@ -75,6 +76,7 @@ class SSCustomEdittextOutlinedBorder @JvmOverloads constructor(context: Context,
         }
 
         btnUp.setOnClickListener {
+
             var number = editText.text.toString().toInt()
             if (number < maxValue) {
                 number += 1
@@ -83,33 +85,59 @@ class SSCustomEdittextOutlinedBorder @JvmOverloads constructor(context: Context,
             }
         }
 
+        editText.filters = arrayOf<InputFilter>(InputFilterMinMax(minValue, maxValue))
+
         var beforeText = "0"
+        editText.doAfterTextChanged {
+            if (it.isNullOrBlank()) {
+                modifyText("0")
+                return@doAfterTextChanged
+            }
+            val originalText = it.toString()
+            try {
+                val numberText = originalText.toInt().toString()
+                if (originalText != numberText) {
+                    modifyText(numberText)
+                }
+                if (numberText.toInt() > maxValue) {
+                    modifyText(maxValue.toString())
+                }
+            } catch (e: Exception) {
+                modifyText("0")
+            }
+        }
+
         editText.addTextChangedListener(object : TextWatcher {
             override fun afterTextChanged(s: Editable?) {
-                Log.i("afterTextChanged", s.toString())
+                Log.i("1 afterTextChanged", s.toString())
             }
 
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
                 beforeText = s.toString()
-                Log.i("beforeTextChanged", s.toString())
+                Log.i("2 beforeTextChanged", s.toString())
             }
 
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                if (beforeText == "0") {
-                    editText.setText(editText.text.toString().replace("0", ""))
-                    editText.setSelection(1)
-                }
+//                if (beforeText.length > 1 && beforeText.contains("0")) {
+//                    editText.setText(editText.text.toString().replace("0", " "))
+//                    editText.setSelection(1)
+//                }
+//
+//                if (s.toString().toInt0() < minValue || s.toString() == "")
+//                    editText.setText(minValue.toString())
+//                else if (s.toString().toInt0() > maxValue || s.toString().count() > maxValue.toString().count()){
+//                    editText.setText(maxValue.toString())
+//                    editText.setSelection(maxValue.toString().count())
+//                }
 
-                if (s.toString().toInt0() < minValue || s.toString() == "")
-                    editText.setText(minValue.toString())
-                else if (s.toString().toInt0() > maxValue || s.toString().count() > maxValue.toString().count()){
-                    editText.setText(maxValue.toString())
-                    editText.setSelection(maxValue.toString().count())
-                }
-
-                Log.i("onTextChanged", "${s.toString()}, start: $start, before: $before, count: $count")
+                Log.i("3 onTextChanged", "${s.toString()}, start: $start, before: $before, count: $count")
             }
         })
+    }
+
+    private fun modifyText(numberText: String) {
+        editText.setText(numberText)
+        editText.setSelection(numberText.length)
     }
 
     fun String.toInt0() = try {
