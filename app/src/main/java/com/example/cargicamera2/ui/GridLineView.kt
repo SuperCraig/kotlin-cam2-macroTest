@@ -25,7 +25,7 @@ class GridLineView @JvmOverloads constructor(
         paint.isAntiAlias = true
         paint.strokeWidth = 3F
         paint.style = Paint.Style.STROKE
-        paint.color = Color.parseColor("#32a852")
+        paint.color = Color.parseColor("#FF00FF00")
 
         canvas.drawLine(((screenWidth/3)*2).toFloat(), 0F,
             ((screenWidth/3)*2).toFloat(), screenHeight.toFloat(),paint)

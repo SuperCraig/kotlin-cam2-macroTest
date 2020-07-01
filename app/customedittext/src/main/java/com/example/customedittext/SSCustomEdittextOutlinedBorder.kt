@@ -1,5 +1,6 @@
 package com.example.customedittext
 
+import android.app.Activity
 import android.content.Context
 import android.graphics.Typeface
 import android.graphics.drawable.DrawableContainer
@@ -13,15 +14,17 @@ import android.text.TextWatcher
 import android.util.AttributeSet
 import android.util.Log
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.annotation.ColorInt
 import androidx.core.content.ContextCompat
 import androidx.core.content.res.ResourcesCompat
 import androidx.core.widget.doAfterTextChanged
 import kotlinx.android.synthetic.main.layout_custom_edittext.view.*
-import java.lang.NumberFormatException
 
 class SSCustomEdittextOutlinedBorder @JvmOverloads constructor(context: Context, attrs: AttributeSet?, defStyle: Int = 0, defStyleRes: Int = 0): LinearLayout(context, attrs, defStyle, defStyleRes) {
     private var titleColor = ContextCompat.getColor(context, R.color.color_brownish_grey_two)
@@ -96,11 +99,6 @@ class SSCustomEdittextOutlinedBorder @JvmOverloads constructor(context: Context,
         editText.doAfterTextChanged {
             if (it.isNullOrBlank()) {
                 modifyText("0")
-
-                changeNumberHandler.postDelayed(Runnable {
-                    if (editText.text.toString().toInt() < minValue)
-                        modifyText(minValue.toString())
-                }, 3000)
                 return@doAfterTextChanged
             }
             val originalText = it.toString()
@@ -115,10 +113,6 @@ class SSCustomEdittextOutlinedBorder @JvmOverloads constructor(context: Context,
 //                if (numberText.toInt() < minValue) {
 //                    modifyText(minValue.toString())
 //                }
-                changeNumberHandler.postDelayed(Runnable {
-                    if (editText.text.toString().toInt() < minValue)
-                        modifyText(minValue.toString())
-                }, 3000)
             } catch (e: Exception) {
                 modifyText("0")
             }
@@ -150,12 +144,39 @@ class SSCustomEdittextOutlinedBorder @JvmOverloads constructor(context: Context,
                 Log.i("3 onTextChanged", "${s.toString()}, start: $start, before: $before, count: $count")
             }
         })
+
+        editText.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) {
+                Log.i("onFocusChange", "lost focus")
+
+                val inputManager = context.getSystemService(Activity.INPUT_METHOD_SERVICE) as InputMethodManager
+                inputManager.hideSoftInputFromWindow(windowToken, 0)
+                if (editText.text.toString().toInt() < minValue)
+                    modifyText(minValue.toString())
+
+                editText.clearFocus()
+            }
+        }
+
+
+        editText.setOnEditorActionListener(object: TextView.OnEditorActionListener {
+            override fun onEditorAction(v: TextView?, actionId: Int, event: KeyEvent?): Boolean {
+                when (actionId) {
+                    EditorInfo.IME_ACTION_DONE, EditorInfo.IME_ACTION_NEXT, EditorInfo.IME_ACTION_PREVIOUS -> {
+                        if (editText.text.toString().toInt() < minValue)
+                            modifyText(minValue.toString())
+                        Log.i("SSCustomEditText", "onEditorAction")
+                        return false
+                    }
+                }
+                return false
+            }
+        })
     }
 
     private fun modifyText(numberText: String) {
         editText.setText(numberText)
         editText.setSelection(numberText.length)
-        changeNumberHandler.removeCallbacksAndMessages(null)
     }
 
     fun String.toInt0() = try {
@@ -218,5 +239,9 @@ class SSCustomEdittextOutlinedBorder @JvmOverloads constructor(context: Context,
 
     fun getTextValue(): String? {
         return editText.text.toString()
+    }
+
+    override fun clearFocus() {
+        editText.clearFocus()
     }
 }

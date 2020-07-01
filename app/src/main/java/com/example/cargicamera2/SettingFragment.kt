@@ -3,6 +3,7 @@ package com.example.cargicamera2
 import android.app.AlertDialog
 import android.content.DialogInterface
 import android.content.SharedPreferences
+import android.graphics.Rect
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
@@ -59,50 +60,89 @@ class SettingFragment : Fragment(){
         toggle_btn_grid.setOnToggledListener {
             isGridEnable = it
             saveData()
+            clearEdtFocus()
         }
 
         toggle_btn_cloud.setOnToggledListener {
             isCloudSyncEnable = it
             saveData()
+            clearEdtFocus()
         }
 
         toggle_btn_sound.setOnToggledListener {
             isSoundEnable = it
             saveData()
+            clearEdtFocus()
+        }
+
+        layout_grid.setOnClickListener {
+            clearEdtFocus()
+        }
+
+        layout_sound.setOnClickListener {
+            clearEdtFocus()
+        }
+
+        layout_cloud.setOnClickListener {
+            clearEdtFocus()
         }
 
         layout_format.setOnClickListener{
             Log.i(TAG, "layout_format.setOnClickListener")
+            clearEdtFocus()
         }
 
         layout_language.setOnClickListener{
             Log.i(TAG, "layout_language.setOnClickListener")
+            clearEdtFocus()
         }
 
         layout_tell_a_friend.setOnClickListener{
             Log.i(TAG, "layout_tell_a_friend.setOnClickListener")
+            clearEdtFocus()
         }
 
         layout_feedback.setOnClickListener{
             Log.i(TAG, "layout_feedback.setOnClickListener")
+            clearEdtFocus()
         }
 
         layout_about.setOnClickListener{
             Log.i(TAG, "layout_about.setOnClickListener")
+            clearEdtFocus()
         }
 
         layout_reset.setOnClickListener{
             Log.i(TAG, "layout_reset.setOnClickListener")
             showDialog()
+            clearEdtFocus()
         }
 
-        container.setOnClickListener {
+        total_container.setOnClickListener {
 
+        }
+
+        layout_scrollView.setOnClickListener {
+            clearEdtFocus()
         }
 
         edtWhitePeak.setTextValue(whitePeakValue.toString())
         edtBlackNadir.setTextValue(blackNadirValue.toString())
         edtDarkNoise.setTextValue(darkNoiseValue.toString())
+
+        view.viewTreeObserver.addOnGlobalLayoutListener {
+            val r = Rect()
+            view.getWindowVisibleDisplayFrame(r)
+            if (view.rootView.height - (r.bottom - r.top) > 500) {  // if more than 100 pixels, its probably a keyboard...
+                Log.i(TAG, "keyboard show")
+            }   else {
+                Log.i(TAG, "keyboard hide")
+                if (edtWhitePeak != null) {
+                    if (edtWhitePeak.getTextValue()!!.toInt() < 128)
+                        edtWhitePeak.setTextValue("128")
+                }
+            }
+        }
     }
 
     private fun showDialog() {
@@ -227,6 +267,12 @@ class SettingFragment : Fragment(){
         toInt()
     } catch (e: NumberFormatException) {
         0
+    }
+
+    private fun clearEdtFocus() {
+        edtWhitePeak.clearFocus()
+        edtBlackNadir.clearFocus()
+        edtDarkNoise.clearFocus()
     }
 
     companion object{

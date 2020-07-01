@@ -2,12 +2,10 @@ package com.example.cargicamera2
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.app.ActionBar
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
 import android.content.Context
-import android.content.Context.SENSOR_SERVICE
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
@@ -19,21 +17,24 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.hardware.camera2.*
 import android.media.*
+import android.net.Uri
 import android.os.*
 import android.util.Log
-import android.util.Range
 import android.util.Size
 import android.util.SparseIntArray
 import android.view.*
-import android.widget.*
+import android.widget.ImageView
+import android.widget.ProgressBar
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.core.view.size
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentTransaction
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
-import com.example.cargicamera2.extensions.*
+import com.example.cargicamera2.extensions.MBITSP2020
+import com.example.cargicamera2.extensions.RawConverter
+import com.example.cargicamera2.extensions.getISOList
+import com.example.cargicamera2.extensions.getTvList
 import com.example.cargicamera2.fragments.PermissionsFragment
 import com.example.cargicamera2.room.History
 import com.example.cargicamera2.room.HistoryViewModel
@@ -47,7 +48,6 @@ import com.example.extensions.toMat
 import com.example.imagegallery.fragment.GalleryFullscreenFragment
 import com.example.imagegallery.model.ImageGalleryUiModel
 import com.example.imagegallery.service.MediaHelper
-import com.example.lib.CustomSeekBar
 import com.example.mruler.RulerView
 import com.example.toast.ToastView
 import kotlinx.android.synthetic.main.fragment_camera2_basic.*
@@ -58,11 +58,17 @@ import org.opencv.core.Mat
 import org.opencv.core.MatOfPoint
 import org.opencv.core.Scalar
 import org.opencv.imgproc.Imgproc
-import java.io.*
+import java.io.Closeable
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
 import java.math.BigDecimal
 import java.text.SimpleDateFormat
 import java.util.*
-import java.util.concurrent.*
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.Semaphore
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import kotlin.collections.ArrayList
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -299,6 +305,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private var currentFocusIconSizeWidth = 0.0
     private var currentFocusIconSizeHeight = 0.0
 
+    var currentMeasurement: Measurement = Measurement.None
     /**
      * [CameraDevice.StateCallback] is called when [CameraDevice] changes its state.
      */
@@ -501,59 +508,59 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 //            false
 //        }
 
-        setZoomArea(focusZoomScale - 1)
+        setZoomArea(focusZoomScale)
         focusCustomSeekBar = view.findViewById(R.id.focusCustomSeekBar)
         focusCustomSeekBar.setValue(focusZoomScale.toFloat())
         focusCustomSeekBar.setValueListener {
             focusAreaLayout.visibility = View.VISIBLE
 
-            val progress = focusCustomSeekBar.getValue().toInt() - 1
+            val progress = focusCustomSeekBar.getValue().toInt()
 
             var focusIconFlag: FocusIconSize = FocusIconSize.ZOOM1_8
-            when (progress % 8) {
+            when (progress) {
                 0 -> {
                     focusIconFlag = FocusIconSize.ZOOM1_8
-                    focusZoomScale = 1
+                    focusZoomScale = 0
                     txt_3AValue.text = "1/8"
                 }
                 1 -> {
                     focusIconFlag = FocusIconSize.ZOOM2_8
-                    focusZoomScale = 2
+                    focusZoomScale = 1
                     txt_3AValue.text = "2/8"
                 }
                 2 -> {
                     focusIconFlag = FocusIconSize.ZOOM3_8
-                    focusZoomScale = 3
+                    focusZoomScale = 2
                     txt_3AValue.text = "3/8"
                 }
                 3 -> {
                     focusIconFlag = FocusIconSize.ZOOM4_8
-                    focusZoomScale = 4
+                    focusZoomScale = 3
                     txt_3AValue.text = "4/8"
                 }
                 4 -> {
                     focusIconFlag = FocusIconSize.ZOOM5_8
-                    focusZoomScale = 5
+                    focusZoomScale = 4
                     txt_3AValue.text = "5/8"
                 }
                 5 -> {
                     focusIconFlag = FocusIconSize.ZOOM6_8
-                    focusZoomScale = 6
+                    focusZoomScale = 5
                     txt_3AValue.text = "6/8"
                 }
                 6 -> {
                     focusIconFlag = FocusIconSize.ZOOM7_8
-                    focusZoomScale = 7
+                    focusZoomScale = 6
                     txt_3AValue.text = "7/8"
                 }
                 7 -> {
                     focusIconFlag = FocusIconSize.ZOOM8_8
-                    focusZoomScale = 8
+                    focusZoomScale = 7
                     txt_3AValue.text = "8/8"
                 }
             }
 
-            setZoomArea(focusZoomScale - 1)
+            setZoomArea(focusZoomScale)
 
             if (currentFocusIconFlag != focusIconFlag)
                 vibrate.vibrate(vibrationEffect)
@@ -601,6 +608,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
         textureView.setOnTouchListener(surfaceTextureTouchListener)
 
+        focusAreaLayout.visibility = View.INVISIBLE
 //        if (m_address.contains(":"))
 //            ConnectToDevice(context!!).execute()        // connect to bluetooth device
 //        else
@@ -651,17 +659,23 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 else 100
 
                 if (task == 0) {        //20200623 no measurement item selected
-                    view.post {
-                        showToast(50.0f, "No Selected!", Color.argb(0xAA, 0xAA, 0x00, 0x00))
-                    }
-
                     val fileName = "$currentDateTime"
+                    var pictureObject: PictureObject? = null
                     lifecycleScope.launch(Dispatchers.IO) {
-                        takeRawPhoto(fileName).use { result ->
-                            procedureTakePicture(result)
+                        if (mRawImageReader != null) {
+                            takeRawPhoto(fileName).use { result ->
+                                pictureObject = procedureTakePicture(result)
+                            }
                         }
-                        takeJPEGPhoto(fileName).use { result ->
-                            procedureTakePicture(result)
+                        else {
+                            takeJPEGPhoto(fileName).use { result ->
+                                pictureObject = procedureTakePicture(result)
+                            }
+                        }
+                        
+                        view.post {
+                            btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(pictureObject!!.file!!.absolutePath))
+                            latestFileName = pictureObject!!.file!!.absolutePath
                         }
                     }
 
@@ -972,15 +986,18 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                     val historyViewModel = ViewModelProvider(this@Camera2BasicFragment).get(HistoryViewModel::class.java)
 
-                    val contrastDescription = if (isContrastEnable) contrastObject!!.contrast.toInt().toString() + " -> \n" +
-                            contrastObject.lum1.toInt().toString() + ":" + contrastObject.lum2.toString()
+                    val contrastDescription = if (isContrastEnable) contrastObject!!.contrast.toInt().toString() + " (" +
+                            contrastObject.lum1.toInt().toString() + " : " + contrastObject.lum2.toString() + ")"
                     else "0"
 
-                    val colorTemperatureDescription = if (isColorTemperatureEnable) colorTemperatureObject!!.colorTemperature.name + " ->" +
-                            colorTemperatureObject!!.cxcy[0].toString() + ", " + colorTemperatureObject!!.cxcy[1].toString()
+                    val colorTemperatureDescription = if (isColorTemperatureEnable) colorTemperatureObject!!.colorTemperature.name + " (" +
+                            colorTemperatureObject!!.cxcy[0].toString() + ", " + colorTemperatureObject!!.cxcy[1].toString() + ")"
                     else ColorTemperature.None.name
 
-                    historyViewModel.insert(History(currentDateTime, contrastDescription, refreshRate, colorTemperatureDescription))
+                    val RefreshDescription = if (isRefreshRateEnable) "$refreshRate Hz"
+                    else "0"
+
+                    historyViewModel.insert(History(currentDateTime, contrastDescription, RefreshDescription, colorTemperatureDescription))
 
                     Log.i(TAG, "Contrast: ${contrastObject!!.contrast}, Refresh Rate: $refreshRate, Color Temperature: ${colorTemperatureObject!!.colorTemperature}")
 
@@ -1020,6 +1037,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 if(isContrastEnable){
                     manual3A(Measurement.Contrast)
 
+                    view.post {
+                        showToast(50.0f, "Contrast", Color.argb(0xAA, 0xAA, 0x00, 0x00))
+                    }
+
                     btnContrast.setImageResource(R.drawable.ic_contrast_selection)
 //                    contrastTargetLayout.visibility = View.VISIBLE
                     focusAreaLayout.visibility = View.VISIBLE
@@ -1048,6 +1069,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         m_bluetoothSocket = sendToDevice(command)
                         readCommandHandler.post(readCommandRunnable)
                     }
+
+                    currentMeasurement = Measurement.Contrast
                 }else{
                     automate3A()
 
@@ -1074,6 +1097,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 if(isRefreshRateEnable){
                     manual3A(Measurement.RefreshRate)
+
+                    view.post {
+                        showToast(50.0f, "Refresh Rate", Color.argb(0xAA, 0xAA, 0x00, 0x00))
+                    }
 
                     btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate_selection)
 //                    contrastTargetLayout.visibility = View.INVISIBLE
@@ -1103,6 +1130,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         m_bluetoothSocket = sendToDevice(command)
                         readCommandHandler.post(readCommandRunnable)
                     }
+
+                    currentMeasurement = Measurement.RefreshRate
                 }else{
                     automate3A()
 
@@ -1128,6 +1157,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 if(isColorTemperatureEnable){
                     manual3A(Measurement.ColorTemperature)
+
+                    view.post {
+                        showToast(50.0f, "Color Temp.", Color.argb(0xAA, 0xAA, 0x00, 0x00))
+                    }
 
                     btnColorTemperature.setImageResource(R.drawable.ic_color_temperature_selection)
 //                    contrastTargetLayout.visibility = View.INVISIBLE
@@ -1157,6 +1190,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         m_bluetoothSocket = sendToDevice(command)
                         readCommandHandler.post(readCommandRunnable)
                     }
+
+                    currentMeasurement = Measurement.ColorTemperature
                 }else{
                     automate3A()
 
@@ -1298,7 +1333,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 focusCustomSeekBar.visibility = View.VISIBLE
 
-                txt_3AValue.text = "$focusZoomScale/8"
+                txt_3AValue.text = "${focusZoomScale + 1}/8"
             }
         }
     }
@@ -1380,7 +1415,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             requestPermissions(PERMISSIONS_REQUIRED, PERMISSIONS_REQUEST_CODE)
         }
     }
-
 
     /**
      * Starts a background thread and its [Handler].
@@ -1704,7 +1738,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         captureRequest.addTarget(mRawImageReader!!.surface)
 
 //        captureRequest.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
-        captureRequest.set(CaptureRequest.SCALER_CROP_REGION, zoom)
+//        captureRequest.set(CaptureRequest.SCALER_CROP_REGION, zoom)
 
         val isSavedEnable = fileName != null            //20200617 Craig
 
@@ -1719,7 +1753,15 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 ) {
                     super.onCaptureStarted(session, request, timestamp, frameNumber)
                     if(isSoundEnable) {
-                        cameraHandler.post{ mediaActionSound.play(MediaActionSound.SHUTTER_CLICK) }
+                        cameraHandler.post{
+                            mediaActionSound.play(MediaActionSound.SHUTTER_CLICK)
+//                            val audioManager = context!!.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+//                            val volume = audioManager.getStreamVolume(AudioManager.STREAM_NOTIFICATION)
+//                            if (volume != 0) {
+//                                val _shootMP = MediaPlayer.create(context, Uri.parse("file:///system/media/audio/ui/camera_click.ogg"))
+//                                _shootMP.start()
+//                            }
+                        }
                         Log.i(TAG, "onCaptureStarted")
                     }
                 }
@@ -1759,7 +1801,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         else {
                             // Unset the image reader listener
                             imageReaderHandler.removeCallbacks(timeoutRunnable)
-//                            mRawImageReader!!.setOnImageAvailableListener(null, null)
+                            mRawImageReader!!.setOnImageAvailableListener(null, null)
 
                             // Clear the queue of images, if there are left
                             imageQueue.forEach { image ->
@@ -1818,7 +1860,15 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 ) {
                     super.onCaptureStarted(session, request, timestamp, frameNumber)
                     if(isSoundEnable) {
-                        cameraHandler.post{ mediaActionSound.play(MediaActionSound.SHUTTER_CLICK) }
+                        cameraHandler.post{
+                            mediaActionSound.play(MediaActionSound.SHUTTER_CLICK)
+//                            val audioManager = context!!.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+//                            val volume = audioManager.getStreamVolume(AudioManager.STREAM_NOTIFICATION)
+//                            if (volume != 0) {
+//                                val _shootMP = MediaPlayer.create(context, Uri.parse("file:///system/media/audio/ui/camera_click.ogg"))
+//                                _shootMP.start()
+//                            }
+                        }
                         Log.i(TAG, "onCaptureStarted")
                     }
                 }
@@ -1877,12 +1927,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         )
     }
 
-    private suspend fun procedureTakePicture(result: CombinedCaptureResult) {
+    private suspend fun procedureTakePicture(result: CombinedCaptureResult): PictureObject = suspendCoroutine { cont ->
         when (result.format) {
             ImageFormat.JPEG, ImageFormat.DEPTH_JPEG -> {
                 try {
                     val buffer = result.image.planes[0].buffer
                     val bytes = ByteArray(buffer.remaining()).apply { buffer.get(this) }
+                    val pictureObject = PictureObject()
+                    pictureObject.file = null
 
                     if (result.isSavedEnable) {
                         val output = createFile(result.fileName,"jpg")
@@ -1895,11 +1947,15 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         }
 
                         temp.recycle()
+
+                        pictureObject.file = output
                     }
 
                     result.image.close()
+                    cont.resume(pictureObject)
                 } catch (exc: IOException) {
                     Log.e(TAG, "Unable to write JPEG image to file", exc)
+                    cont.resumeWithException(exc)
                 }
             }
 
@@ -1912,6 +1968,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     val byteArray = ByteArray(byteBuffer.remaining())
                     byteBuffer.get(byteArray)
 
+                    val pictureObject = PictureObject()
+                    pictureObject.file = null
+
                     if (result.isSavedEnable){
                         val output = createFile(result.fileName,"dng")
 
@@ -1923,18 +1982,23 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         ) { path, _ ->
                             Log.i(TAG, "onScanCompleted : $path")
                         }
+
+                        pictureObject.file = output
                     }
 
                     result.image.close()
+                    cont.resume(pictureObject)
                 } catch (exc: IOException) {
                     Log.e(TAG, "Unable to write DNG image to file", exc)
                     exc.printStackTrace()
+                    cont.resumeWithException(exc)
                 }
             }
             // No other formats are supported by this sample
             else -> {
                 val exc = RuntimeException("Unknown image format: ${result.image.format}")
                 Log.e(TAG, exc.message, exc)
+                cont.resumeWithException(exc)
             }
         }
     }
@@ -2199,21 +2263,21 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         Log.i(TAG, "cct: $cct")
         Log.i(TAG, "Red: $red, Green: $green, Blue: $blue")
 
-        val colorTemperatureCCT = if (cct < 5000) ColorTemperature.WarmColorTemperature
-        else if (cct >= 5000 && cct < 8000) ColorTemperature.NormalColorTemperature
-        else ColorTemperature.ColdColorTemperature
+        val colorTemperatureCCT = if (cct < 5000) ColorTemperature.Warm
+        else if (cct >= 5000 && cct < 8000) ColorTemperature.Normal
+        else ColorTemperature.Cold
 
         var colorTemperature: ColorTemperature = ColorTemperature.None
         if (abs(red - green) < (0.05 * 255) && abs(red - blue) < (0.05 * 255)){
-            colorTemperature = ColorTemperature.NormalColorTemperature
+            colorTemperature = ColorTemperature.Normal
             Log.i(TAG, "Normal color temperature")
         }
         else if (red > green && red > blue || (red > green && abs(red - blue) < (0.1 * 255))){
-            colorTemperature = ColorTemperature.WarmColorTemperature
+            colorTemperature = ColorTemperature.Warm
             Log.i(TAG, "Warm color temperature")
         }
         else if (blue > red && blue > green){
-            colorTemperature = ColorTemperature.ColdColorTemperature
+            colorTemperature = ColorTemperature.Cold
             Log.i(TAG, "Cold color temperature")
         }
         else{
@@ -2631,7 +2695,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             val outputStream = bluetoothSocket.outputStream
             outputStream.write(bytes)
             return bluetoothSocket
-        }catch (e: Exception) {
+        }
+        catch (e: Exception) {
             e.printStackTrace()
             return null
         }
@@ -2803,6 +2868,42 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 //        }
     }
 
+    fun backToSendCommand() {
+        val commandWhite = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0, 0, 0,
+            Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
+            Color.argb(0, 0, 0, 0),
+            Color.argb(0, 0, 0, 0),
+            Color.argb(0, 0, 0, 0))
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            m_bluetoothSocket = sendToDevice(commandWhite)
+            readCommandHandler.post(readCommandRunnable)
+        }
+
+        when(currentMeasurement) {
+            Measurement.Contrast -> {
+                lifecycleScope.launch(Dispatchers.IO) {
+                    m_bluetoothSocket = sendToDevice(commandWhite)
+                    if (m_bluetoothSocket == null)
+                        m_bluetoothSocket = sendToDevice(commandWhite)
+                    readCommandHandler.post(readCommandRunnable)
+                }
+            }
+            Measurement.ColorTemperature -> {
+                lifecycleScope.launch(Dispatchers.IO) {
+                    m_bluetoothSocket = sendToDevice(commandWhite)
+                    readCommandHandler.post(readCommandRunnable)
+                }
+            }
+            Measurement.RefreshRate -> {
+
+            }
+            Measurement.None -> {
+
+            }
+        }
+    }
+
     inner class LightSensorListener: SensorEventListener {
         private var lux = 0f
         override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
@@ -2843,7 +2944,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
         val layoutParams = focusAreaLayout.layoutParams
         var ratio = 8.0
-        when (focusZoomScale % 8) {
+        when (focusZoomScale) {
             0 -> {
                 ratio = 1 / 8.0
             }
@@ -2946,9 +3047,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         var m_isAckReceived: Boolean = false
 
         enum class ColorTemperature {
-            WarmColorTemperature,
-            NormalColorTemperature,
-            ColdColorTemperature,
+            Warm,
+            Normal,
+            Cold,
             None
         }
 
@@ -3065,6 +3166,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
         data class ColorTemperatureObject(val cxcy: DoubleArray, val cct: Double, val colorTemperature: ColorTemperature, var file: File? = null)
 
+        data class PictureObject(var file: File? = null)
         private const val PERMISSIONS_REQUEST_CODE = 10
         private val PERMISSIONS_REQUIRED = arrayOf(
             Manifest.permission.CAMERA,

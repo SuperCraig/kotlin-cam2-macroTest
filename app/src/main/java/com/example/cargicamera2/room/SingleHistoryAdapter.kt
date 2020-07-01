@@ -45,7 +45,7 @@ class SingleHistoryAdapter: ListAdapter<History, SingleHistoryAdapter.HistoryHol
         if (currentHistory.contrast != "0") {
             holder.textViewHistory.text = "Contrast"
             holder.textViewData.text = currentHistory.contrast
-        }else if (currentHistory.refreshRate != 0) {
+        }else if (currentHistory.refreshRate != "0") {
             holder.textViewHistory.text = "Refresh Rate"
             holder.textViewData.text = currentHistory.refreshRate.toString()
         }else if (currentHistory.colorTemperature != Camera2BasicFragment.Companion.ColorTemperature.None.name) {

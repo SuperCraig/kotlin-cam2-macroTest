@@ -9,6 +9,6 @@ class DataItem {
 //    var url: String? = null
     var date: String? = null
     var contrast: String? = null
-    var refreshRate: Int = 0
+    var refreshRate: String? = null
     var colorTemperature: String? = null
 }

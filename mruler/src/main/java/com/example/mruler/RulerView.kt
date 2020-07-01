@@ -329,7 +329,8 @@ class RulerView @JvmOverloads constructor(
             MotionEvent.ACTION_MOVE -> {
                 mMove += (mLastX - xPosition)
                 changeMoveAndValue()
-                if (mMove < 10 && mMove > 0 && mValue == 0)
+
+                if (mMove < 10 && mMove > 0 && mValue == 0)             //20200630 Craig
                     setValue(1f)
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {

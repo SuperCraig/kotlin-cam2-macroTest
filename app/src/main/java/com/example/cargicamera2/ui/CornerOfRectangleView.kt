@@ -18,7 +18,7 @@ class CornerOfRectangleView  @JvmOverloads constructor(
         val paint: Paint = Paint(Paint.DITHER_FLAG)
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 50f
-        paint.color = 0x6260f542.toInt()
+        paint.color = 0xFF00FF00.toInt()
 
         paint.strokeJoin = Paint.Join.MITER
         canvas!!.drawPath(createCornersPath(0, 0, width, height, 100), paint)

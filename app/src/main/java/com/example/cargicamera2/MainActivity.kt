@@ -49,6 +49,7 @@ class MainActivity : AppCompatActivity() {
         val cameraFragment: Camera2BasicFragment = supportFragmentManager.findFragmentByTag("Camera2BasicFragment") as Camera2BasicFragment
         if(cameraFragment.isVisible){
             cameraFragment.readSettingData()
+//            cameraFragment.backToSendCommand()
         }
     }
 
