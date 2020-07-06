@@ -11,6 +11,8 @@ import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.*
+import android.graphics.Point
+import android.graphics.Rect
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -25,6 +27,7 @@ import android.util.SparseIntArray
 import android.view.*
 import android.widget.ImageView
 import android.widget.ProgressBar
+import androidx.annotation.BoolRes
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
@@ -54,15 +57,15 @@ import kotlinx.android.synthetic.main.fragment_camera2_basic.*
 import kotlinx.android.synthetic.main.fragment_camera2_basic.view.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import org.opencv.core.Mat
-import org.opencv.core.MatOfPoint
-import org.opencv.core.Scalar
+import org.opencv.core.*
+import org.opencv.imgcodecs.Imgcodecs
 import org.opencv.imgproc.Imgproc
 import java.io.Closeable
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.math.BigDecimal
+import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ArrayBlockingQueue
@@ -612,7 +615,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 //        if (m_address.contains(":"))
 //            ConnectToDevice(context!!).execute()        // connect to bluetooth device
 //        else
-//            Toast.makeText(this.context, "This device has not matched any bluetooth", Toast.LENGTH_LONG).show()v
+//            Toast.makeText(this.context, "This device has not matched any bluetooth", Toast.LENGTH_LONG).show()
+
+        view.keepScreenOn = true
     }
 
     private fun getFingerSpacing(event: MotionEvent): Float{
@@ -651,6 +656,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 val dateFormat = SimpleDateFormat("yyyy_MM_dd HH:mm:ss", Locale.TAIWAN)
                 val currentDateTime: String = dateFormat.format(Date()) // Find todays date
 
+                var isLEDScreen: Boolean = false
+
                 var task = 0
                 if (isColorTemperatureEnable) task += 1
                 if (isContrastEnable) task += 1
@@ -661,24 +668,31 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 if (task == 0) {        //20200623 no measurement item selected
                     val fileName = "$currentDateTime"
                     var pictureObject: PictureObject? = null
+//                    var pictureObject: ContrastObject? = null
                     lifecycleScope.launch(Dispatchers.IO) {
-                        if (mRawImageReader != null) {
-                            takeRawPhoto(fileName).use { result ->
-                                pictureObject = procedureTakePicture(result)
-                            }
+                        view.post {
+                            btnPicture.isEnabled = false
                         }
-                        else {
-                            takeJPEGPhoto(fileName).use { result ->
-                                pictureObject = procedureTakePicture(result)
-                            }
+
+//                        if (mRawImageReader != null) {
+//                            takeRawPhoto(fileName).use { result ->
+//                                pictureObject = procedureContrast(result)
+//                            }
+//                        }
+
+                        takeJPEGPhoto(fileName).use { result ->
+                            pictureObject = procedureTakePicture(result)
                         }
-                        
+
                         view.post {
                             btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(pictureObject!!.file!!.absolutePath))
                             latestFileName = pictureObject!!.file!!.absolutePath
                         }
-                    }
 
+                        view.post {
+                            btnPicture.isEnabled = true
+                        }
+                    }
                     return
                 }
 
@@ -719,6 +733,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         if (mRawImageReader != null) {
                             val fileName = "C_$currentDateTime"
                             var contrastObjectRAW: ContrastObject? = null
+                            var pictureObject: PictureObject? = null
                             var contrastObjectJPEGWhite: ContrastObject? = null
                             var contrastObjectJPEGBlack: ContrastObject? = null
 
@@ -727,7 +742,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             Thread.sleep(1000)
 
                             takeRawPhoto(fileName).use { result ->
-                                contrastObjectRAW = procedureContrast(result)
+//                                contrastObjectRAW = procedureContrast(result)
+                                pictureObject = procedureTakePicture(result)
                             }
                             takeJPEGPhoto().use { result ->
                                 contrastObjectJPEGWhite = procedureContrast(result)
@@ -737,22 +753,28 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             readCommandHandler.post(readCommandRunnable)
                             Thread.sleep(1000)
 
+                            takeRawPhoto(fileName).use { result ->
+//                                contrastObjectRAW = procedureContrast(result)
+                                pictureObject = procedureTakePicture(result)
+                            }
                             takeJPEGPhoto().use { result ->
-                                view.post {
-                                    showToast("Picture Done!")
-                                }
-
                                 contrastObjectJPEGBlack = procedureContrast(result)
                             }
 
-                            contrastObject = contrastObjectRAW
-                            contrastObject!!.lum1 = contrastObjectJPEGWhite!!.lum1
+                            view.post {
+                                showToast("Picture Done!")
+                            }
+
+//                            contrastObject = contrastObjectRAW
+                            contrastObject = contrastObjectJPEGWhite
+                            contrastObject!!.file = pictureObject!!.file
+                            contrastObject.lum1 = contrastObjectJPEGWhite!!.lum1
                             contrastObject.lum2 = contrastObjectJPEGBlack!!.lum1
                             contrastObject.contrast = if (contrastObject.lum1 > contrastObject.lum2) contrastObject.lum1 / contrastObject.lum2
                             else contrastObject.lum2 / contrastObject.lum1
 
                             if (contrastObject.contrast < 20 && (contrastObject.contrast.isNaN() || contrastObject.contrast.isNaN()))
-                                contrastObject = ContrastObject(0.0, 0.0, lightSensorListener.getLux().toDouble(), contrastObjectRAW?.file)
+                                contrastObject = ContrastObject(0.0, 0.0, lightSensorListener.getLux().toDouble(), pictureObject?.file)
 
                             try {
 //                                val fileName = "Contrast_${contrastObject!!.contrast}"
@@ -773,8 +795,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 //                                }
 
                                 view.post {
-                                    btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(contrastObjectRAW!!.file!!.absolutePath))
-                                    latestFileName = contrastObjectRAW!!.file!!.absolutePath
+                                    btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(contrastObject!!.file!!.absolutePath))
+                                    latestFileName = contrastObject!!.file!!.absolutePath
                                 }
                             } catch (e: Exception) {
                                 e.printStackTrace()
@@ -844,6 +866,15 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                     Thread.sleep(200)
                     if (isColorTemperatureEnable) {     //set fixed iso 320 & tv 250
+                        val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
+                            0, 0,
+                            Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
+                            Color.argb(0, 0, 0, 0),
+                            Color.argb(0, 0, 0, 0),
+                            Color.argb(0, 0, 0, 0))
+                        m_bluetoothSocket = sendToDevice(command)
+                        readCommandHandler.post(readCommandRunnable)
+
                         val fileName = "T_$currentDateTime"
 
                         takeJPEGPhoto(fileName).use { result ->
@@ -888,6 +919,15 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                     Thread.sleep(200)
                     if (isRefreshRateEnable) {      //from tv: 1000 ~ 4000 and fixed iso 800
+                        val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
+                            0, 0,
+                            Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
+                            Color.argb(0, 0, 0, 0),
+                            Color.argb(0, 0, 0, 0),
+                            Color.argb(0, 0, 0, 0))
+                        m_bluetoothSocket = sendToDevice(command)
+                        readCommandHandler.post(readCommandRunnable)
+
                         val exposureTimeRange = intArrayOf(1500, 2000, 2500, 3000, 3500, 4000)
                         val fixedISO = 60
                         val circleCount = ArrayList<Int>()
@@ -908,7 +948,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             prevRate = countOfBlack.blackOfCount / countOfBlack.totalCount
 
                             files.add(countOfBlack.file)
-                            Log.i(TAG, "Black rate: $prevRate")
+
+                            isLEDScreen = prevRate > 0.9
+
+                            Log.i(TAG, "Black rate: $prevRate, Circles: ${countOfBlack.circles}")
                         }
 
                         if (prevRate < 0.2) {
@@ -994,10 +1037,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             colorTemperatureObject!!.cxcy[0].toString() + ", " + colorTemperatureObject!!.cxcy[1].toString() + ")"
                     else ColorTemperature.None.name
 
-                    val RefreshDescription = if (isRefreshRateEnable) "$refreshRate Hz"
+                    val refreshDescription = if (isRefreshRateEnable && !isLEDScreen) "$refreshRate Hz"
+                    else if (isRefreshRateEnable && isLEDScreen) "over 4000 Hz"
                     else "0"
 
-                    historyViewModel.insert(History(currentDateTime, contrastDescription, RefreshDescription, colorTemperatureDescription))
+                    historyViewModel.insert(History(currentDateTime, contrastDescription, refreshDescription, colorTemperatureDescription))
 
                     Log.i(TAG, "Contrast: ${contrastObject!!.contrast}, Refresh Rate: $refreshRate, Color Temperature: ${colorTemperatureObject!!.colorTemperature}")
 
@@ -1670,7 +1714,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             )
 
                             // Flash is automatically enabled when necessary.
-                            setAutoFlash(previewRequestBuilder)
+//                            setAutoFlash(previewRequestBuilder)
 
                             // Finally, we start displaying the camera preview.
                             previewRequest = previewRequestBuilder.build()
@@ -1679,7 +1723,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                 null, backgroundHandler
                             )
 
-                            automate3A()                //20200622 Craig
+                            if (isAutoEnable)
+                                automate3A()                //20200622 Craig
+                            else
+                                manual3A(Measurement.None)
+
                             Log.i(TAG, "CameraCaptureSession.StateCallback")
                         } catch (e: CameraAccessException) {
                             Log.e(TAG, e.toString())
@@ -1844,6 +1892,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         val captureRequest = captureSession.device.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE)
         captureRequest.addTarget(mImageReader.surface)
 
+        if (mRawImageReader != null)            //20200702 Craig for continuing capture same photo
+            captureRequest.addTarget(mRawImageReader!!.surface)
+
 //        captureRequest.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
         captureRequest.set(CaptureRequest.SCALER_CROP_REGION, zoom)
 
@@ -2003,14 +2054,19 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         }
     }
 
-    private suspend fun procedureRefreshRate(result: CombinedCaptureResult): CountOfBlack = suspendCoroutine { cont ->
+    private suspend fun procedureRefreshRate(result: CombinedCaptureResult): BlackCircleObject = suspendCoroutine { cont ->
         when (result.format) {
             ImageFormat.JPEG, ImageFormat.DEPTH_JPEG -> {
                 try {
                     val buffer = result.image.planes[0].buffer
                     val bytes = ByteArray(buffer.remaining()).apply { buffer.get(this) }
                     val countOfBlack = calculateRefreshRate(bytes)
+                    val circleObject = calculateRefreshRate_CircleObject(bytes)
                     countOfBlack.file = null
+                    circleObject.file = null
+
+                    val blackCircleObject = BlackCircleObject(countOfBlack.mat, countOfBlack.blackOfCount, countOfBlack.totalCount,
+                    circleObject.circles)
 
                     if (result.isSavedEnable) {
                         val output = createFile(result.fileName, "jpg")
@@ -2026,11 +2082,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         temp.recycle()
 
                         countOfBlack.file = output
+                        blackCircleObject.file = output
                     }
 
                     result.image.close()
 
-                    cont.resume(countOfBlack)
+                    cont.resume(blackCircleObject)
                 }catch (exc: IOException) {
                     Log.e(TAG, "Unable to write JPEG image to file", exc)
                     cont.resumeWithException(exc)
@@ -2130,7 +2187,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     val byteArray = ByteArray(byteBuffer.remaining())
                     byteBuffer.get(byteArray)
 
-                    val contrastObject = calculateContrastRAW(result.image.width, result.image.height, byteArray)
+                    val contrastObject = calculateContrastRAW_CV(result.image.width, result.image.height, byteBuffer)
+//                    val contrastObject = calculateContrastRAW(result.image.width, result.image.height, byteArray)
+
                     contrastObject.file = null
 
                     if (result.isSavedEnable){
@@ -2217,6 +2276,20 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         temp.recycle()
         bitmap.recycle()
         return countOfBlack
+    }
+
+    private fun calculateRefreshRate_CircleObject(bytes: ByteArray): CircleObject {
+        val temp  = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        val bitmap = temp.rotate(90f)
+
+        val circleObject = findCircles(bitmap)
+
+        if (isJPEGSavedEnable)
+            circleObject.mat.toBitmap().compress(Bitmap.CompressFormat.JPEG, 80, FileOutputStream(createFile(null,"jpg")))
+
+        temp.recycle()
+        bitmap.recycle()
+        return circleObject
     }
 
     private fun calculateColorTemp(bytes: ByteArray): ColorTemperatureObject {
@@ -2363,6 +2436,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
         luminance1 = if (luminance1 > darkNoiseValue) luminance1 - darkNoiseValue         //125 is black offset
         else if (luminance1 > 65535.0) 65535.0
+        else if (luminance1 < darkNoiseValue) 1.0
         else luminance1
 
         val contrastLum = luminance1
@@ -2374,6 +2448,47 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         Log.i(TAG, "contrast: $lum1: -> $luminance1, $contrast")
 
         return ContrastObject(luminance1.roundTo2DecimalPlaces(), 0.0.roundTo2DecimalPlaces(), contrast.roundTo2DecimalPlaces())
+    }
+
+    private fun calculateContrastRAW_CV(width: Int, height: Int, bytes: ByteBuffer): ContrastObject {
+        var contrast: Double = 0.0
+        val colorFilterArrangement = characteristics.get(CameraCharacteristics.SENSOR_INFO_COLOR_FILTER_ARRANGEMENT)
+
+        val mat = Mat(height, width, org.opencv.core.CvType.CV_16U, bytes)
+        val dstMat: Mat = Mat()
+        Imgproc.cvtColor(mat, dstMat, Imgproc.COLOR_BayerGR2BGR)
+
+        val bgr = ArrayList<Mat>()
+        Core.split(dstMat, bgr)
+        val matB = bgr.get(0)
+        val matG = bgr.get(1)
+        val matR = bgr.get(2)
+        val avgB = Core.mean(matB).`val`[0]
+        val avgG = Core.mean(matG).`val`[0]
+        val avgR = Core.mean(matR).`val`[0]
+
+        val KB = (avgR + avgG + avgB) / (avgB * 3);
+        val KG = (avgR + avgG + avgB) / (avgG * 3);
+        val KR = (avgR + avgG + avgB) / (avgR * 3);
+
+        val mergeMatList = ArrayList<Mat>()
+        val merge = Mat()
+
+        Core.multiply(matB, Scalar(KB), matB)
+        Core.multiply(matG, Scalar(KG), matG)
+        Core.multiply(matR, Scalar(KR), matR)
+        mergeMatList.add(matB)
+        mergeMatList.add(matG)
+        mergeMatList.add(matR)
+        Core.merge(mergeMatList, merge)
+
+
+        val pictureMat = Mat()
+        merge.convertTo(pictureMat, org.opencv.core.CvType.CV_8U)
+
+//        pictureMat.convertTo(pictureMat,  -1, 1.0, 20.0)
+        pictureMat.toBitmap().compress(Bitmap.CompressFormat.JPEG, 80, FileOutputStream(createFile(null,"jpg")))
+        return ContrastObject(0.0.roundTo2DecimalPlaces(), 0.0.roundTo2DecimalPlaces(), contrast.roundTo2DecimalPlaces())
     }
 
     private fun calculateContrastRAW(width: Int, height: Int, bytes: ByteArray): ContrastObject {
@@ -2485,6 +2600,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             val cY = m.m01 / m.m00
             Imgproc.circle(image, org.opencv.core.Point(cX, cY), 10, Scalar(254.0, 227.0, 1.0), -1)
         }
+        pixelArrangement(contour)
 
         val circleObject = CircleObject(image, contour.size)
 //        image.release()
@@ -2493,6 +2609,47 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         th1.release()
         th2.release()
         return circleObject
+    }
+
+    private fun pixelArrangement(contour: MutableList<MatOfPoint>) {
+        val pointsList = ArrayList<org.opencv.core.Point>()
+        val squareSize = sqrt(contour.size.toDouble())      //because picture is crop as rect
+        for (cnt in contour) {
+            val m  = Imgproc.moments(cnt)
+            val point = org.opencv.core.Point(m.m10 / m.m00, m.m01 / m.m00)
+            pointsList.add(point)
+        }
+
+        var left = Double.MAX_VALUE
+        var right = Double.MIN_VALUE
+        var up = Double.MAX_VALUE
+        var down = Double.MIN_VALUE
+
+        pointsList.forEach {
+            if (it.x > right) right = it.x
+            if (it.x < left) left = it.x
+            if (it.y > down) down = it.y
+            if (it.y < up) up = it.y
+        }
+
+        val averageX = abs(right - left) / squareSize
+        val averageY = abs(down - up) / squareSize
+
+        pointsList.sortWith(compareBy({it.x}, {it.y}))
+
+//        val diffBuffer = ArrayList<Double>()
+        var tempX = pointsList[0].x
+        var segmentX = 0
+        pointsList.forEach {
+            val diff = abs(tempX - it.x)
+            if (diff >= averageX * 0.5)
+                segmentX += 1
+
+//            diffBuffer.add(diff)
+            tempX = it.x
+        }
+
+        Log.i(TAG, "123, $averageX, $averageY, $segmentX")
     }
 
     private fun findLines(bitmap: Bitmap): LineObject {
@@ -3161,6 +3318,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         data class CircleObject(val mat: Mat, val circles: Int, var file: File? = null)
 
         data class CountOfBlack(val mat: Mat, val blackOfCount: Double, val totalCount: Double, var file: File? = null)
+
+        data class BlackCircleObject(var mat: Mat, var blackOfCount: Double, var totalCount: Double, var circles: Int, var file: File? = null)
 
         data class ContrastObject(var lum1: Double, var lum2: Double, var contrast: Double, var file: File? = null)
 
