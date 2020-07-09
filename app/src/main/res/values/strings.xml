@@ -1,5 +1,6 @@
 <resources>
     <string name="app_name">Performance</string>
+    <string name="test_app_name">TestPerformance</string>
     <string name="picture">Picture</string>
     <string name="description_info">Info</string>
     <string name="request_permission">This sample needs camera permission.</string>
@@ -18,6 +19,7 @@
     <string name="setting_whitePeak">White Peak (128-255)</string>
     <string name="setting_blackNadir">Black Nadir (0-127)</string>
     <string name="setting_darkNoise">Dark Noise (0-1023)</string>
+    <string name="setting_repeatTimes">Repeat Times (0-5)</string>
     <string name="setting_grid">Grid</string>
     <string name="setting_sound">Sound</string>
     <string name="setting_mbi_cloud_sync">MBI-Cloud sync</string>

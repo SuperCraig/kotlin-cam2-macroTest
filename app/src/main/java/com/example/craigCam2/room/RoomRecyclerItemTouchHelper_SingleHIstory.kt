@@ -1,13 +1,12 @@
-package com.example.recyclerswipe.uiUtils
+package com.example.craigCam2.room
 
 import android.graphics.Canvas
 import android.view.View
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
 import com.example.craigCam2.R
-import com.example.recyclerswipe.adapter.RecViewAdapter
 
-class RecyclerItemTouchHelper (dragDirs: Int, swipeDirs: Int, private val listener: RecyclerItemTouchHelperListener): ItemTouchHelper.SimpleCallback(dragDirs, swipeDirs){
+class RoomRecyclerItemTouchHelper_SingleHIstory (dragDirs: Int, swipeDirs: Int, private val listener: RecyclerItemTouchHelperListener): ItemTouchHelper.SimpleCallback(dragDirs, swipeDirs){
     override fun onMove(
         recyclerView: RecyclerView,
         viewHolder: RecyclerView.ViewHolder,
@@ -18,8 +17,8 @@ class RecyclerItemTouchHelper (dragDirs: Int, swipeDirs: Int, private val listen
 
     override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
         if(viewHolder != null){
-            val foregroundView = (viewHolder as RecViewAdapter.RecViewHolder).itemView.findViewById<View>(
-                R.id.view_foreground)
+            val foregroundView = (viewHolder as SingleHistoryAdapter.HistoryHolder).itemView.findViewById<View>(
+                R.id.single_view_foreground)
 
             ItemTouchHelper.Callback.getDefaultUIUtil().onSelected(foregroundView)
         }
@@ -34,12 +33,14 @@ class RecyclerItemTouchHelper (dragDirs: Int, swipeDirs: Int, private val listen
         actionState: Int,
         isCurrentlyActive: Boolean
     ) {
-        val foregroundView = (viewHolder as RecViewAdapter.RecViewHolder).itemView.findViewById<View>(R.id.view_foreground)
+        val foregroundView = (viewHolder as SingleHistoryAdapter.HistoryHolder).itemView.findViewById<View>(
+            R.id.single_view_foreground)
         ItemTouchHelper.Callback.getDefaultUIUtil().onDrawOver(c, recyclerView, foregroundView, dX, dY, actionState, isCurrentlyActive)
     }
 
     override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
-        val foregroundView = (viewHolder as RecViewAdapter.RecViewHolder).itemView.findViewById<View>(R.id.view_foreground)
+        val foregroundView = (viewHolder as SingleHistoryAdapter.HistoryHolder).itemView.findViewById<View>(
+            R.id.single_view_foreground)
         ItemTouchHelper.Callback.getDefaultUIUtil().clearView(foregroundView)
     }
 
@@ -52,7 +53,8 @@ class RecyclerItemTouchHelper (dragDirs: Int, swipeDirs: Int, private val listen
         actionState: Int,
         isCurrentlyActive: Boolean
     ) {
-        val foregroundView = (viewHolder as RecViewAdapter.RecViewHolder).itemView.findViewById<View>(R.id.view_foreground)
+        val foregroundView = (viewHolder as SingleHistoryAdapter.HistoryHolder).itemView.findViewById<View>(
+            R.id.single_view_foreground)
         ItemTouchHelper.Callback.getDefaultUIUtil().onDraw(c, recyclerView, foregroundView, dX, dY, actionState, isCurrentlyActive)
     }
 

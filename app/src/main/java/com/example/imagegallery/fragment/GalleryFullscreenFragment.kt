@@ -12,7 +12,7 @@ import androidx.viewpager.widget.PagerAdapter
 import androidx.viewpager.widget.ViewPager
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
-import com.example.cargicamera2.R
+import com.example.craigCam2.R
 import com.example.imagegallery.adapter.Image
 import com.example.imagegallery.helper.GlideApp
 import com.example.imagegallery.helper.ZoomOutPageTransformer

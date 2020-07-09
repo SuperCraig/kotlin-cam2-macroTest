@@ -7,8 +7,8 @@ import android.widget.RatingBar
 import android.widget.TextView
 import androidx.databinding.DataBindingUtil
 import androidx.recyclerview.widget.RecyclerView
-import com.example.cargicamera2.R
-import com.example.cargicamera2.databinding.RecViewRowLayoutBinding
+import com.example.craigCam2.R
+import com.example.craigCam2.databinding.RecViewRowLayoutBinding
 import com.example.recyclerswipe.model.DataItem
 
 class RecViewAdapter(private val mContext: Context, private val mDataItemList: ArrayList<DataItem>): RecyclerView.Adapter<RecViewAdapter.RecViewHolder>(){

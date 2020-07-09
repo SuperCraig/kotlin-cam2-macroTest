@@ -1,4 +1,4 @@
-rootProject.name='cargiCamera2'
+rootProject.name='craigCam2'
 include ':app', ':customSeekBarLib', ':easy_toggle', ':openCVLibrary349'
 include ':app:customedittext'
 include ':mruler'

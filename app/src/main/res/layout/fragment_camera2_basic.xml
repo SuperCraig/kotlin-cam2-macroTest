@@ -11,14 +11,14 @@
         android:layout_below="@+id/layoutTop"
         android:layout_above="@+id/control">
 
-        <com.example.cargicamera2.ui.AutoFitTextureView
+        <com.example.craigCam2.ui.AutoFitTextureView
             android:id="@+id/texture"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:layout_centerInParent="true">
-        </com.example.cargicamera2.ui.AutoFitTextureView>
+        </com.example.craigCam2.ui.AutoFitTextureView>
 
-        <com.example.cargicamera2.ui.GridLineView
+        <com.example.craigCam2.ui.GridLineView
             android:id="@+id/grid_line"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -105,9 +105,9 @@
             android:layout_centerInParent="true"
             android:visibility="visible">
 
-            <com.example.cargicamera2.ui.CornerOfRectangleView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+            <com.example.craigCam2.ui.CornerOfRectangleView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
                 />
 
 <!--            <ImageView-->
@@ -397,7 +397,7 @@
 
     </FrameLayout>
 
-    <com.example.cargicamera2.ui.FocusView
+    <com.example.craigCam2.ui.FocusView
         android:id="@+id/focus_view"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"

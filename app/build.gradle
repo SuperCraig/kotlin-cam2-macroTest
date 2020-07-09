@@ -8,7 +8,7 @@ android {
     buildToolsVersion "29.0.2"
 
     defaultConfig {
-        applicationId "com.example.cargicamera2"
+        applicationId "com.example.craigCam2"
         minSdkVersion 26
         targetSdkVersion 29
         versionCode 1

@@ -1,4 +1,4 @@
-package com.example.cargicamera2
+package com.example.craigCam2
 
 import org.junit.Test
 

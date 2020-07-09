@@ -9,7 +9,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.load.engine.DiskCacheStrategy
-import com.example.cargicamera2.R
+import com.example.craigCam2.R
 import com.example.imagegallery.helper.GlideApp
 import com.example.imagegallery.helper.SquareLayout
 import kotlinx.android.synthetic.main.activity_main.view.container

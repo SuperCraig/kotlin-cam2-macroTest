@@ -168,12 +168,57 @@
             </RelativeLayout>
 
             <RelativeLayout
-                android:id="@+id/layout_grid"
+                android:id="@+id/layout_repeatTimes"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
                 android:layout_marginTop="10dp"
                 app:layout_constraintTop_toBottomOf="@+id/layout_darkNoise">
+
+                <ImageView
+                    android:id="@+id/btn_repeatTimes"
+                    android:layout_width="@dimen/setting_button_size"
+                    android:layout_height="@dimen/setting_button_size"
+                    android:layout_alignParentStart="true"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginTop="8dp"
+                    android:src="@drawable/ic_multiple_photo" />
+
+                <TextView
+                    android:id="@+id/txt_repeatTimes"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="20dp"
+                    android:layout_marginTop="13dp"
+                    android:layout_toEndOf="@+id/btn_repeatTimes"
+                    android:text="@string/setting_repeatTimes"
+                    android:textColor="#FFFF"
+                    android:textSize="@dimen/setting_text_size" />
+
+                <com.example.customedittext.SSCustomEdittextOutlinedBorder
+                    android:id="@+id/edtRepeatTimes"
+                    android:layout_width="150dp"
+                    android:layout_height="wrap_content"
+                    android:layout_alignEnd="@id/txt_repeatTimes"
+                    android:inputType="number"
+                    app:custom_component_border_color="@color/color_warm_grey"
+                    app:custom_component_border_error_color="@color/color_error"
+                    app:custom_component_editText_bg_color="@android:color/white"
+                    app:custom_component_editText_hint="@string/edt_hint_number"
+                    app:custom_component_error_text_bg_color="@android:color/white"
+                    app:custom_component_maxValue="5"
+                    app:custom_component_minValue="0"
+                    app:custom_component_title_color="@color/color_brownish_grey_two"
+                    app:custom_component_title_error_color="@color/color_error" />
+            </RelativeLayout>
+
+            <RelativeLayout
+                android:id="@+id/layout_grid"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="10dp"
+                app:layout_constraintTop_toBottomOf="@+id/layout_repeatTimes">
 
                 <ImageView
                     android:id="@+id/btn_grid"
