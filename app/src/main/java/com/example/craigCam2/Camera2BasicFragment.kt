@@ -27,6 +27,7 @@ import android.view.*
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
+import android.widget.RelativeLayout
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
@@ -308,7 +309,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private var currentFocusIconFlag = FocusIconSize.ZOOM1_8
     private var currentFocusIconSizeWidth = 0.0
     private var currentFocusIconSizeHeight = 0.0
-    private var defaultFocusAreaSize: Size? = null
+    private var defaultFocusAreaWidth: Int = 0
+    private var defaultFocusAreaHeight: Int = 0
 
     var currentMeasurement: Measurement = Measurement.None
     /**
@@ -513,13 +515,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 //            false
 //        }
 
-        val focusAreaLayout = view.findViewById<LinearLayout>(R.id.focusAreaLayout)             //20200706 get  default focus area layout size
-        focusAreaLayout.viewTreeObserver.addOnGlobalLayoutListener(object: ViewTreeObserver.OnGlobalLayoutListener {
+        val relativeLayout = view.findViewById<RelativeLayout>(R.id.layoutCenter)             //20200706 get  default focus area layout size
+        relativeLayout.viewTreeObserver.addOnGlobalLayoutListener(object: ViewTreeObserver.OnGlobalLayoutListener {
             override fun onGlobalLayout() {
-                val size = Size(focusAreaLayout.width, focusAreaLayout.height)
+                defaultFocusAreaWidth = relativeLayout.width
+                defaultFocusAreaHeight = relativeLayout.height
+                saveData()
                 focusAreaLayout.viewTreeObserver.removeOnGlobalLayoutListener(this)
                 focusAreaLayout.visibility = View.GONE
-                defaultFocusAreaSize = size
             }
         })
 
@@ -673,8 +676,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 if (isColorTemperatureEnable) task += 1
                 if (isContrastEnable) task += 1
                 if (isRefreshRateEnable) task += 1
-                var scale = if (task != 0) 100 / task
-                else 100
 
                 if (task == 0) {        //20200623 no measurement item selected
                     val fileName = "$currentDateTime"
@@ -729,6 +730,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     val colorTemperatureCounts = ArrayList<ColorTemperature>()
 
                     if (isContrastEnable) {
+                        var scale = 100 /  (2 * (repeatTimesValue + 1))         //white and black times
+
                         val commandWhite = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0, 0, 0,
                             Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
                             Color.argb(0, 0, 0, 0),
@@ -760,12 +763,17 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             takeJPEGPhoto().use { result ->
                                 contrastObjectJPEGWhite = procedureContrast(result)
                             }
+                            progressbarShutter?.progress = scale
 
                             for (i in 0 until repeatTimesValue) {       //do repeat calculate
+                                Thread.sleep(200)
+
                                 takeJPEGPhoto().use { result ->
                                     val contrastObject  = procedureContrast(result)
                                     contrastObjectJPEGWhite!!.lum1 += contrastObject.lum1
                                 }
+
+                                progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
                             }
                             contrastObjectJPEGWhite!!.lum1 /= repeatTimesValue + 1
 
@@ -781,12 +789,18 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             takeJPEGPhoto().use { result ->
                                 contrastObjectJPEGBlack = procedureContrast(result)
                             }
+                            progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
+
 
                             for (i in 0 until repeatTimesValue) {       //do repeat calculate
+                                Thread.sleep(200)
+
                                 takeJPEGPhoto().use { result ->
                                     val contrastObject = procedureContrast(result)
                                     contrastObjectJPEGBlack!!.lum1 += contrastObject.lum1
                                 }
+
+                                progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
                             }
                             contrastObjectJPEGBlack!!.lum1 /= repeatTimesValue + 1
 
@@ -826,11 +840,17 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             takeJPEGPhoto(fileName).use { result ->
                                 contrastObjectJPEGWhite = procedureContrast(result)
                             }
+                            progressbarShutter?.progress = scale
+
                             for (i in 0 until repeatTimesValue) {
+                                Thread.sleep(200)
+
                                 takeJPEGPhoto().use { result ->
                                     val contrastObject = procedureContrast(result)
                                     contrastObjectJPEGWhite!!.lum1 += contrastObject.lum1
                                 }
+
+                                progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
                             }
                             contrastObjectJPEGWhite!!.lum1 /= repeatTimesValue + 1
 
@@ -841,11 +861,16 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             takeJPEGPhoto(fileName).use { result ->
                                 contrastObjectJPEGBlack = procedureContrast(result)
                             }
+                            progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
+
                             for (i in 0 until repeatTimesValue) {
+                                Thread.sleep(200)
+
                                 takeJPEGPhoto().use { result ->
                                     val contrastObject = procedureContrast(result)
                                     contrastObjectJPEGBlack!!.lum1 += contrastObject.lum1
                                 }
+                                progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
                             }
                             contrastObjectJPEGBlack!!.lum1 /= repeatTimesValue + 1
 
@@ -871,15 +896,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                 e.printStackTrace()
                             }
                         }
-
-                        scale = if (scale == 0) scale
-                        else scale + scale
-
-                        progressbarShutter?.progress = scale
                     }
 
                     Thread.sleep(200)
                     if (isColorTemperatureEnable) {     //set fixed iso 320 & tv 250
+                        var scale = 100 / (repeatTimesValue + 1)
                         val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
                             0, 0,
                             Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
@@ -895,8 +916,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             colorTemperatureObject = procedureColorTemperature(result)
                             colorTemperatureCounts.add(colorTemperatureObject!!.colorTemperature)
                         }
+                        progressbarShutter?.progress = scale
 
                         for (i in 0 until repeatTimesValue) {           //do repeat calculate cct
+                            Thread.sleep(200)
+
                             takeJPEGPhoto().use { result ->
                                 val colorObject = procedureColorTemperature(result)
                                 when {
@@ -911,13 +935,15 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                     }
                                 }
                             }
+
+                            progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
                         }
 
                         when {
                             colorTemperatureObject != null -> {
                                 colorTemperatureObject!!.cct /= repeatTimesValue + 1
-                                colorTemperatureObject!!.cxcy[0] = colorTemperatureObject!!.cxcy[0] / (repeatTimesValue + 1)
-                                colorTemperatureObject!!.cxcy[1] = colorTemperatureObject!!.cxcy[1] / (repeatTimesValue + 1)
+                                colorTemperatureObject!!.cxcy[0] = (colorTemperatureObject!!.cxcy[0] / (repeatTimesValue + 1)).roundToDecimalPlaces(2)
+                                colorTemperatureObject!!.cxcy[1] = (colorTemperatureObject!!.cxcy[1] / (repeatTimesValue + 1)).roundToDecimalPlaces(2)
                                 val countOfWarm = colorTemperatureCounts.count { it == ColorTemperature.Warm }
                                 val countOfCold = colorTemperatureCounts.count { it == ColorTemperature.Cold }
                                 val countOfNormal = colorTemperatureCounts.count {it == ColorTemperature.Normal}
@@ -949,15 +975,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         }catch (e: Exception) {
                             e.printStackTrace()
                         }
-
-                        scale = if (scale == 0) scale
-                        else scale + scale
-
-                        progressbarShutter?.progress = scale
                     }
 
                     Thread.sleep(200)
                     if (isRefreshRateEnable) {      //from tv: 1000 ~ 4000 and fixed iso 800
+                        var scale = 100 / (repeatTimesValue + 1)
                         val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
                             0, 0,
                             Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
@@ -992,7 +1014,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                             Log.i(TAG, "Black rate: $prevRate, Circles: ${countOfBlack.circles}")
                         }
+                        progressbarShutter?.progress = scale
+
                         for (i in 0 until repeatTimesValue) {
+                            Thread.sleep(200)
+
                             takeJPEGPhoto(fileName).use { result ->
                                 val countOfBlack = procedureRefreshRate(result)
                                 prevRate += countOfBlack.blackOfCount / countOfBlack.totalCount
@@ -1000,6 +1026,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                                 Log.i(TAG, "Black rate: $prevRate, Circles: ${countOfBlack.circles}")
                             }
+
+                            progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
                         }
                         prevRate /= refreshRate + 1
 
@@ -1026,7 +1054,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                                         Log.i(TAG, "Black rate: $curRate")
                                     }
+                                    progressbarShutter?.progress = scale
+
                                     for (i in 0 until repeatTimesValue) {
+                                        Thread.sleep(200)
+
                                         takeJPEGPhoto(fileName).use { result ->
                                             val countOfBlack = procedureRefreshRate(result)
 
@@ -1040,6 +1072,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                             }
                                             Log.i(TAG, "Black rate: $curRate")
                                         }
+
+                                        progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
                                     }
                                 }
                             }
@@ -1063,11 +1097,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         } catch (e: Exception) {
                             e.printStackTrace()
                         }
-
-                        scale = if (scale == 0) scale
-                        else scale + scale
-
-                        progressbarShutter?.progress = scale
                     }
 
 
@@ -2856,6 +2885,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             .putInt(EXPOSURE_PROGRESS, exposureProgress)
             .putInt(SENSOR_SENSITIVITY_PROGRESS, sensorSensitivityProgress)
             .putInt(FOCUS_ZOOM_SCALE, focusZoomScale)
+            .putInt(FOCUS_AREA_LAYOUT_WIDTH, defaultFocusAreaWidth)
+            .putInt(FOCUS_AREA_LAYOUT_HEIGHT, defaultFocusAreaHeight)
             .apply()
     }
 
@@ -2873,6 +2904,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         exposureProgress = settings.getInt(EXPOSURE_PROGRESS, 0)
         sensorSensitivityProgress = settings.getInt(SENSOR_SENSITIVITY_PROGRESS, 0)
         focusZoomScale = settings.getInt(FOCUS_ZOOM_SCALE, 1)
+        defaultFocusAreaWidth = settings.getInt(FOCUS_AREA_LAYOUT_WIDTH, 1440)
+        defaultFocusAreaHeight = settings.getInt(FOCUS_AREA_LAYOUT_HEIGHT, 1896)
     }
 
     fun readSettingData(){
@@ -3167,14 +3200,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     }
 
     private fun setZoomArea(focusZoomScale: Int) {
-        if (defaultFocusAreaSize != null) {
-            focusAreaLayout.layoutParams.width = defaultFocusAreaSize!!.width
-            focusAreaLayout.layoutParams.height = defaultFocusAreaSize!!.height
-        }
-        else {
-            focusAreaLayout.layoutParams.width = 1440
-            focusAreaLayout.layoutParams.height = 1896
-        }
+        readData()
+        focusAreaLayout.layoutParams.width = defaultFocusAreaWidth
+        focusAreaLayout.layoutParams.height = defaultFocusAreaHeight
 
         Log.i(TAG, "focusAreaLayout: ${focusAreaLayout.width} x ${focusAreaLayout.height}")
 
@@ -3184,34 +3212,42 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             0 -> {
                 ratio = 1 / 8.0
                 currentFocusIconFlag = FocusIconSize.ZOOM1_8
+                this.focusZoomScale = 0
             }
             1 -> {
                 ratio = 2 / 8.0
                 currentFocusIconFlag = FocusIconSize.ZOOM2_8
+                this.focusZoomScale = 1
             }
             2 -> {
                 ratio = 3 / 8.0
                 currentFocusIconFlag = FocusIconSize.ZOOM3_8
+                this.focusZoomScale = 2
             }
             3 -> {
                 ratio = 4 / 8.0
                 currentFocusIconFlag = FocusIconSize.ZOOM4_8
+                this.focusZoomScale = 3
             }
             4 -> {
                 ratio = 5 / 8.0
                 currentFocusIconFlag = FocusIconSize.ZOOM5_8
+                this.focusZoomScale = 4
             }
             5 -> {
                 ratio = 6 / 8.0
                 currentFocusIconFlag = FocusIconSize.ZOOM6_8
+                this.focusZoomScale = 5
             }
             6 -> {
                 ratio = 7 / 8.0
                 currentFocusIconFlag = FocusIconSize.ZOOM7_8
+                this.focusZoomScale = 6
             }
             7 -> {
                 ratio = 8 / 8.0
                 currentFocusIconFlag = FocusIconSize.ZOOM8_8
+                this.focusZoomScale = 7
             }
         }
         currentFocusIconSizeWidth = layoutParams.width * ratio
@@ -3275,6 +3311,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         private const val APERTURE_PROGRESS = "APERTURE_PROGRESS"
         private const val EXPOSURE_PROGRESS = "EXPOSURE_PROGRESS"
         private const val SENSOR_SENSITIVITY_PROGRESS = "SENSOR_SENSITIVITY_PROGRESS"
+        private const val FOCUS_AREA_LAYOUT_WIDTH = "FOCUS_AREA_LAYOUT_WIDTH"
+        private const val FOCUS_AREA_LAYOUT_HEIGHT = "FOCUS_AREA_LAYOUT_HEIGHT"
 
         private const val RAW_FORMAT = ImageFormat.RAW_SENSOR
         private const val JPEG_FORMAT = ImageFormat.JPEG
