@@ -207,11 +207,11 @@ class SettingFragment : Fragment(){
         whitePeakValue = 255
         blackNadirValue = 0
         darkNoiseValue = 0
-        repeatTimesValue = 0
+        repeatTimesValue = 3
         edtWhitePeak.setTextValue("255")
         edtDarkNoise.setTextValue("0")
         edtBlackNadir.setTextValue("0")
-        edtRepeatTimes.setTextValue("0")
+        edtRepeatTimes.setTextValue("3")
 
         isGridEnable = false
         isSoundEnable = false
@@ -244,8 +244,8 @@ class SettingFragment : Fragment(){
         isCloudSyncEnable = settings.getBoolean(CLOUD_SYNC, false)
         whitePeakValue = settings.getInt(WHITE_PEAK, 255)
         blackNadirValue = settings.getInt(BLACK_NADIR, 0)
-        darkNoiseValue = settings.getInt(DARK_NOISE, 70)
-        repeatTimesValue = settings.getInt(REPEAT_TIMES, 0)
+        darkNoiseValue = settings.getInt(DARK_NOISE, 0)
+        repeatTimesValue = settings.getInt(REPEAT_TIMES, 3)
     }
 
     private fun saveData(){

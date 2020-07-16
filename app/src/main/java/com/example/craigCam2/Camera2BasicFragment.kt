@@ -96,7 +96,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             configureTransform(width, height)
         }
 
-        override fun onSurfaceTextureDestroyed(texture: SurfaceTexture) = true
+        override fun onSurfaceTextureDestroyed(texture: SurfaceTexture) : Boolean {
+            return true
+        }
 
         override fun onSurfaceTextureUpdated(texture: SurfaceTexture) = Unit
 
@@ -912,6 +914,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                         val fileName = "T_$currentDateTime"
 
+                        if (mRawImageReader != null) {
+                            takeRawPhoto(fileName).use { result ->
+                                val pictureObject = procedureTakePicture(result)
+                            }
+                        }
+
                         takeJPEGPhoto(fileName).use { result ->
                             colorTemperatureObject = procedureColorTemperature(result)
                             colorTemperatureCounts.add(colorTemperatureObject!!.colorTemperature)
@@ -1004,6 +1012,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         setExposureTime((10.0.pow(9) / 1000).roundToLong())      //start from 1000
                         Thread.sleep(50)
 
+                        if (mRawImageReader != null) {
+                            takeRawPhoto(fileName).use { result ->
+                                val pictureObject = procedureTakePicture(result)
+                            }
+                        }
+
                         takeJPEGPhoto(fileName).use { result ->
                             val countOfBlack = procedureRefreshRate(result)
                             prevRate = countOfBlack.blackOfCount / countOfBlack.totalCount
@@ -1017,9 +1031,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         progressbarShutter?.progress = scale
 
                         for (i in 0 until repeatTimesValue) {
-                            Thread.sleep(200)
+                            Thread.sleep(500)
 
-                            takeJPEGPhoto(fileName).use { result ->
+                            takeJPEGPhoto().use { result ->
                                 val countOfBlack = procedureRefreshRate(result)
                                 prevRate += countOfBlack.blackOfCount / countOfBlack.totalCount
                                 isLEDScreen = prevRate > 0.9
@@ -1037,6 +1051,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                     val ae: Long = (10.0.pow(9) / it).roundToLong()
                                     setExposureTime(ae)
                                     Thread.sleep(50)
+
+                                    if (mRawImageReader != null) {
+                                        takeRawPhoto(fileName).use { result ->
+                                            val pictureObject = procedureTakePicture(result)
+                                        }
+                                    }
 
                                     takeJPEGPhoto(fileName).use { result ->
                                         val countOfBlack = procedureRefreshRate(result)
@@ -1059,7 +1079,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                     for (i in 0 until repeatTimesValue) {
                                         Thread.sleep(200)
 
-                                        takeJPEGPhoto(fileName).use { result ->
+                                        takeJPEGPhoto().use { result ->
                                             val countOfBlack = procedureRefreshRate(result)
 
                                             val curRate = countOfBlack.blackOfCount / countOfBlack.totalCount
@@ -2663,7 +2683,21 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     private fun findCircles(bitmap: Bitmap): CircleObject {
         var image = bitmap.toMat()
-        val roi = org.opencv.core.Rect(0, 0, image.width() / 4, image.height() / 4)     //use 1 / 4 of picture to speed up calculation
+
+        val width = image.width()
+        val height = image.height()
+        val targetSizeWidth = getFocusRatio(currentFocusIconFlag) * width * 0.9
+        val targetSizeHeight = getFocusRatio(currentFocusIconFlag) * height * 0.9
+        val startX = (width / 2) - (targetSizeWidth / 2)
+        val startY = (height / 2) - (targetSizeHeight / 2)
+
+        val roi = org.opencv.core.Rect(
+            startX.roundToInt(),
+            startY.roundToInt(),
+            targetSizeWidth.roundToInt(),
+            targetSizeHeight.roundToInt()
+        )     //use 1 / 4 of picture to speed up calculation
+
         image = Mat(image, roi)
         val gray = Mat()
         val gaussian = Mat()
@@ -2738,7 +2772,24 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     }
 
     private fun findLines(bitmap: Bitmap): LineObject {
-        val image = bitmap.toMat()
+        var image = bitmap.toMat()
+
+        val width = image.width()
+        val height = image.height()
+        val targetSizeWidth = getFocusRatio(currentFocusIconFlag) * width * 0.9
+        val targetSizeHeight = getFocusRatio(currentFocusIconFlag) * height * 0.9
+        val startX = (width / 2) - (targetSizeWidth / 2)
+        val startY = (height / 2) - (targetSizeHeight / 2)
+
+        val roi = org.opencv.core.Rect(
+            startX.roundToInt(),
+            startY.roundToInt(),
+            targetSizeWidth.roundToInt(),
+            targetSizeHeight.roundToInt()
+        )     //use 1 / 4 of picture to speed up calculation
+
+        image = Mat(image, roi)
+
         val edges = Mat()
         val lines = Mat()
 
@@ -2777,13 +2828,27 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     }
 
     private fun findBlackRate(bitmap: Bitmap): CountOfBlack {
-        val image = bitmap.toMat()
+        var image = bitmap.toMat()
+
+        val width = image.width()
+        val height = image.height()
+        val targetSizeWidth = getFocusRatio(currentFocusIconFlag) * width * 0.9
+        val targetSizeHeight = getFocusRatio(currentFocusIconFlag) * height * 0.9
+        val startX = (width / 2) - (targetSizeWidth / 2)
+        val startY = (height / 2) - (targetSizeHeight / 2)
+
+        val roi = org.opencv.core.Rect(
+            startX.roundToInt(),
+            startY.roundToInt(),
+            targetSizeWidth.roundToInt(),
+            targetSizeHeight.roundToInt()
+        )     //use 1 / 4 of picture to speed up calculation
+
+        image = Mat(image, roi)
+
         val gray = Mat()
         val gaussian = Mat()
         val th1 = Mat()
-        val width = image.width()
-        val height = image.height()
-
         Imgproc.cvtColor(image, gray, Imgproc.COLOR_BGR2GRAY)
         Imgproc.GaussianBlur(gray, gaussian, org.opencv.core.Size(15.0, 15.0), 0.0)
         Imgproc.threshold(gaussian, th1, 10.0, 255.0, Imgproc.THRESH_BINARY)
@@ -3292,7 +3357,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
          */
         private const val MAX_PREVIEW_HEIGHT = 1080
 
-        private const val IMAGE_BUFFER_SIZE = 5
+        private const val IMAGE_BUFFER_SIZE = 10
 
         /** Maximum time allowed to wait for the result of an image capture */
         private const val IMAGE_CAPTURE_TIMEOUT_MILLIS: Long = 2000

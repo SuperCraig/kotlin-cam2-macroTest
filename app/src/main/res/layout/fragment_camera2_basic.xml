@@ -252,7 +252,7 @@
             app:numValue="15"
             app:numMinValue="0"
             app:numMaxValue="29"
-            app:numDefaultValue="16"
+            app:numDefaultValue="19"
             app:numTextColor="@color/secondary_text"
             app:textSize="12sp"
             app:textSpaceHeight="6dp"
