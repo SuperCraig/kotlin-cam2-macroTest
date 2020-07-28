@@ -25,7 +25,6 @@ import android.util.Size
 import android.util.SparseIntArray
 import android.view.*
 import android.widget.ImageView
-import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.RelativeLayout
 import androidx.core.app.ActivityCompat
@@ -34,8 +33,6 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentTransaction
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
-import com.example.craigCam2.*
-import com.example.craigCam2.CompareSizesByArea
 import com.example.craigCam2.extensions.MBITSP2020
 import com.example.craigCam2.extensions.RawConverter
 import com.example.craigCam2.extensions.getISOList
@@ -114,7 +111,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
             val currentFingerSpacing: Float
 
-            if (event.pointerCount > 1){
+            if (event.pointerCount > 1 && !isRefreshRateEnable){
                 currentFingerSpacing = getFingerSpacing(event)
                 var delta: Float = 0.05f
                 if (fingerSpacing != 0f){
@@ -302,9 +299,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private lateinit var focusCustomSeekBar: RulerView
 
     private var sensorManager: SensorManager? = null
-    private var lightSensor: Sensor? = null
 
-    private val lightSensorListener: LightSensorListener = LightSensorListener()
+    private val sensorListener: SensorListener = SensorListener()
 
     private var latestFileName: String? = null
 
@@ -347,7 +343,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         m_address = arguments?.getString(SplashScreenActivity.EXTRA_ADDRESS).toString()
 
         sensorManager = context?.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        lightSensor = sensorManager!!.getDefaultSensor(Sensor.TYPE_LIGHT)
 
         Log.i(TAG,"onCreateView")
         Log.i(TAG, "Paired address: $m_address")
@@ -401,7 +396,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             sensorSensitivity = iso
             sensorSensitivityProgress = progress.toInt()
             saveData()      //save shared preferences
-            Log.i(TAG, "progress: $progress")
+//            Log.i(TAG, "progress: $progress")
         }
 //        isoCustomSeekBar = view.findViewById(R.id.isoCustomSeekBar)
 //        isoCustomSeekBar.progress = sensorSensitivityProgress
@@ -454,7 +449,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             exposureTime = ae
             exposureProgress = progress.toInt()
             saveData()
-            Log.i(TAG, "progress: $progress, ae: $ae")
+//            Log.i(TAG, "progress: $progress, ae: $ae")
         }
 //        tvCustomSeekBar = view.findViewById(R.id.tvCustomSeekBar)
 //        tvCustomSeekBar.progress = exposureProgress
@@ -589,7 +584,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             currentFocusIconFlag = focusIconFlag
 
             saveData()
-            Log.i(TAG, "focusCustomSeekBar: $progress")
+//            Log.i(TAG, "focusCustomSeekBar: $progress")
         }
 
         val imageView: ImageView = view.findViewById(R.id.btnPhotoBox)
@@ -662,7 +657,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         if (progressbarShutter!!.visibility == View.VISIBLE)
             progressbarShutter!!.visibility = View.INVISIBLE
 
-        sensorManager!!.registerListener(lightSensorListener, sensorManager!!.getDefaultSensor(Sensor.TYPE_LIGHT), SensorManager.SENSOR_DELAY_NORMAL)
+        sensorManager!!.registerListener(sensorListener, sensorManager!!.getDefaultSensor(Sensor.TYPE_LIGHT), SensorManager.SENSOR_DELAY_NORMAL)
+        sensorManager!!.registerListener(sensorListener, sensorManager!!.getDefaultSensor(Sensor.TYPE_ORIENTATION), SensorManager.SENSOR_DELAY_NORMAL)
         Log.i(TAG, "onResume")
     }
 
@@ -746,7 +742,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             Color.argb(0, 0, 0, 0),
                             Color.argb(0, 0, 0, 0))
 
-                        Log.i(TAG, "Lux: ${lightSensorListener.getLux()}")
+                        Log.i(TAG, "Lux: ${sensorListener.getLux()}")
                         if (mRawImageReader != null) {
                             val fileName = "C_$currentDateTime"
                             var contrastObjectRAW: ContrastObject? = null
@@ -820,7 +816,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
 
                             if (contrastObject.contrast < 20 && (contrastObject.contrast.isNaN() || contrastObject.contrast.isNaN()))
-                                contrastObject = ContrastObject(0.0, 0.0, lightSensorListener.getLux().toDouble(), pictureObject?.file)
+                                contrastObject = ContrastObject(0.0, 0.0, sensorListener.getLux().toDouble(), pictureObject?.file)
 
                             try {
                                 view.post {
@@ -886,7 +882,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             else (contrastObject.lum2 / contrastObject.lum1).roundToDecimalPlaces(0)
                             contrastObject.file = contrastObjectJPEGBlack!!.file
 
-                            contrastObject = if (contrastObject.contrast.isNaN()) ContrastObject(0.0, 0.0, lightSensorListener.getLux().toDouble(), contrastObject.file)
+                            contrastObject = if (contrastObject.contrast.isNaN()) ContrastObject(0.0, 0.0, sensorListener.getLux().toDouble(), contrastObject.file)
                             else contrastObject
 
                             try {
@@ -987,6 +983,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                     Thread.sleep(200)
                     if (isRefreshRateEnable) {      //from tv: 1000 ~ 4000 and fixed iso 800
+                        val rect: Rect? = characteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE)
+                        previewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, rect)
+                        captureSession.setRepeatingRequest(previewRequestBuilder.build(), null, backgroundHandler)
+
                         var scale = 100 / (repeatTimesValue + 1)
                         val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
                             0, 0,
@@ -997,20 +997,20 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         m_bluetoothSocket = sendToDevice(command)
                         readCommandHandler.post(readCommandRunnable)
 
-                        val exposureTimeRange = intArrayOf(1500, 2000, 2500, 3000, 3500, 4000)
-                        val fixedISO = 60
-                        val circleCount = ArrayList<Int>()
+                        val exposureTimeRange = intArrayOf(1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000)
+                        var fixedISO = 800
                         setSensorSensitivity(fixedISO)
-
-                        var prevRate = 0.0
-                        var assigned = false
 
                         val files: ArrayList<File?> = ArrayList()
 
                         val fileName = "F_$currentDateTime"
 
-                        setExposureTime((10.0.pow(9) / 1000).roundToLong())      //start from 1000
+                        setExposureTime((10.0.pow(9) / 500).roundToLong())      //start from 1000
                         Thread.sleep(50)
+
+                        var isHaveBlackLine = false
+                        var isHaveBlackLineCount = 0.0
+                        var assigned = false
 
                         if (mRawImageReader != null) {
                             takeRawPhoto(fileName).use { result ->
@@ -1019,14 +1019,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         }
 
                         takeJPEGPhoto(fileName).use { result ->
-                            val countOfBlack = procedureRefreshRate(result)
-                            prevRate = countOfBlack.blackOfCount / countOfBlack.totalCount
+                            val lineObject = procedureRefreshRate(result)
 
-                            files.add(countOfBlack.file)
+                            isHaveBlackLine = lineObject.isHaveBlackLine
 
-                            isLEDScreen = prevRate > 0.9
+                            isHaveBlackLineCount = if (isHaveBlackLine) isHaveBlackLineCount + 1
+                            else isHaveBlackLineCount
 
-                            Log.i(TAG, "Black rate: $prevRate, Circles: ${countOfBlack.circles}")
+                            files.add(lineObject.file)
                         }
                         progressbarShutter?.progress = scale
 
@@ -1034,23 +1034,32 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             Thread.sleep(500)
 
                             takeJPEGPhoto().use { result ->
-                                val countOfBlack = procedureRefreshRate(result)
-                                prevRate += countOfBlack.blackOfCount / countOfBlack.totalCount
-                                isLEDScreen = prevRate > 0.9
+                                val lineObject = procedureRefreshRate(result)
 
-                                Log.i(TAG, "Black rate: $prevRate, Circles: ${countOfBlack.circles}")
+                                isHaveBlackLine = lineObject.isHaveBlackLine
+
+                                isHaveBlackLineCount = if (isHaveBlackLine) isHaveBlackLineCount + 1
+                                else isHaveBlackLineCount
                             }
-
                             progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
                         }
-                        prevRate /= refreshRate + 1
 
-                        if (prevRate < 0.2) {
+                        isHaveBlackLineCount /= repeatTimesValue + 1
+                        isHaveBlackLine = isHaveBlackLineCount >= 0.5
+
+                        if (!isHaveBlackLine) {
                             exposureTimeRange.forEach {
-                                if (!assigned) {
+                                if (!isHaveBlackLine) {
                                     val ae: Long = (10.0.pow(9) / it).roundToLong()
                                     setExposureTime(ae)
                                     Thread.sleep(50)
+
+                                    isHaveBlackLineCount = 0.0
+
+//                                    if (it >= 3000) {
+//                                        fixedISO = 125
+//                                        setSensorSensitivity(fixedISO)
+//                                    }
 
                                     if (mRawImageReader != null) {
                                         takeRawPhoto(fileName).use { result ->
@@ -1059,41 +1068,48 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                     }
 
                                     takeJPEGPhoto(fileName).use { result ->
-                                        val countOfBlack = procedureRefreshRate(result)
+                                        val lineObject = procedureRefreshRate(result)
 
-                                        val curRate = countOfBlack.blackOfCount / countOfBlack.totalCount
+                                        isHaveBlackLine = lineObject.isHaveBlackLine
 
-                                        if (curRate > 0.2) {
-                                            if (it in 1001 .. 2499) refreshRate = 2000
-                                            if (it in 2500 .. 3000) refreshRate = 3000
-                                            if (it > 3000) refreshRate = 4000
-                                            assigned = true
-                                        }
+                                        isHaveBlackLineCount = if (isHaveBlackLine) isHaveBlackLineCount + 1
+                                        else isHaveBlackLineCount
 
-                                        files.add(countOfBlack.file)
-
-                                        Log.i(TAG, "Black rate: $curRate")
+                                        files.add(lineObject.file)
                                     }
                                     progressbarShutter?.progress = scale
+
 
                                     for (i in 0 until repeatTimesValue) {
                                         Thread.sleep(200)
 
                                         takeJPEGPhoto().use { result ->
-                                            val countOfBlack = procedureRefreshRate(result)
+                                            val lineObject = procedureRefreshRate(result)
 
-                                            val curRate = countOfBlack.blackOfCount / countOfBlack.totalCount
+                                            isHaveBlackLine = lineObject.isHaveBlackLine
 
-                                            if (curRate > 0.2) {
-                                                if (it in 1001 .. 2499) refreshRate = 2000
-                                                if (it in 2500 .. 3000) refreshRate = 3000
-                                                if (it > 3000) refreshRate = 4000
-                                                assigned = true
-                                            }
-                                            Log.i(TAG, "Black rate: $curRate")
+                                            isHaveBlackLineCount = if (isHaveBlackLine) isHaveBlackLineCount + 1
+                                            else isHaveBlackLineCount
                                         }
 
                                         progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
+                                    }
+
+                                    isHaveBlackLineCount /= repeatTimesValue + 1
+                                    isHaveBlackLine = isHaveBlackLineCount >= 0.5
+
+                                    Log.i(TAG, "isHaveBlackLineCount: $isHaveBlackLineCount")
+                                    if (isHaveBlackLine) {
+                                        if (it in 500 .. 1000) refreshRate = 1000
+                                        if (it in 1001 .. 1500) refreshRate = 1500
+                                        if (it in 1501 .. 2000) refreshRate = 2000
+                                        if (it in 2001 .. 2500) refreshRate = 2500
+                                        if (it in 2501 .. 3000) refreshRate = 3000
+                                        if (it in 3001 .. 3500) refreshRate = 3000
+                                        if (it in 3501 .. 4000) refreshRate = 3500
+                                        if (it in 4001 .. 4500) refreshRate = 3500
+                                        if (it > 4500) refreshRate = 4000
+                                        assigned = true
                                     }
                                 }
                             }
@@ -1102,8 +1118,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             assigned = true
                         }
 
-                        if (!assigned)
-                            refreshRate = 4000
+                        if (!assigned) {
+                            isLEDScreen = true
+                        }
 
                         view.post {
                             showToast("Picture Done!")
@@ -1137,7 +1154,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     else ColorTemperature.None.name
 
                     val refreshDescription = if (isRefreshRateEnable && !isLEDScreen) "$refreshRate Hz"
-                    else if (isRefreshRateEnable && isLEDScreen) "over 4000 Hz"
+                    else if (isRefreshRateEnable && isLEDScreen) "over 5000 Hz"
                     else "0"
 
                     historyViewModel.insert(History(currentDateTime, contrastDescription, refreshDescription, colorTemperatureDescription))
@@ -1183,6 +1200,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     view.post {
                         showToast(50.0f, "Contrast", Color.argb(0xAA, 0xAA, 0x00, 0x00))
                     }
+
+                    val range = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
+                    val max = range!!.upper
+                    val min = range.lower
+                    val tvList = getTvList(min, max)
+                    val index = tvList.indexOf(125)
+                    tvCustomSeekBar.setDefaultValue(index)
 
                     btnContrast.setImageResource(R.drawable.ic_contrast_selection)
 //                    contrastTargetLayout.visibility = View.VISIBLE
@@ -1304,6 +1328,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     view.post {
                         showToast(50.0f, "Color Temp.", Color.argb(0xAA, 0xAA, 0x00, 0x00))
                     }
+
+                    val range = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
+                    val max = range!!.upper
+                    val min = range.lower
+                    val tvList = getTvList(min, max)
+                    val index = tvList.indexOf(350)
+                    tvCustomSeekBar.setDefaultValue(index)
 
                     btnColorTemperature.setImageResource(R.drawable.ic_color_temperature_selection)
 //                    contrastTargetLayout.visibility = View.INVISIBLE
@@ -1493,7 +1524,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     override fun onPause() {
         super.onPause()
-        sensorManager!!.unregisterListener(lightSensorListener)
+        sensorManager!!.unregisterListener(sensorListener)
         Log.i(TAG, "onPause")
     }
 
@@ -1811,7 +1842,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         captureSession = cameraCaptureSession
                         try {
                             // Auto focus should be continuous for camera preview.
-                            previewRequestBuilder.set(
+                            previewRequestBuilder.set(                //20200726 Craig
                                 CaptureRequest.CONTROL_AF_MODE,
                                 CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE
                             )
@@ -2157,19 +2188,21 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         }
     }
 
-    private suspend fun procedureRefreshRate(result: CombinedCaptureResult): BlackCircleObject = suspendCoroutine { cont ->
+    private suspend fun procedureRefreshRate(result: CombinedCaptureResult): LineObject = suspendCoroutine { cont ->
         when (result.format) {
             ImageFormat.JPEG, ImageFormat.DEPTH_JPEG -> {
                 try {
                     val buffer = result.image.planes[0].buffer
                     val bytes = ByteArray(buffer.remaining()).apply { buffer.get(this) }
-                    val countOfBlack = calculateRefreshRate(bytes)
-                    val circleObject = calculateRefreshRate_CircleObject(bytes)
-                    countOfBlack.file = null
-                    circleObject.file = null
+//                    val countOfBlack = calculateRefreshRate(bytes)
+//                    val circleObject = calculateRefreshRate_CircleObject(bytes)
+                    val lineObject = calculateRefreshRate_LineObject(bytes)
 
-                    val blackCircleObject = BlackCircleObject(countOfBlack.mat, countOfBlack.blackOfCount, countOfBlack.totalCount,
-                    circleObject.circles)
+//                    countOfBlack.file = null
+//                    circleObject.file = null
+                    lineObject.file = null
+
+//                    val blackCircleObject = BlackLineObject(countOfBlack.mat, countOfBlack.blackOfCount, countOfBlack.totalCount, 0)
 
                     if (result.isSavedEnable) {
                         val output = createFile(result.fileName, "jpg")
@@ -2184,13 +2217,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                         temp.recycle()
 
-                        countOfBlack.file = output
-                        blackCircleObject.file = output
+//                        countOfBlack.file = output
+//                        blackCircleObject.file = output
+                        lineObject.file = output
                     }
 
                     result.image.close()
 
-                    cont.resume(blackCircleObject)
+                    cont.resume(lineObject)
                 }catch (exc: IOException) {
                     Log.e(TAG, "Unable to write JPEG image to file", exc)
                     cont.resumeWithException(exc)
@@ -2381,6 +2415,21 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         return countOfBlack
     }
 
+    private fun calculateRefreshRate_LineObject(bytes: ByteArray): LineObject {
+        val temp  = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        val bitmap = temp.rotate(90f)
+        val lineObject = findLines(bitmap)
+        if (isJPEGSavedEnable) {
+            lineObject.mat.forEach {
+                it.toBitmap().compress(Bitmap.CompressFormat.JPEG, 80, FileOutputStream(createFile("Line","jpg")))
+            }
+        }
+
+        temp.recycle()
+        bitmap.recycle()
+        return lineObject
+    }
+
     private fun calculateRefreshRate_CircleObject(bytes: ByteArray): CircleObject {
         val temp  = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
         val bitmap = temp.rotate(90f)
@@ -2388,7 +2437,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         val circleObject = findCircles(bitmap)
 
         if (isJPEGSavedEnable)
-            circleObject.mat.toBitmap().compress(Bitmap.CompressFormat.JPEG, 80, FileOutputStream(createFile(null,"jpg")))
+            circleObject.mat.toBitmap().compress(Bitmap.CompressFormat.JPEG, 80, FileOutputStream(createFile("Circle","jpg")))
 
         temp.recycle()
         bitmap.recycle()
@@ -2682,52 +2731,57 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     }
 
     private fun findCircles(bitmap: Bitmap): CircleObject {
-        var image = bitmap.toMat()
+        try {
+            var image = bitmap.toMat()
 
-        val width = image.width()
-        val height = image.height()
-        val targetSizeWidth = getFocusRatio(currentFocusIconFlag) * width * 0.9
-        val targetSizeHeight = getFocusRatio(currentFocusIconFlag) * height * 0.9
-        val startX = (width / 2) - (targetSizeWidth / 2)
-        val startY = (height / 2) - (targetSizeHeight / 2)
+            val width = image.width()
+            val height = image.height()
+            val targetSizeWidth = getFocusRatio(currentFocusIconFlag) * width * 0.9
+            val targetSizeHeight = getFocusRatio(currentFocusIconFlag) * height * 0.9
+            val startX = (width / 2) - (targetSizeWidth / 2)
+            val startY = (height / 2) - (targetSizeHeight / 2)
 
-        val roi = org.opencv.core.Rect(
-            startX.roundToInt(),
-            startY.roundToInt(),
-            targetSizeWidth.roundToInt(),
-            targetSizeHeight.roundToInt()
-        )     //use 1 / 4 of picture to speed up calculation
+            val roi = org.opencv.core.Rect(
+                startX.roundToInt(),
+                startY.roundToInt(),
+                targetSizeWidth.roundToInt(),
+                targetSizeHeight.roundToInt()
+            )     //use 1 / 4 of picture to speed up calculation
 
-        image = Mat(image, roi)
-        val gray = Mat()
-        val gaussian = Mat()
-        val th1 = Mat()
-        val th2 = Mat()
-        val contour: MutableList<MatOfPoint> = ArrayList<MatOfPoint>()
+            image = Mat(image, roi)
+            val gray = Mat()
+            val gaussian = Mat()
+            val th1 = Mat()
+            val th2 = Mat()
+            val contour: MutableList<MatOfPoint> = ArrayList<MatOfPoint>()
 
-        Imgproc.cvtColor(image, gray, Imgproc.COLOR_BGR2GRAY)
-        Imgproc.medianBlur(gray, gray, 3)
-        Imgproc.GaussianBlur(gray, gaussian, org.opencv.core.Size(9.0, 9.0), 2.0, 2.0)
-        Imgproc.threshold(gaussian, th1, 100.0, 255.0, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU)
-        Imgproc.threshold(th1, th2, 127.0, 255.0, Imgproc.THRESH_BINARY_INV)
+            Imgproc.cvtColor(image, gray, Imgproc.COLOR_BGR2GRAY)
+            Imgproc.medianBlur(gray, gray, 3)
+            Imgproc.GaussianBlur(gray, gaussian, Size(9.0, 9.0), 2.0, 2.0)
+            Imgproc.threshold(gaussian, th1, 100.0, 255.0, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU)
+            Imgproc.threshold(th1, th2, 127.0, 255.0, Imgproc.THRESH_BINARY_INV)
 
-        Imgproc.findContours(th2, contour, Mat(), Imgproc.RETR_TREE, Imgproc.CHAIN_APPROX_SIMPLE)
+            Imgproc.findContours(th2, contour, Mat(), Imgproc.RETR_TREE, Imgproc.CHAIN_APPROX_SIMPLE)
 
-        for (cnt in contour) {
-            val m = Imgproc.moments(cnt)
-            val cX = m.m10 / m.m00
-            val cY = m.m01 / m.m00
-            Imgproc.circle(image, org.opencv.core.Point(cX, cY), 10, Scalar(254.0, 227.0, 1.0), -1)
-        }
-        pixelArrangement(contour)
+            for (cnt in contour) {
+                val m = Imgproc.moments(cnt)
+                val cX = m.m10 / m.m00
+                val cY = m.m01 / m.m00
+                Imgproc.circle(image, org.opencv.core.Point(cX, cY), 10, Scalar(254.0, 227.0, 1.0), -1)
+            }
+            pixelArrangement(contour)
 
-        val circleObject = CircleObject(image, contour.size)
+            val circleObject = CircleObject(image, contour.size)
 //        image.release()
-        gray.release()
-        gaussian.release()
-        th1.release()
-        th2.release()
-        return circleObject
+            gray.release()
+            gaussian.release()
+            th1.release()
+            th2.release()
+            return circleObject
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return  CircleObject(bitmap.toMat(), 0)
+        }
     }
 
     private fun pixelArrangement(contour: MutableList<MatOfPoint>) {
@@ -2772,59 +2826,162 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     }
 
     private fun findLines(bitmap: Bitmap): LineObject {
-        var image = bitmap.toMat()
+        try {
+            var image = bitmap.toMat()
 
-        val width = image.width()
-        val height = image.height()
-        val targetSizeWidth = getFocusRatio(currentFocusIconFlag) * width * 0.9
-        val targetSizeHeight = getFocusRatio(currentFocusIconFlag) * height * 0.9
-        val startX = (width / 2) - (targetSizeWidth / 2)
-        val startY = (height / 2) - (targetSizeHeight / 2)
+            val width = image.width()
+            val height = image.height()
+            val targetSizeWidth = getFocusRatio(currentFocusIconFlag) * width * 0.9
+            val targetSizeHeight = getFocusRatio(currentFocusIconFlag) * height * 0.9
+            val startX = (width / 2) - (targetSizeWidth / 2)
+            val startY = (height / 2) - (targetSizeHeight / 2)
 
-        val roi = org.opencv.core.Rect(
-            startX.roundToInt(),
-            startY.roundToInt(),
-            targetSizeWidth.roundToInt(),
-            targetSizeHeight.roundToInt()
-        )     //use 1 / 4 of picture to speed up calculation
+            val roi = org.opencv.core.Rect(
+                startX.roundToInt(),
+                startY.roundToInt(),
+                targetSizeWidth.roundToInt(),
+                targetSizeHeight.roundToInt()
+            )     //use 1 / 4 of picture to speed up calculation
 
-        image = Mat(image, roi)
 
-        val edges = Mat()
-        val lines = Mat()
+            image = Mat(image, roi)
 
-        Imgproc.cvtColor(image, edges, Imgproc.COLOR_BGR2GRAY)
-        Imgproc.blur(edges, edges, org.opencv.core.Size(3.0, 3.0))
-        Imgproc.threshold(edges, edges, 127.0, 255.0, Imgproc.THRESH_BINARY_INV)
-        Imgproc.erode(edges, edges, Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, org.opencv.core.Size(2.0, 2.0)))
-        Imgproc.dilate(edges, edges, Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, org.opencv.core.Size(2.0, 2.0)))
-        Imgproc.Canny(edges, edges, 100.0, 200.0, 3)
+            val blur = Mat()
+            val edges = Mat()
+            var gray = Mat()
+            val th1 = Mat()
+            val lines = Mat()
 
-        val threshold = 80
-        val minLineSize = 50.0
-        val linGap = 50.0
+            val hls = ArrayList<Mat>()
 
-        Imgproc.HoughLinesP(edges, lines, 1.0, Math.PI / 180, threshold, minLineSize, linGap)
+            Imgproc.blur(image, blur, Size(10.0, 10.0))
 
-        if(lines.rows() > 0) {
-            Log.i(TAG, "line count: ${lines.rows()}")
-            for (y in 0 until lines.rows()) {
-                val vec = lines.get(y, 0)
-                val x1 = vec[0]
-                val y1 = vec[1]
-                val x2 = vec[2]
-                val y2 = vec[3]
-                val start = org.opencv.core.Point(x1, y1)
-                val end = org.opencv.core.Point(x2, y2)
-                Imgproc.line(edges, start, end, Scalar(255.0, 0.0, 0.0), 3)
+            Imgproc.cvtColor(blur, gray, Imgproc.COLOR_BGR2GRAY)
+
+            Imgproc.threshold(gray, gray, Core.mean(gray).`val`[0], 255.0, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU)
+
+            Imgproc.blur(gray, gray, Size(40.0, 40.0))
+
+            Imgproc.threshold(gray, th1, Core.mean(gray).`val`[0], 255.0, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU)
+
+            val roiR = org.opencv.core.Rect(
+                0, 0, (targetSizeWidth / 2).toInt(), targetSizeHeight.toInt()
+            )
+            val left = Mat(th1, roiR)
+
+            val roiL = org.opencv.core.Rect(
+                (targetSizeWidth/2).toInt(), 0, (targetSizeWidth/2).toInt(), targetSizeHeight.toInt()
+            )
+            val right = Mat(th1, roiL)
+
+            val roiU = org.opencv.core.Rect(
+                0, 0, targetSizeWidth.toInt(), (targetSizeHeight / 2).toInt()
+            )
+            val up = Mat(th1, roiU)
+
+            val roiD = org.opencv.core.Rect(
+                0, (targetSizeHeight / 2).toInt(), targetSizeWidth.toInt(), (targetSizeHeight / 2).toInt()
+            )
+            val down = Mat(th1, roiD)
+
+            val brightR = Core.countNonZero(right)
+            val brightL = Core.countNonZero(left)
+            val brightU = Core.countNonZero(up)
+            val brightD = Core.countNonZero(down)
+
+            Imgproc.Canny(th1, edges, Core.mean(gray).`val`[0] * 0.75, Core.mean(gray).`val`[0] * 1.25, 3)
+
+            val threshold = 50
+            val minLineSize = (targetSizeWidth + targetSizeHeight) / 2 * 0.5        //pixels
+            val lineGap = targetSizeWidth / 20      //pixles
+
+            Imgproc.HoughLinesP(edges, lines, 1.0, Math.PI / 180, threshold, minLineSize, lineGap)
+
+            val angles = ArrayList <Double>()
+            if(lines.rows() > 0) {
+                Log.i(TAG, "line count: ${lines.rows()}")
+                for (y in 0 until lines.rows()) {
+                    val vec = lines.get(y, 0)
+                    val x1 = vec[0]
+                    val y1 = vec[1]
+                    val x2 = vec[2]
+                    val y2 = vec[3]
+                    val start = org.opencv.core.Point(x1, y1)
+                    val end = org.opencv.core.Point(x2, y2)
+                    val angle = atan2(y1 - y2, x1 - x2).roundToDecimalPlaces(1)
+                    angles.add(angle)
+//                    Imgproc.line(image, start, end, Scalar(255.0, 0.0, 0.0), 3)
+                }
             }
-        }
 
-        val lineObject = LineObject(edges, lines.rows())
-        image.release()
-//        edges.release()
-        lines.release()
-        return lineObject
+            val thetas = ArrayList<Double>()
+
+            //threshold − A variable of the type integer representing the minimum number of intersections to “detect” a line.
+            Imgproc.HoughLines(edges, lines, 1.0, Math.PI / 180, 125)
+            for (i in 0 until lines.rows()) {
+                val rho = lines.get(i, 0)[0]
+                val theta = lines.get(i, 0)[1]
+                val a = cos(theta)
+                val b = sin(theta)
+                val x0 = a * rho
+                val y0 = b * rho
+                val pt1 = org.opencv.core.Point(Math.round(x0 + 1000*(-b)).toDouble(),
+                    Math.round(y0 + 1000*(a)).toDouble()
+                )
+                val pt2 = org.opencv.core.Point(Math.round(x0 - 1000*(-b)).toDouble(),
+                    Math.round(y0 - 1000*(a)).toDouble()
+                )
+                Imgproc.line(image, pt1, pt2, Scalar(255.0, 0.0, 0.0), 3)
+                thetas.add(theta.roundToDecimalPlaces(1))
+            }
+
+            val XYZ = sensorListener.getXYZ()
+
+            val mapAngles = angles.groupingBy { it }.eachCount().filter { it.value > 0 }
+            Log.i(TAG, "X: ${XYZ[0]}, Angles: $mapAngles")
+
+            val mapThetas = thetas.groupingBy { it }.eachCount().filter { it.value > 0 }
+
+            Log.i(TAG, "Thetas: $mapThetas")
+
+            var isHaveBlackLine = mapAngles.keys.size < 3
+
+            val brightRLRatio: Double = if (brightR > brightL) brightL.toDouble() / brightR.toDouble()
+            else brightR.toDouble() / brightL.toDouble()
+
+            val brightUDRatio: Double = if (brightU > brightD) brightD.toDouble() / brightU.toDouble()
+            else brightU.toDouble() / brightD.toDouble()
+
+            if (isHaveBlackLine)
+                isHaveBlackLine = (brightRLRatio > 0.75 || brightUDRatio > 0.75) && abs(brightRLRatio - brightUDRatio) < 0.1
+
+            if (isHaveBlackLine)
+                isHaveBlackLine = mapThetas.keys.isNotEmpty() && lines.rows() > 2
+
+            Log.i(TAG, "brightRLRatio: $brightRLRatio, brightUDRatio: $brightUDRatio, isHaveBlackLine: $isHaveBlackLine")
+
+            val array = ArrayList<Mat>()
+            array.add(gray)
+            array.add(th1)
+            array.add(image)
+            val lineObject = LineObject(array, thetas, angles, brightRLRatio, brightUDRatio, isHaveBlackLine)
+//            image.release()
+//            th1.release()
+//            gray.release()
+            right.release()
+            left.release()
+            up.release()
+            down.release()
+            edges.release()
+            lines.release()
+            blur.release()
+            return lineObject
+        } catch (e: Exception) {
+            e.printStackTrace()
+            val array = ArrayList<Mat>()
+            array.add(bitmap.toMat())
+            return LineObject(array, ArrayList(), ArrayList(), 0.0, 0.0, false)
+        }
     }
 
     private fun findBlackRate(bitmap: Bitmap): CountOfBlack {
@@ -2850,10 +3007,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         val gaussian = Mat()
         val th1 = Mat()
         Imgproc.cvtColor(image, gray, Imgproc.COLOR_BGR2GRAY)
-        Imgproc.GaussianBlur(gray, gaussian, org.opencv.core.Size(15.0, 15.0), 0.0)
-        Imgproc.threshold(gaussian, th1, 10.0, 255.0, Imgproc.THRESH_BINARY)
+        Imgproc.GaussianBlur(gray, gaussian, Size(15.0, 15.0), 0.0)
+        Imgproc.threshold(gaussian, th1, 20.0, 255.0, Imgproc.THRESH_BINARY)        //thresh: 10
         val nonZeroCount = org.opencv.core.Core.countNonZero(th1)
-        val totalPixels = width * height
+        val totalPixels = targetSizeWidth * targetSizeHeight
         val blackOfCount = totalPixels - nonZeroCount
 
         val countOfBlack = CountOfBlack(th1, blackOfCount.toDouble(), totalPixels.toDouble())
@@ -3167,11 +3324,47 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
         val apertures = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_APERTURES)
         when {
-            apertures != null -> {
-                val av = apertures[apertures.size - 1]
-                setApertureSize(av)
+            isContrastEnable || isColorTemperatureEnable -> {
+                when {
+                    apertures != null -> {
+                        val av = apertures[apertures.size - 1]
+                        setApertureSize(av)
+                    }
+                }
             }
+            isRefreshRateEnable -> {
+                when {
+                    apertures != null -> {
+                        val av = apertures[0]
+                        setApertureSize(av)
+                    }
+                }
+            }
+
+            //        when(measurementItem) {
+            //            Measurement.Contrast -> {           //iso 50, tv 350
+            //                val ae = (10.0.pow(9) / 350).roundToLong()
+            //                val iso = 50
+            //                setExposureTime(ae)
+            //                setSensorSensitivity(iso)
+            //            }
+            //            Measurement.ColorTemperature -> {
+            //                val iso = 50
+            //                val ae = (10.0.pow(9) / 350).roundToLong()
+            //                setExposureTime(ae)
+            //                setSensorSensitivity(iso)
+            //            }
+            //            Measurement.RefreshRate -> {
+            //            }
+            //            Measurement.None -> {
+            //                val iso = 50
+            //                val ae = (10.0.pow(9) / 350).roundToLong()
+            //                setExposureTime(ae)
+            //                setSensorSensitivity(iso)
+            //            }
+            //        }
         }
+
 //        when(measurementItem) {
 //            Measurement.Contrast -> {           //iso 50, tv 350
 //                val ae = (10.0.pow(9) / 350).roundToLong()
@@ -3232,8 +3425,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         }
     }
 
-    inner class LightSensorListener: SensorEventListener {
+    inner class SensorListener: SensorEventListener {
         private var lux = 0f
+        private var XYZ = FloatArray(3)
         override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
             Log.i(TAG, "Sensor: ${sensor!!.name}, accuracy: $accuracy")
         }
@@ -3243,10 +3437,23 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 //                Log.i(TAG, "Lux: ${event.values[0]}")
                 lux = event.values[0]
             }
+            when (event.sensor.type) {
+                Sensor.TYPE_ORIENTATION -> {
+                    XYZ[0] = if (event.values[0] > 40) event.values[0] - 40
+                    else event.values[0] + 320
+                    XYZ[1] = event.values[1]
+                    XYZ[2] = event.values[2]
+//                    Log.i(TAG, "Rotation: X: ${XYZ[0]}, Y: ${XYZ[1]}, Z: ${XYZ[2]}")
+                }
+            }
         }
 
         fun getLux(): Float {
             return lux
+        }
+
+        fun getXYZ(): FloatArray {
+            return XYZ
         }
     }
 
@@ -3503,13 +3710,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             override fun close() = image.close()
         }
 
-        data class LineObject(val mat: Mat, val lines: Int)
+        data class LineObject(val mat: ArrayList<Mat>, val linesThetas: ArrayList<Double>, val linesPAngels: ArrayList<Double>, val brightRLRatio: Double, val brightUDRatio: Double, val isHaveBlackLine: Boolean, var file: File? = null)
 
         data class CircleObject(val mat: Mat, val circles: Int, var file: File? = null)
 
         data class CountOfBlack(val mat: Mat, val blackOfCount: Double, val totalCount: Double, var file: File? = null)
 
-        data class BlackCircleObject(var mat: Mat, var blackOfCount: Double, var totalCount: Double, var circles: Int, var file: File? = null)
+        data class BlackLineObject(var mat: Mat, var blackOfCount: Double, var totalCount: Double, var lines: Int, var file: File? = null)
 
         data class ContrastObject(var lum1: Double, var lum2: Double, var contrast: Double, var file: File? = null)
 
