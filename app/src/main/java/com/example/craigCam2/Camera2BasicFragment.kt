@@ -775,6 +775,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             }
                             contrastObjectJPEGWhite!!.lum1 /= repeatTimesValue + 1
 
+                            Thread.sleep(3000)      //20200729 Johnny ask to delay for checking LED screen
 
                             m_bluetoothSocket = sendToDevice(commandBlack)
                             readCommandHandler.post(readCommandRunnable)
@@ -814,9 +815,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             contrastObject.contrast = if (contrastObject.lum1 > contrastObject.lum2) (contrastObject.lum1 / contrastObject.lum2).roundToDecimalPlaces(0)
                             else (contrastObject.lum2 / contrastObject.lum1).roundToDecimalPlaces(0)
 
+//                            if (contrastObject.contrast < 20 && (contrastObject.contrast.isNaN() || contrastObject.contrast.isNaN()))
+//                                contrastObject = ContrastObject(0.0, 0.0, sensorListener.getLux().toDouble(), pictureObject?.file)
 
-                            if (contrastObject.contrast < 20 && (contrastObject.contrast.isNaN() || contrastObject.contrast.isNaN()))
-                                contrastObject = ContrastObject(0.0, 0.0, sensorListener.getLux().toDouble(), pictureObject?.file)
+                            if (contrastObject.contrast > 1000) {
+                               contrastObject.contrast = (contrastObject.contrast / 100).roundToDecimalPlaces(0) * 100
+                            } else if (contrastObject.contrast > 100) {
+                                contrastObject.contrast = (contrastObject.contrast / 10).roundToDecimalPlaces(0) * 10
+                            }
 
                             try {
                                 view.post {
@@ -852,6 +858,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             }
                             contrastObjectJPEGWhite!!.lum1 /= repeatTimesValue + 1
 
+                            Thread.sleep(3000)      //20200729 Johnny ask to delay for checking LED screen
+
                             m_bluetoothSocket = sendToDevice(commandBlack)
                             readCommandHandler.post(readCommandRunnable)
                             Thread.sleep(1000)
@@ -882,8 +890,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             else (contrastObject.lum2 / contrastObject.lum1).roundToDecimalPlaces(0)
                             contrastObject.file = contrastObjectJPEGBlack!!.file
 
-                            contrastObject = if (contrastObject.contrast.isNaN()) ContrastObject(0.0, 0.0, sensorListener.getLux().toDouble(), contrastObject.file)
-                            else contrastObject
+//                            contrastObject = if (contrastObject.contrast.isNaN()) ContrastObject(0.0, 0.0, sensorListener.getLux().toDouble(), contrastObject.file)
+//                            else contrastObject
+
+                            if (contrastObject.contrast > 1000) {
+                                contrastObject.contrast = (contrastObject.contrast / 100).roundToDecimalPlaces(0) * 100
+                            } else if (contrastObject.contrast > 100) {
+                                contrastObject.contrast = (contrastObject.contrast / 10).roundToDecimalPlaces(0) * 10
+                            }
 
                             try {
                                 view.post {
@@ -929,10 +943,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                 val colorObject = procedureColorTemperature(result)
                                 when {
                                     colorTemperatureObject != null -> {
-                                        colorTemperatureObject!!.cct += colorObject.cct
-                                        colorTemperatureObject!!.cxcy[0] += colorObject.cxcy[0]
-                                        colorTemperatureObject!!.cxcy[1] += colorObject.cxcy[1]
-                                        colorTemperatureCounts.add(colorObject.colorTemperature)
+                                        if (colorObject.cxcy[0] > 0 && colorObject.cxcy[1] > 0) {
+                                            colorTemperatureObject!!.cct += colorObject.cct
+                                            colorTemperatureObject!!.cxcy[0] += colorObject.cxcy[0]
+                                            colorTemperatureObject!!.cxcy[1] += colorObject.cxcy[1]
+                                            colorTemperatureCounts.add(colorObject.colorTemperature)
+                                        }
                                     }
                                     else -> {
 
@@ -946,6 +962,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         when {
                             colorTemperatureObject != null -> {
                                 colorTemperatureObject!!.cct /= repeatTimesValue + 1
+                                colorTemperatureObject!!.cct = (colorTemperatureObject!!.cct / 100).toInt() * 100
                                 colorTemperatureObject!!.cxcy[0] = (colorTemperatureObject!!.cxcy[0] / (repeatTimesValue + 1)).roundToDecimalPlaces(2)
                                 colorTemperatureObject!!.cxcy[1] = (colorTemperatureObject!!.cxcy[1] / (repeatTimesValue + 1)).roundToDecimalPlaces(2)
                                 val countOfWarm = colorTemperatureCounts.count { it == ColorTemperature.Warm }
@@ -1139,7 +1156,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                     if (!isContrastEnable) contrastObject = ContrastObject(0.0, 0.0, 0.0)
                     if (!isColorTemperatureEnable) colorTemperatureObject = ColorTemperatureObject(
-                        doubleArrayOf(0.0, 0.0), 0.0, ColorTemperature.None
+                        doubleArrayOf(0.0, 0.0), 0, ColorTemperature.None
                     )
                     if (!isRefreshRateEnable) refreshRate = 0
 
@@ -1149,7 +1166,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             contrastObject.lum1.toInt().toString() + " : " + contrastObject.lum2.toInt().toString() + ")"
                     else "0"
 
-                    val colorTemperatureDescription = if (isColorTemperatureEnable) colorTemperatureObject!!.colorTemperature.name + " (" +
+                    val colorTemperatureDescription = if (isColorTemperatureEnable) "${colorTemperatureObject!!.cct}K" + " (" +
                             colorTemperatureObject!!.cxcy[0].toString() + ", " + colorTemperatureObject!!.cxcy[1].toString() + ")"
                     else ColorTemperature.None.name
 
@@ -1201,12 +1218,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         showToast(50.0f, "Contrast", Color.argb(0xAA, 0xAA, 0x00, 0x00))
                     }
 
-                    val range = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
-                    val max = range!!.upper
-                    val min = range.lower
-                    val tvList = getTvList(min, max)
-                    val index = tvList.indexOf(125)
-                    tvCustomSeekBar.setDefaultValue(index)
+                    setSeekBarDefaultValue(125, 50)
 
                     btnContrast.setImageResource(R.drawable.ic_contrast_selection)
 //                    contrastTargetLayout.visibility = View.VISIBLE
@@ -1269,6 +1281,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         showToast(50.0f, "Refresh Rate", Color.argb(0xAA, 0xAA, 0x00, 0x00))
                     }
 
+                    setSeekBarDefaultValue(500, 800)
+
                     btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate_selection)
 //                    contrastTargetLayout.visibility = View.INVISIBLE
                     focusAreaLayout.visibility = View.VISIBLE
@@ -1329,12 +1343,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         showToast(50.0f, "Color Temp.", Color.argb(0xAA, 0xAA, 0x00, 0x00))
                     }
 
-                    val range = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
-                    val max = range!!.upper
-                    val min = range.lower
-                    val tvList = getTvList(min, max)
-                    val index = tvList.indexOf(350)
-                    tvCustomSeekBar.setDefaultValue(index)
+                    setSeekBarDefaultValue(350, 100)
 
                     btnColorTemperature.setImageResource(R.drawable.ic_color_temperature_selection)
 //                    contrastTargetLayout.visibility = View.INVISIBLE
@@ -1508,6 +1517,38 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 focusCustomSeekBar.visibility = View.VISIBLE
 
                 txt_3AValue.text = "${focusZoomScale + 1}/8"
+            }
+        }
+    }
+
+    private fun setSeekBarDefaultValue(defaultExposeTime: Int?, defaultSensorSensitivity: Int?) {
+        if (defaultExposeTime != null) {
+            val range = characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
+            val max = range!!.upper
+            val min = range.lower
+            val tvList = getTvList(min, max)
+            if (defaultExposeTime in tvList) {
+                val index = tvList.indexOf(defaultExposeTime)
+                tvCustomSeekBar.setDefaultValue(index)
+                tvCustomSeekBar.setValue(index.toFloat())
+                exposureTime = (10.toDouble().pow(9.toDouble()) / defaultExposeTime).toLong()
+
+                setExposureTime(exposureTime)
+            }
+        }
+
+        if (defaultSensorSensitivity != null) {
+            val range1 = characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)
+            val max1 = range1!!.upper //10000
+            val min1 = range1.lower //100
+            val isoList = getISOList(min1, max1)
+            if (defaultSensorSensitivity in isoList) {
+                val index1 = isoList.indexOf(defaultSensorSensitivity)
+                isoCustomSeekBar.setDefaultValue(index1)
+                isoCustomSeekBar.setValue(index1.toFloat())
+                sensorSensitivity = defaultSensorSensitivity
+
+                setSensorSensitivity(sensorSensitivity)
             }
         }
     }
@@ -2468,12 +2509,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 val g = Color.green(argb)
                 val b = Color.blue(argb)
                 val lum = luminance(r, g, b)
-                if (lum < 150) {
+//                if (lum < 180) {
                     red += r
                     green += g
                     blue += b
                     count += 1
-                }
+//                }
             }
         }
         red /= count
@@ -2489,21 +2530,22 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         Log.i(TAG, "Red: $red, Green: $green, Blue: $blue")
 
         val colorTemperatureCCT = if (cct < 5000) ColorTemperature.Warm
-        else if (cct >= 5000 && cct < 8000) ColorTemperature.Normal
+        else if (cct >= 5000 && cct < 6000) ColorTemperature.Normal
         else ColorTemperature.Cold
 
         var colorTemperature: ColorTemperature = ColorTemperature.None
-        if (abs(red - green) < (0.05 * 255) && abs(red - blue) < (0.05 * 255)){
-            colorTemperature = ColorTemperature.Normal
-            Log.i(TAG, "Normal color temperature")
-        }
-        else if (red > green && red > blue || (red > green && abs(red - blue) < (0.1 * 255))){
+
+        if (red > blue && red >= green){
             colorTemperature = ColorTemperature.Warm
             Log.i(TAG, "Warm color temperature")
         }
-        else if (blue > red && blue > green){
+        else if (blue > red && blue >= green){
             colorTemperature = ColorTemperature.Cold
             Log.i(TAG, "Cold color temperature")
+        }
+        else if (abs(red - green) < (0.05 * 255) && abs(red - blue) < (0.05 * 255)){
+            colorTemperature = ColorTemperature.Normal
+            Log.i(TAG, "Normal color temperature")
         }
         else{
             colorTemperature = ColorTemperature.None
@@ -2518,22 +2560,36 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         else ColorTemperatureObject(cxcy, cct, colorTemperature)
     }
 
-    private fun calculateXY(r: Float, g: Float, b: Float):DoubleArray {
-        val X = (412.5 * r) + (357.6 * g) + (180.4 * b)
-        val Y = (212.7 * r) + (712.5 * g) + (72.2 * b)      //luminance
-        val Z = (19.3 * r) + (119.2 * g) + (950.3 * b)
+    private fun calculateXY(red: Float, green: Float, blue: Float):DoubleArray {
+        val r: Double = pivotRgb(red / 255.0).roundToDecimalPlaces(0)
+        val g: Double = pivotRgb(green / 255.0).roundToDecimalPlaces(0)
+        val b: Double = pivotRgb(blue / 255.0).roundToDecimalPlaces(0)
 
-        val cx = X / (X + Y + Z)
-        val cy = Y / (X + Y + Z)
-        return doubleArrayOf(cx.roundToDecimalPlaces(2), cy.roundToDecimalPlaces(2))
+        val X = r * 0.4124 + g * 0.3576 + b * 0.1805
+        val Y = r * 0.2126 + g * 0.7152 + b * 0.0722
+        val Z = r * 0.0193 + g * 0.1192 + b * 0.9505
+
+        var cx = floor(X) / (X.toInt() + Y.toInt() + Z.toInt())
+        var cy = floor(Y) / (X.toInt() + Y.toInt() + Z.toInt())
+
+        if(cx > 0.1) cx -= 0.01      //for compensating
+        if(cy > 0.1) cy -= 0.01      //for compensating
+        return doubleArrayOf(cx.roundToDecimalPlaces_ROUND_FLOOR(2), cy.roundToDecimalPlaces_ROUND_FLOOR(2))
+    }
+
+    private fun pivotRgb(n: Double): Double {
+        return (if (n > 0.04045) Math.pow((n + 0.055) / 1.055, 2.4) else n / 12.92) * 100
     }
 
     fun Double.roundToDecimalPlaces(i: Int) = if (this.isNaN() || this.isInfinite()) 0.0
     else BigDecimal(this).setScale(i, BigDecimal.ROUND_HALF_UP).toDouble()
 
-    private fun calculateCCT(cx: Double, cy: Double):Double {
+    fun Double.roundToDecimalPlaces_ROUND_FLOOR(i: Int) = if (this.isNaN() || this.isInfinite()) 0.0
+    else BigDecimal(this).setScale(i, BigDecimal.ROUND_FLOOR).toDouble()
+
+    private fun calculateCCT(cx: Double, cy: Double):Int {
         val n = (cx - 0.3320) / (0.1858 - cy)
-        val cct = (449 * (n * n * n)) + (3525 * (n * n)) + (6823.3 * n) + 5520.33
+        val cct: Int = (((449 * (n * n * n)) + (3525 * (n * n)) + (6823.3 * n) + 5520.33) / 100).toInt() * 100
         return cct
     }
 
@@ -3114,7 +3170,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     private fun readData(){
         settings = context!!.getSharedPreferences(PREF_NAME, PRIVATE_MODE)
-        sensorSensitivity = settings.getInt(SENSOR_SENSITIVITY, 0)
+        sensorSensitivity = settings.getInt(SENSOR_SENSITIVITY, 50)
         exposureTime = settings.getLong(EXPOSURE_TIME, 0)
         aperture = settings.getFloat(APERTURE, 0f)
         isManualEnable = settings.getBoolean(MANUAL_ENABLE, false)
@@ -3312,6 +3368,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             }
         }
 
+        previewRequestBuilder.set(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_AUTO)
+
         captureSession.setRepeatingRequest(previewRequestBuilder.build(), null, backgroundHandler)
     }
 
@@ -3340,53 +3398,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     }
                 }
             }
-
-            //        when(measurementItem) {
-            //            Measurement.Contrast -> {           //iso 50, tv 350
-            //                val ae = (10.0.pow(9) / 350).roundToLong()
-            //                val iso = 50
-            //                setExposureTime(ae)
-            //                setSensorSensitivity(iso)
-            //            }
-            //            Measurement.ColorTemperature -> {
-            //                val iso = 50
-            //                val ae = (10.0.pow(9) / 350).roundToLong()
-            //                setExposureTime(ae)
-            //                setSensorSensitivity(iso)
-            //            }
-            //            Measurement.RefreshRate -> {
-            //            }
-            //            Measurement.None -> {
-            //                val iso = 50
-            //                val ae = (10.0.pow(9) / 350).roundToLong()
-            //                setExposureTime(ae)
-            //                setSensorSensitivity(iso)
-            //            }
-            //        }
         }
-
-//        when(measurementItem) {
-//            Measurement.Contrast -> {           //iso 50, tv 350
-//                val ae = (10.0.pow(9) / 350).roundToLong()
-//                val iso = 50
-//                setExposureTime(ae)
-//                setSensorSensitivity(iso)
-//            }
-//            Measurement.ColorTemperature -> {
-//                val iso = 50
-//                val ae = (10.0.pow(9) / 350).roundToLong()
-//                setExposureTime(ae)
-//                setSensorSensitivity(iso)
-//            }
-//            Measurement.RefreshRate -> {
-//            }
-//            Measurement.None -> {
-//                val iso = 50
-//                val ae = (10.0.pow(9) / 350).roundToLong()
-//                setExposureTime(ae)
-//                setSensorSensitivity(iso)
-//            }
-//        }
     }
 
     fun backToSendCommand() {
@@ -3720,7 +3732,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
         data class ContrastObject(var lum1: Double, var lum2: Double, var contrast: Double, var file: File? = null)
 
-        data class ColorTemperatureObject(var cxcy: DoubleArray, var cct: Double, var colorTemperature: ColorTemperature, var file: File? = null)
+        data class ColorTemperatureObject(var cxcy: DoubleArray, var cct: Int, var colorTemperature: ColorTemperature, var file: File? = null)
 
         data class PictureObject(var file: File? = null)
         private const val PERMISSIONS_REQUEST_CODE = 10
