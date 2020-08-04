@@ -944,7 +944,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                 when {
                                     colorTemperatureObject != null -> {
                                         if (colorObject.cxcy[0] > 0 && colorObject.cxcy[1] > 0) {
-                                            colorTemperatureObject!!.cct += colorObject.cct
+//                                            colorTemperatureObject!!.cct += colorObject.cct
                                             colorTemperatureObject!!.cxcy[0] += colorObject.cxcy[0]
                                             colorTemperatureObject!!.cxcy[1] += colorObject.cxcy[1]
                                             colorTemperatureCounts.add(colorObject.colorTemperature)
@@ -961,10 +961,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                         when {
                             colorTemperatureObject != null -> {
-                                colorTemperatureObject!!.cct /= repeatTimesValue + 1
-                                colorTemperatureObject!!.cct = (colorTemperatureObject!!.cct / 100).toInt() * 100
+//                                colorTemperatureObject!!.cct /= repeatTimesValue + 1
+//                                colorTemperatureObject!!.cct = (colorTemperatureObject!!.cct / 100).toInt() * 100
                                 colorTemperatureObject!!.cxcy[0] = (colorTemperatureObject!!.cxcy[0] / (repeatTimesValue + 1)).roundToDecimalPlaces(2)
                                 colorTemperatureObject!!.cxcy[1] = (colorTemperatureObject!!.cxcy[1] / (repeatTimesValue + 1)).roundToDecimalPlaces(2)
+
+                                colorTemperatureObject!!.cct = calculateCCT(colorTemperatureObject!!.cxcy[0], colorTemperatureObject!!.cxcy[1])
+
                                 val countOfWarm = colorTemperatureCounts.count { it == ColorTemperature.Warm }
                                 val countOfCold = colorTemperatureCounts.count { it == ColorTemperature.Cold }
                                 val countOfNormal = colorTemperatureCounts.count {it == ColorTemperature.Normal}
@@ -1343,7 +1346,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         showToast(50.0f, "Color Temp.", Color.argb(0xAA, 0xAA, 0x00, 0x00))
                     }
 
-                    setSeekBarDefaultValue(350, 100)
+                    setSeekBarDefaultValue(125, 100)
 
                     btnColorTemperature.setImageResource(R.drawable.ic_color_temperature_selection)
 //                    contrastTargetLayout.visibility = View.INVISIBLE
@@ -1485,6 +1488,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 //                avCustomSeekBar.visibility = View.INVISIBLE
                 focusCustomSeekBar.visibility = View.INVISIBLE
 
+                btnExposure.background = resources.getDrawable(R.drawable.border_image)
+                btnISO.setBackgroundResource(0)
+                btnFocus.setBackgroundResource(0)
                 txt_3AValue.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / exposureTime)}s"
             }
             R.id.btnISO -> {
@@ -1495,6 +1501,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 //                avCustomSeekBar.visibility = View.INVISIBLE
                 focusCustomSeekBar.visibility = View.INVISIBLE
 
+                btnISO.background = resources.getDrawable(R.drawable.border_image)
+                btnExposure.setBackgroundResource(0)
+                btnFocus.setBackgroundResource(0)
                 txt_3AValue.text = "ISO $sensorSensitivity"
             }
 //            R.id.btnAperture -> {
@@ -1516,6 +1525,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 focusCustomSeekBar.visibility = View.VISIBLE
 
+                btnFocus.background = resources.getDrawable(R.drawable.border_image)
+                btnExposure.setBackgroundResource(0)
+                btnISO.setBackgroundResource(0)
                 txt_3AValue.text = "${focusZoomScale + 1}/8"
             }
         }
@@ -1551,6 +1563,16 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 setSensorSensitivity(sensorSensitivity)
             }
         }
+
+        val focusIconFlag = FocusIconSize.ZOOM3_8
+        focusZoomScale = 2
+        setZoomArea(focusZoomScale)
+        focusCustomSeekBar.setValue(focusZoomScale.toFloat())
+        currentFocusIconFlag = focusIconFlag
+
+        btnExposure.background = resources.getDrawable(R.drawable.border_image)
+        btnISO.setBackgroundResource(0)
+        btnFocus.setBackgroundResource(0)
     }
 
     private val restoreButtonAction = Runnable {
@@ -2589,7 +2611,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     private fun calculateCCT(cx: Double, cy: Double):Int {
         val n = (cx - 0.3320) / (0.1858 - cy)
-        val cct: Int = (((449 * (n * n * n)) + (3525 * (n * n)) + (6823.3 * n) + 5520.33) / 100).toInt() * 100
+        val cct: Int =  (437 * n.pow(3.0) + 3601 * n.pow(2.0) + 6861 * n + 5517).roundToInt()
         return cct
     }
 
@@ -2645,6 +2667,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         luminance1 = if (luminance1 > darkNoiseValue) luminance1 - darkNoiseValue         //125 is black offset
         else if (luminance1 > 65535.0) 65535.0
         else if (luminance1 < darkNoiseValue) 1.0
+        else luminance1
+
+        luminance1 = if (luminance1 < 1) 1.0            //20200730 for avoiding 0.x value
         else luminance1
 
         val contrastLum = luminance1
@@ -3151,8 +3176,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private fun saveData(){
         settings = context!!.getSharedPreferences(PREF_NAME, PRIVATE_MODE)
         settings.edit()
-            .putInt(SENSOR_SENSITIVITY, sensorSensitivity)
-            .putLong(EXPOSURE_TIME, exposureTime)
+//            .putInt(SENSOR_SENSITIVITY, sensorSensitivity)
+//            .putLong(EXPOSURE_TIME, exposureTime)
             .putFloat(APERTURE, aperture)
             .putBoolean(MANUAL_ENABLE, isManualEnable)
 //            .putBoolean(AUTO_ENABLE, isAutoEnable)
@@ -3170,8 +3195,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     private fun readData(){
         settings = context!!.getSharedPreferences(PREF_NAME, PRIVATE_MODE)
-        sensorSensitivity = settings.getInt(SENSOR_SENSITIVITY, 50)
-        exposureTime = settings.getLong(EXPOSURE_TIME, 0)
+//        sensorSensitivity = settings.getInt(SENSOR_SENSITIVITY, 50)
+//        exposureTime = settings.getLong(EXPOSURE_TIME, 0)
         aperture = settings.getFloat(APERTURE, 0f)
         isManualEnable = settings.getBoolean(MANUAL_ENABLE, false)
 //        isAutoEnable = settings.getBoolean(AUTO_ENABLE, false)

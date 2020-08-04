@@ -61,6 +61,7 @@
             android:background="#4D000000"
             android:visibility="invisible"
             >
+
             <ImageView
                 android:id="@+id/btnExposure"
                 android:layout_width="30dp"
@@ -321,7 +322,7 @@
             app:numValue="4"
             app:numMinValue="0"
             app:numMaxValue="7"
-            app:numDefaultValue="3"
+            app:numDefaultValue="2"
             app:numTextColor="@color/secondary_text"
             app:textSize="12sp"
             app:textSpaceHeight="6dp"

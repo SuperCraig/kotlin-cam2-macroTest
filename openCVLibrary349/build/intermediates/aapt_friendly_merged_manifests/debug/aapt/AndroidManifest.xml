@@ -2,8 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="org.opencv"
     android:versionCode="3490"
-    android:versionName="3.4.9" >
-
-    <!-- <uses-sdk android:minSdkVersion="8" android:targetSdkVersion="21" /> -->
+    android:versionName="3.4.9" > <!-- <uses-sdk android:minSdkVersion="8" android:targetSdkVersion="21" /> -->
+    <uses-sdk android:minSdkVersion="1" />
 
 </manifest>

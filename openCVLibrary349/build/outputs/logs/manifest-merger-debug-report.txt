@@ -21,3 +21,11 @@ INJECTED from C:\Users\mblock\craigCamera2\openCVLibrary349\src\main\AndroidMani
 		ADDED from C:\Users\mblock\craigCamera2\openCVLibrary349\src\main\AndroidManifest.xml:4:7-33
 		INJECTED from C:\Users\mblock\craigCamera2\openCVLibrary349\src\main\AndroidManifest.xml
 		INJECTED from C:\Users\mblock\craigCamera2\openCVLibrary349\src\main\AndroidManifest.xml
+uses-sdk
+INJECTED from C:\Users\mblock\craigCamera2\openCVLibrary349\src\main\AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from C:\Users\mblock\craigCamera2\openCVLibrary349\src\main\AndroidManifest.xml
+INJECTED from C:\Users\mblock\craigCamera2\openCVLibrary349\src\main\AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from C:\Users\mblock\craigCamera2\openCVLibrary349\src\main\AndroidManifest.xml
+		ADDED from C:\Users\mblock\craigCamera2\openCVLibrary349\src\main\AndroidManifest.xml
+		INJECTED from C:\Users\mblock\craigCamera2\openCVLibrary349\src\main\AndroidManifest.xml
