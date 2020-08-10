@@ -38,7 +38,7 @@
         android:hint="Enter a number"
         android:inputType="number"
         android:maxLines="1"
-        android:padding="@dimen/_10sdp"
+        android:padding="@dimen/_5sdp"
         android:textCursorDrawable="@drawable/color_cursor"
         android:textSize="@dimen/_12ssp"
         android:textAlignment="center"

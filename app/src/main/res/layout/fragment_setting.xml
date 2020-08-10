@@ -62,7 +62,7 @@
 
                 <com.example.customedittext.SSCustomEdittextOutlinedBorder
                     android:id="@+id/edtWhitePeak"
-                    android:layout_width="150dp"
+                    android:layout_width="@dimen/setting_SSCustomEditText_width"
                     android:layout_height="wrap_content"
                     android:layout_alignEnd="@id/txt_whitePeak"
                     android:inputType="number"
@@ -107,7 +107,7 @@
 
                 <com.example.customedittext.SSCustomEdittextOutlinedBorder
                     android:id="@+id/edtBlackNadir"
-                    android:layout_width="150dp"
+                    android:layout_width="@dimen/setting_SSCustomEditText_width"
                     android:layout_height="wrap_content"
                     android:layout_alignEnd="@id/txt_blackNadir"
                     android:inputType="number"
@@ -152,7 +152,7 @@
 
                 <com.example.customedittext.SSCustomEdittextOutlinedBorder
                     android:id="@+id/edtDarkNoise"
-                    android:layout_width="150dp"
+                    android:layout_width="@dimen/setting_SSCustomEditText_width"
                     android:layout_height="wrap_content"
                     android:layout_alignEnd="@id/txt_darkNoise"
                     android:inputType="number"
@@ -197,7 +197,7 @@
 
                 <com.example.customedittext.SSCustomEdittextOutlinedBorder
                     android:id="@+id/edtRepeatTimes"
-                    android:layout_width="150dp"
+                    android:layout_width="@dimen/setting_SSCustomEditText_width"
                     android:layout_height="wrap_content"
                     android:layout_alignEnd="@id/txt_repeatTimes"
                     android:inputType="number"

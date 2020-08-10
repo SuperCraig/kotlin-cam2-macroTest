@@ -1777,11 +1777,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
 
                 // We fit the aspect ratio of TextureView to the size of preview we picked.
-                if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
-                    textureView.setAspectRatio(previewSize.width, previewSize.height)
-                } else {
-                    textureView.setAspectRatio(previewSize.height, previewSize.width)
-                }
+//                if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+//                    textureView.setAspectRatio(previewSize.width, previewSize.height)
+//                } else {
+//                    textureView.setAspectRatio(previewSize.height, previewSize.width)
+//                }
 
                 // Check if the flash is supported.
                 flashSupported =

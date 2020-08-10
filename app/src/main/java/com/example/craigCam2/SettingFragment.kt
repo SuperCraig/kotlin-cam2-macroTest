@@ -211,7 +211,7 @@ class SettingFragment : Fragment(){
         edtWhitePeak.setTextValue("255")
         edtDarkNoise.setTextValue("0")
         edtBlackNadir.setTextValue("0")
-        edtRepeatTimes.setTextValue("3")
+        edtRepeatTimes.setTextValue("2")
 
         isGridEnable = false
         isSoundEnable = false
@@ -245,7 +245,7 @@ class SettingFragment : Fragment(){
         whitePeakValue = settings.getInt(WHITE_PEAK, 255)
         blackNadirValue = settings.getInt(BLACK_NADIR, 0)
         darkNoiseValue = settings.getInt(DARK_NOISE, 0)
-        repeatTimesValue = settings.getInt(REPEAT_TIMES, 3)
+        repeatTimesValue = settings.getInt(REPEAT_TIMES, 2)
     }
 
     private fun saveData(){
