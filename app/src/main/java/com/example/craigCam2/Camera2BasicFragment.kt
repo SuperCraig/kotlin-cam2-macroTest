@@ -271,6 +271,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private var isGridEnable: Boolean = false
     private var isSoundEnable: Boolean = false
     private var isCloudSyncEnable: Boolean = false
+    private var isPatternSyncEnable: Boolean = false
     private var whitePeakValue: Int = 0
     private var blackNadirValue: Int = 0
     private var darkNoiseValue: Int = 0
@@ -310,7 +311,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private var defaultFocusAreaWidth: Int = 0
     private var defaultFocusAreaHeight: Int = 0
 
-    var currentMeasurement: Measurement = Measurement.None
+    private var currentMeasurement: Measurement = Measurement.None
+    private var currentContrastObject: ContrastObject = ContrastObject(0.0, 0.0, 0.0)
+
     /**
      * [CameraDevice.StateCallback] is called when [CameraDevice] changes its state.
      */
@@ -366,7 +369,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         view.findViewById<View>(R.id.btnFocus).setOnClickListener(this)
 
         val vibrate = context?.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-        val vibrationEffect = VibrationEffect.createOneShot(2, VibrationEffect.DEFAULT_AMPLITUDE)
+        val vibrationEffect = VibrationEffect.createOneShot(25, VibrationEffect.DEFAULT_AMPLITUDE)
 
         readData()          //read shared preferneces data & apply
         readSettingData()
@@ -594,7 +597,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
             val imageList:ArrayList<ImageGalleryUiModel> = imageGalleryUiModelList[ALBUM_NAME]!!
             file = File(imageList[imageList.size - 1].imageUri)
-            imageView.setImageBitmap(BitmapFactory.decodeFile(file.absolutePath))
+//            imageView.setImageBitmap(BitmapFactory.decodeFile(file.absolutePath))
+            imageView.setImageBitmap(getImageThumbnail(file.absolutePath, 100, 100))            //20200810 for Hauwei phone
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -657,6 +661,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         if (progressbarShutter!!.visibility == View.VISIBLE)
             progressbarShutter!!.visibility = View.INVISIBLE
 
+        if (currentMeasurement == Measurement.Contrast_White)
+            currentMeasurement = Measurement.None
+
         sensorManager!!.registerListener(sensorListener, sensorManager!!.getDefaultSensor(Sensor.TYPE_LIGHT), SensorManager.SENSOR_DELAY_NORMAL)
         sensorManager!!.registerListener(sensorListener, sensorManager!!.getDefaultSensor(Sensor.TYPE_ORIENTATION), SensorManager.SENSOR_DELAY_NORMAL)
         Log.i(TAG, "onResume")
@@ -674,6 +681,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 if (isColorTemperatureEnable) task += 1
                 if (isContrastEnable) task += 1
                 if (isRefreshRateEnable) task += 1
+
+                actionVibrate(context, 100, 1)
 
                 if (task == 0) {        //20200623 no measurement item selected
                     val fileName = "$currentDateTime"
@@ -695,7 +704,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         }
 
                         view.post {
-                            btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(pictureObject!!.file!!.absolutePath))
+//                            btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(pictureObject!!.file!!.absolutePath))
+                            btnPhotoBox.setImageBitmap(getImageThumbnail(pictureObject!!.file!!.absolutePath, 100, 100))            //20200810 for Hauwei phone
                             latestFileName = pictureObject!!.file!!.absolutePath
                         }
 
@@ -710,9 +720,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 var count = 0
                 // Disable click listener to prevent multiple requests simultaneously in flight
-                progressbarShutter?.max = 100
-                progressbarShutter?.progress = 0
-                progressbarShutter?.visibility = ProgressBar.VISIBLE
+                if (!isPatternSyncEnable && isContrastEnable) {                //Pattern sync disable and first time to do white pattern
+                    progressbarShutter?.visibility = ProgressBar.VISIBLE
+                } else {
+                    progressbarShutter?.max = 100
+                    progressbarShutter?.progress = 0
+                    progressbarShutter?.visibility = ProgressBar.VISIBLE
+                }
 
 //                view.findViewById<View>(R.id.btnPicture).isEnabled = false
 
@@ -730,197 +744,383 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     if (isContrastEnable) {
                         var scale = 100 /  (2 * (repeatTimesValue + 1))         //white and black times
 
-                        val commandWhite = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0, 0, 0,
-                            Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
-                            Color.argb(0, 0, 0, 0),
-                            Color.argb(0, 0, 0, 0),
-                            Color.argb(0, 0, 0, 0))
+                        if (isPatternSyncEnable) {
+                            val commandWhite = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0, 0, 0,
+                                Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
+                                Color.argb(0, 0, 0, 0),
+                                Color.argb(0, 0, 0, 0),
+                                Color.argb(0, 0, 0, 0))
 
-                        val commandBlack = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0, 0, 0,
-                            Color.argb(0, blackNadirValue, blackNadirValue, blackNadirValue),
-                            Color.argb(0, 0, 0, 0),
-                            Color.argb(0, 0, 0, 0),
-                            Color.argb(0, 0, 0, 0))
+                            val commandBlack = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0, 0, 0,
+                                Color.argb(0, blackNadirValue, blackNadirValue, blackNadirValue),
+                                Color.argb(0, 0, 0, 0),
+                                Color.argb(0, 0, 0, 0),
+                                Color.argb(0, 0, 0, 0))
 
-                        Log.i(TAG, "Lux: ${sensorListener.getLux()}")
-                        if (mRawImageReader != null) {
-                            val fileName = "C_$currentDateTime"
-                            var contrastObjectRAW: ContrastObject? = null
-                            var pictureObject: PictureObject? = null
-                            var contrastObjectJPEGWhite: ContrastObject? = null
-                            var contrastObjectJPEGBlack: ContrastObject? = null
+                            Log.i(TAG, "Lux: ${sensorListener.getLux()}")
+                            if (mRawImageReader != null) {
+                                val fileName = "C_$currentDateTime"
+                                var contrastObjectRAW: ContrastObject? = null
+                                var pictureObject: PictureObject? = null
+                                var contrastObjectJPEGWhite: ContrastObject? = null
+                                var contrastObjectJPEGBlack: ContrastObject? = null
 
-                            m_bluetoothSocket = sendToDevice(commandWhite)
-                            readCommandHandler.post(readCommandRunnable)
-                            Thread.sleep(1000)
+                                m_bluetoothSocket = sendToDevice(commandWhite)
+                                readCommandHandler.post(readCommandRunnable)
+                                Thread.sleep(1000)
 
-                            takeRawPhoto(fileName).use { result ->
+                                takeRawPhoto(fileName).use { result ->
 //                                contrastObjectRAW = procedureContrast(result)
-                                pictureObject = procedureTakePicture(result)
-                            }
-                            takeJPEGPhoto().use { result ->
-                                contrastObjectJPEGWhite = procedureContrast(result)
-                            }
-                            progressbarShutter?.progress = scale
-
-                            for (i in 0 until repeatTimesValue) {       //do repeat calculate
-                                Thread.sleep(200)
-
-                                takeJPEGPhoto().use { result ->
-                                    val contrastObject  = procedureContrast(result)
-                                    contrastObjectJPEGWhite!!.lum1 += contrastObject.lum1
+                                    pictureObject = procedureTakePicture(result)
                                 }
+                                takeJPEGPhoto().use { result ->
+                                    contrastObjectJPEGWhite = procedureContrast(result)
+                                }
+                                progressbarShutter?.progress = scale
 
-                                progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
-                            }
-                            contrastObjectJPEGWhite!!.lum1 /= repeatTimesValue + 1
+                                for (i in 0 until repeatTimesValue) {       //do repeat calculate
+                                    Thread.sleep(200)
 
-                            Thread.sleep(3000)      //20200729 Johnny ask to delay for checking LED screen
+                                    takeJPEGPhoto().use { result ->
+                                        val contrastObject  = procedureContrast(result)
+                                        contrastObjectJPEGWhite!!.lum1 += contrastObject.lum1
+                                    }
 
-                            m_bluetoothSocket = sendToDevice(commandBlack)
-                            readCommandHandler.post(readCommandRunnable)
-                            Thread.sleep(1000)
+                                    progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
+                                }
+                                contrastObjectJPEGWhite!!.lum1 /= repeatTimesValue + 1
 
-                            takeRawPhoto(fileName).use { result ->
+                                Thread.sleep(3000)      //20200729 Johnny ask to delay for checking LED screen
+
+                                m_bluetoothSocket = sendToDevice(commandBlack)
+                                readCommandHandler.post(readCommandRunnable)
+                                Thread.sleep(1000)
+
+                                takeRawPhoto(fileName).use { result ->
 //                                contrastObjectRAW = procedureContrast(result)
-                                pictureObject = procedureTakePicture(result)
-                            }
-                            takeJPEGPhoto().use { result ->
-                                contrastObjectJPEGBlack = procedureContrast(result)
-                            }
-                            progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
-
-
-                            for (i in 0 until repeatTimesValue) {       //do repeat calculate
-                                Thread.sleep(200)
-
-                                takeJPEGPhoto().use { result ->
-                                    val contrastObject = procedureContrast(result)
-                                    contrastObjectJPEGBlack!!.lum1 += contrastObject.lum1
+                                    pictureObject = procedureTakePicture(result)
                                 }
-
+                                takeJPEGPhoto().use { result ->
+                                    contrastObjectJPEGBlack = procedureContrast(result)
+                                }
                                 progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
-                            }
-                            contrastObjectJPEGBlack!!.lum1 /= repeatTimesValue + 1
 
-                            view.post {
-                                showToast("Picture Done!")
-                            }
+
+                                for (i in 0 until repeatTimesValue) {       //do repeat calculate
+                                    Thread.sleep(200)
+
+                                    takeJPEGPhoto().use { result ->
+                                        val contrastObject = procedureContrast(result)
+                                        contrastObjectJPEGBlack!!.lum1 += contrastObject.lum1
+                                    }
+
+                                    progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
+                                }
+                                contrastObjectJPEGBlack!!.lum1 /= repeatTimesValue + 1
+
+                                view.post {
+                                    showToast("Picture Done!")
+                                }
 
 //                            contrastObject = contrastObjectRAW
-                            contrastObject = contrastObjectJPEGWhite
-                            contrastObject!!.file = pictureObject!!.file
-                            contrastObject.lum1 = contrastObjectJPEGWhite!!.lum1
-                            contrastObject.lum2 = contrastObjectJPEGBlack!!.lum1
-                            contrastObject.contrast = if (contrastObject.lum1 > contrastObject.lum2) (contrastObject.lum1 / contrastObject.lum2).roundToDecimalPlaces(0)
-                            else (contrastObject.lum2 / contrastObject.lum1).roundToDecimalPlaces(0)
+                                contrastObject = contrastObjectJPEGWhite
+                                contrastObject!!.file = pictureObject!!.file
+                                contrastObject.lum1 = contrastObjectJPEGWhite!!.lum1
+                                contrastObject.lum2 = contrastObjectJPEGBlack!!.lum1
+                                contrastObject.contrast = if (contrastObject.lum1 > contrastObject.lum2) (contrastObject.lum1 / contrastObject.lum2).roundToDecimalPlaces(0)
+                                else (contrastObject.lum2 / contrastObject.lum1).roundToDecimalPlaces(0)
 
 //                            if (contrastObject.contrast < 20 && (contrastObject.contrast.isNaN() || contrastObject.contrast.isNaN()))
 //                                contrastObject = ContrastObject(0.0, 0.0, sensorListener.getLux().toDouble(), pictureObject?.file)
 
-                            if (contrastObject.contrast > 1000) {
-                               contrastObject.contrast = (contrastObject.contrast / 100).roundToDecimalPlaces(0) * 100
-                            } else if (contrastObject.contrast > 100) {
-                                contrastObject.contrast = (contrastObject.contrast / 10).roundToDecimalPlaces(0) * 10
-                            }
+                                if (contrastObject.contrast > 1000) {
+                                    contrastObject.contrast = (contrastObject.contrast / 100).roundToDecimalPlaces(0) * 100
+                                } else if (contrastObject.contrast > 100) {
+                                    contrastObject.contrast = (contrastObject.contrast / 10).roundToDecimalPlaces(0) * 10
+                                }
 
-                            try {
+                                try {
+                                    view.post {
+//                                    btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(contrastObject!!.file!!.absolutePath))
+                                        btnPhotoBox.setImageBitmap(getImageThumbnail(contrastObject!!.file!!.absolutePath, 100, 100))           //20200810 for Hauwei phone
+                                        latestFileName = contrastObject!!.file!!.absolutePath
+                                    }
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+                            } else {
+                                val fileName = "C_$currentDateTime"
+                                var contrastObjectJPEGWhite: ContrastObject? = null
+                                var contrastObjectJPEGBlack: ContrastObject? = null
+
+                                m_bluetoothSocket = sendToDevice(commandWhite)
+                                readCommandHandler.post(readCommandRunnable)
+                                Thread.sleep(1000)
+
+                                takeJPEGPhoto(fileName).use { result ->
+                                    contrastObjectJPEGWhite = procedureContrast(result)
+                                }
+                                progressbarShutter?.progress = scale
+
+                                for (i in 0 until repeatTimesValue) {
+                                    Thread.sleep(200)
+
+                                    takeJPEGPhoto().use { result ->
+                                        val contrastObject = procedureContrast(result)
+                                        contrastObjectJPEGWhite!!.lum1 += contrastObject.lum1
+                                    }
+
+                                    progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
+                                }
+                                contrastObjectJPEGWhite!!.lum1 /= repeatTimesValue + 1
+
+                                Thread.sleep(3000)      //20200729 Johnny ask to delay for checking LED screen
+
+                                m_bluetoothSocket = sendToDevice(commandBlack)
+                                readCommandHandler.post(readCommandRunnable)
+                                Thread.sleep(1000)
+
+                                takeJPEGPhoto(fileName).use { result ->
+                                    contrastObjectJPEGBlack = procedureContrast(result)
+                                }
+                                progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
+
+                                for (i in 0 until repeatTimesValue) {
+                                    Thread.sleep(200)
+
+                                    takeJPEGPhoto().use { result ->
+                                        val contrastObject = procedureContrast(result)
+                                        contrastObjectJPEGBlack!!.lum1 += contrastObject.lum1
+                                    }
+                                    progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
+                                }
+                                contrastObjectJPEGBlack!!.lum1 /= repeatTimesValue + 1
+
                                 view.post {
-                                    btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(contrastObject!!.file!!.absolutePath))
-                                    latestFileName = contrastObject!!.file!!.absolutePath
-                                }
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                            }
-                        } else {
-                            val fileName = "C_$currentDateTime"
-                            var contrastObjectJPEGWhite: ContrastObject? = null
-                            var contrastObjectJPEGBlack: ContrastObject? = null
-
-                            m_bluetoothSocket = sendToDevice(commandWhite)
-                            readCommandHandler.post(readCommandRunnable)
-                            Thread.sleep(1000)
-
-                            takeJPEGPhoto(fileName).use { result ->
-                                contrastObjectJPEGWhite = procedureContrast(result)
-                            }
-                            progressbarShutter?.progress = scale
-
-                            for (i in 0 until repeatTimesValue) {
-                                Thread.sleep(200)
-
-                                takeJPEGPhoto().use { result ->
-                                    val contrastObject = procedureContrast(result)
-                                    contrastObjectJPEGWhite!!.lum1 += contrastObject.lum1
+                                    showToast("Picture Done!")
                                 }
 
-                                progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
-                            }
-                            contrastObjectJPEGWhite!!.lum1 /= repeatTimesValue + 1
-
-                            Thread.sleep(3000)      //20200729 Johnny ask to delay for checking LED screen
-
-                            m_bluetoothSocket = sendToDevice(commandBlack)
-                            readCommandHandler.post(readCommandRunnable)
-                            Thread.sleep(1000)
-
-                            takeJPEGPhoto(fileName).use { result ->
-                                contrastObjectJPEGBlack = procedureContrast(result)
-                            }
-                            progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
-
-                            for (i in 0 until repeatTimesValue) {
-                                Thread.sleep(200)
-
-                                takeJPEGPhoto().use { result ->
-                                    val contrastObject = procedureContrast(result)
-                                    contrastObjectJPEGBlack!!.lum1 += contrastObject.lum1
-                                }
-                                progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
-                            }
-                            contrastObjectJPEGBlack!!.lum1 /= repeatTimesValue + 1
-
-                            view.post {
-                                showToast("Picture Done!")
-                            }
-
-                            contrastObject = contrastObjectJPEGWhite
-                            contrastObject!!.lum2 = contrastObjectJPEGBlack!!.lum1
-                            contrastObject.contrast = if (contrastObject.lum1 > contrastObject.lum2) (contrastObject.lum1 / contrastObject.lum2).roundToDecimalPlaces(0)
-                            else (contrastObject.lum2 / contrastObject.lum1).roundToDecimalPlaces(0)
-                            contrastObject.file = contrastObjectJPEGBlack!!.file
+                                contrastObject = contrastObjectJPEGWhite
+                                contrastObject!!.lum2 = contrastObjectJPEGBlack!!.lum1
+                                contrastObject.contrast = if (contrastObject.lum1 > contrastObject.lum2) (contrastObject.lum1 / contrastObject.lum2).roundToDecimalPlaces(0)
+                                else (contrastObject.lum2 / contrastObject.lum1).roundToDecimalPlaces(0)
+                                contrastObject.file = contrastObjectJPEGBlack!!.file
 
 //                            contrastObject = if (contrastObject.contrast.isNaN()) ContrastObject(0.0, 0.0, sensorListener.getLux().toDouble(), contrastObject.file)
 //                            else contrastObject
 
-                            if (contrastObject.contrast > 1000) {
-                                contrastObject.contrast = (contrastObject.contrast / 100).roundToDecimalPlaces(0) * 100
-                            } else if (contrastObject.contrast > 100) {
-                                contrastObject.contrast = (contrastObject.contrast / 10).roundToDecimalPlaces(0) * 10
-                            }
-
-                            try {
-                                view.post {
-                                    btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(contrastObject!!.file!!.absolutePath))
-                                    latestFileName = contrastObject!!.file!!.absolutePath
+                                if (contrastObject.contrast > 1000) {
+                                    contrastObject.contrast = (contrastObject.contrast / 100).roundToDecimalPlaces(0) * 100
+                                } else if (contrastObject.contrast > 100) {
+                                    contrastObject.contrast = (contrastObject.contrast / 10).roundToDecimalPlaces(0) * 10
                                 }
-                            } catch (e: Exception) {
-                                e.printStackTrace()
+
+                                try {
+                                    view.post {
+//                                    btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(contrastObject!!.file!!.absolutePath))
+                                        btnPhotoBox.setImageBitmap(getImageThumbnail(contrastObject!!.file!!.absolutePath, 100, 100))           //20200810 for Hauwei phone
+                                        latestFileName = contrastObject!!.file!!.absolutePath
+                                    }
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+                            }
+                        } else {
+                            Log.i(TAG, "Lux: ${sensorListener.getLux()}")
+                            if (mRawImageReader != null) {
+                                val fileName = "C_$currentDateTime"
+                                var pictureObject: PictureObject? = null
+                                var contrastObjectJPEG: ContrastObject? = null
+
+                                if (currentMeasurement != Measurement.Contrast_White) {
+                                    view.post {
+                                        if (textTips.visibility == View.INVISIBLE)
+                                            textTips.visibility = View.VISIBLE
+
+                                        textTips.text = "Shoot White Screen"
+                                    }
+
+                                    Thread.sleep(PATTERN_DELAY_TIME)
+
+                                    progressbarShutter?.progress = scale
+                                } else {
+                                    view.post {
+                                        if (textTips.visibility == View.INVISIBLE)
+                                            textTips.visibility = View.VISIBLE
+
+                                        textTips.text = "Shoot Black Screen"
+                                    }
+
+                                    Thread.sleep(PATTERN_DELAY_TIME)
+
+                                    progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
+                                }
+
+                                takeRawPhoto(fileName).use { result ->
+                                    pictureObject = procedureTakePicture(result)
+                                }
+                                takeJPEGPhoto().use { result ->
+                                    contrastObjectJPEG= procedureContrast(result)
+                                }
+
+                                for (i in 0 until repeatTimesValue) {       //do repeat calculate
+                                    Thread.sleep(200)
+
+                                    takeJPEGPhoto().use { result ->
+                                        val contrastObject  = procedureContrast(result)
+                                        contrastObjectJPEG!!.lum1 += contrastObject.lum1
+                                    }
+
+                                    progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
+                                }
+                                contrastObjectJPEG!!.lum1 /= repeatTimesValue + 1
+
+                                if (currentMeasurement != Measurement.Contrast_White) {             //first time to do white pattern contrast
+                                    currentContrastObject.lum1 = contrastObjectJPEG!!.lum1
+                                    currentMeasurement = Measurement.Contrast_White
+
+                                    view.post {
+                                        btnPicture.isEnabled = true
+                                    }
+                                } else {
+                                    view.post {
+                                        showToast("Picture Done!")
+                                    }
+
+                                    currentMeasurement = Measurement.Contrast_Black
+
+                                    contrastObject = ContrastObject(0.0, 0.0, 0.0)
+                                    contrastObject.file = pictureObject!!.file
+                                    contrastObject.lum1 = currentContrastObject.lum1
+                                    contrastObject.lum2 = contrastObjectJPEG!!.lum1
+                                    contrastObject.contrast = if (contrastObject.lum1 > contrastObject.lum2) (contrastObject.lum1 / contrastObject.lum2).roundToDecimalPlaces(0)
+                                    else (contrastObject.lum2 / contrastObject.lum1).roundToDecimalPlaces(0)
+
+
+                                    if (contrastObject.contrast > 1000) {
+                                        contrastObject.contrast = (contrastObject.contrast / 100).roundToDecimalPlaces(0) * 100
+                                    } else if (contrastObject.contrast > 100) {
+                                        contrastObject.contrast = (contrastObject.contrast / 10).roundToDecimalPlaces(0) * 10
+                                    }
+
+                                    try {
+                                        view.post {
+//                                    btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(contrastObject!!.file!!.absolutePath))
+                                            btnPhotoBox.setImageBitmap(getImageThumbnail(contrastObject!!.file!!.absolutePath, 100, 100))           //20200810 for Hauwei phone
+                                            latestFileName = contrastObject!!.file!!.absolutePath
+                                        }
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                    }
+                                }
+                            } else {
+                                val fileName = "C_$currentDateTime"
+                                var contrastObjectJPEG: ContrastObject? = null
+
+                                if (currentMeasurement != Measurement.Contrast_White) {
+                                    view.post {
+                                        if (textTips.visibility == View.INVISIBLE)
+                                            textTips.visibility = View.VISIBLE
+
+                                        textTips.text = "Shoot White Screen"
+                                    }
+
+                                    Thread.sleep(PATTERN_DELAY_TIME)
+
+                                    progressbarShutter?.progress = scale
+                                } else {
+                                    view.post {
+                                        if (textTips.visibility == View.INVISIBLE)
+                                            textTips.visibility = View.VISIBLE
+
+                                        textTips.text = "Shoot Black Screen"
+                                    }
+
+                                    Thread.sleep(PATTERN_DELAY_TIME)
+
+                                    progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
+                                }
+
+                                takeJPEGPhoto(fileName).use { result ->
+                                    contrastObjectJPEG = procedureContrast(result)
+                                }
+
+                                for (i in 0 until repeatTimesValue) {
+                                    Thread.sleep(200)
+
+                                    takeJPEGPhoto().use { result ->
+                                        val contrastObject = procedureContrast(result)
+                                        contrastObjectJPEG!!.lum1 += contrastObject.lum1
+                                    }
+
+                                    progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
+                                }
+                                contrastObjectJPEG!!.lum1 /= repeatTimesValue + 1
+
+                                if (currentMeasurement != Measurement.Contrast_White) {
+                                    currentContrastObject.lum1 = contrastObjectJPEG!!.lum1
+                                    currentMeasurement = Measurement.Contrast_White
+
+                                    actionVibrate(context, 500, 1)
+
+                                    view.post {
+                                        btnPicture.isEnabled = true
+                                    }
+                                } else {
+                                    view.post {
+                                        showToast("Picture Done!")
+                                    }
+
+                                    currentMeasurement = Measurement.Contrast_Black
+                                    contrastObject = ContrastObject(0.0, 0.0, 0.0)
+                                    contrastObject.file = contrastObjectJPEG!!.file
+                                    contrastObject.lum1 = currentContrastObject.lum1
+                                    contrastObject.lum2 = contrastObjectJPEG!!.lum1
+
+                                    contrastObject.contrast = if (contrastObject.lum1 > contrastObject.lum2) (contrastObject.lum1 / contrastObject.lum2).roundToDecimalPlaces(0)
+                                    else (contrastObject.lum2 / contrastObject.lum1).roundToDecimalPlaces(0)
+                                    contrastObject.file = contrastObjectJPEG!!.file
+
+                                    if (contrastObject.contrast > 1000) {
+                                        contrastObject.contrast = (contrastObject.contrast / 100).roundToDecimalPlaces(0) * 100
+                                    } else if (contrastObject.contrast > 100) {
+                                        contrastObject.contrast = (contrastObject.contrast / 10).roundToDecimalPlaces(0) * 10
+                                    }
+
+                                    try {
+                                        view.post {
+//                                    btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(contrastObject!!.file!!.absolutePath))
+                                            btnPhotoBox.setImageBitmap(getImageThumbnail(contrastObject!!.file!!.absolutePath, 100, 100))           //20200810 for Hauwei phone
+                                            latestFileName = contrastObject!!.file!!.absolutePath
+                                        }
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                    }
+                                }
                             }
                         }
                     }
 
-                    Thread.sleep(200)
                     if (isColorTemperatureEnable) {     //set fixed iso 320 & tv 250
                         var scale = 100 / (repeatTimesValue + 1)
-                        val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
-                            0, 0,
-                            Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
-                            Color.argb(0, 0, 0, 0),
-                            Color.argb(0, 0, 0, 0),
-                            Color.argb(0, 0, 0, 0))
-                        m_bluetoothSocket = sendToDevice(command)
-                        readCommandHandler.post(readCommandRunnable)
+
+                        if (isPatternSyncEnable) {
+                            val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
+                                0, 0,
+                                Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
+                                Color.argb(0, 0, 0, 0),
+                                Color.argb(0, 0, 0, 0),
+                                Color.argb(0, 0, 0, 0))
+                            m_bluetoothSocket = sendToDevice(command)
+                            readCommandHandler.post(readCommandRunnable)
+                        } else {
+                            view.post {
+                                textTips.text = "Shoot White Screen"
+                                textTips.visibility = View.VISIBLE
+                            }
+
+                            Thread.sleep(PATTERN_DELAY_TIME)
+                        }
 
                         val fileName = "T_$currentDateTime"
 
@@ -993,7 +1193,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                 showToast("Picture Done!")
                             }
                             view.post {
-                                btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(colorTemperatureObject!!.file!!.absolutePath))
+//                                btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(colorTemperatureObject!!.file!!.absolutePath))
+                                btnPhotoBox.setImageBitmap(getImageThumbnail(colorTemperatureObject!!.file!!.absolutePath, 100, 100))           //20200810 for Hauwei phone
                                 latestFileName = colorTemperatureObject!!.file!!.absolutePath
                             }
                         }catch (e: Exception) {
@@ -1001,21 +1202,30 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         }
                     }
 
-                    Thread.sleep(200)
                     if (isRefreshRateEnable) {      //from tv: 1000 ~ 4000 and fixed iso 800
                         val rect: Rect? = characteristics.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE)
                         previewRequestBuilder.set(CaptureRequest.SCALER_CROP_REGION, rect)
                         captureSession.setRepeatingRequest(previewRequestBuilder.build(), null, backgroundHandler)
 
                         var scale = 100 / (repeatTimesValue + 1)
-                        val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
-                            0, 0,
-                            Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
-                            Color.argb(0, 0, 0, 0),
-                            Color.argb(0, 0, 0, 0),
-                            Color.argb(0, 0, 0, 0))
-                        m_bluetoothSocket = sendToDevice(command)
-                        readCommandHandler.post(readCommandRunnable)
+
+                        if (isPatternSyncEnable) {
+                            val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
+                                0, 0,
+                                Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
+                                Color.argb(0, 0, 0, 0),
+                                Color.argb(0, 0, 0, 0),
+                                Color.argb(0, 0, 0, 0))
+                            m_bluetoothSocket = sendToDevice(command)
+                            readCommandHandler.post(readCommandRunnable)
+                        } else {
+                            view.post {
+                                textTips.text = "Shoot White Screen"
+                                textTips.visibility = View.VISIBLE
+                            }
+
+                            Thread.sleep(PATTERN_DELAY_TIME)
+                        }
 
                         val exposureTimeRange = intArrayOf(1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000)
                         var fixedISO = 800
@@ -1148,7 +1358,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                         try {
                             view.post {
-                                btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(files[files.size - 1]!!.absolutePath))
+//                                btnPhotoBox.setImageBitmap(BitmapFactory.decodeFile(files[files.size - 1]!!.absolutePath))
+                                btnPhotoBox.setImageBitmap(getImageThumbnail(files[files.size - 1]!!.absolutePath, 100, 100))           //20200810 for Hauwei phone
                                 latestFileName = files[files.size - 1]!!.absolutePath
                             }
                         } catch (e: Exception) {
@@ -1156,33 +1367,37 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         }
                     }
 
+                    if (!isPatternSyncEnable && isContrastEnable && contrastObject == null) {                //Pattern sync disable and first time to do white pattern
 
-                    if (!isContrastEnable) contrastObject = ContrastObject(0.0, 0.0, 0.0)
-                    if (!isColorTemperatureEnable) colorTemperatureObject = ColorTemperatureObject(
-                        doubleArrayOf(0.0, 0.0), 0, ColorTemperature.None
-                    )
-                    if (!isRefreshRateEnable) refreshRate = 0
+                    }
+                    else {
+                        if (!isContrastEnable) contrastObject = ContrastObject(0.0, 0.0, 0.0)
+                        if (!isColorTemperatureEnable) colorTemperatureObject = ColorTemperatureObject(
+                            doubleArrayOf(0.0, 0.0), 0, ColorTemperature.None
+                        )
+                        if (!isRefreshRateEnable) refreshRate = 0
 
-                    val historyViewModel = ViewModelProvider(this@Camera2BasicFragment).get(HistoryViewModel::class.java)
+                        val historyViewModel = ViewModelProvider(this@Camera2BasicFragment).get(HistoryViewModel::class.java)
 
-                    val contrastDescription = if (isContrastEnable) contrastObject!!.contrast.toInt().toString() + " (" +
-                            contrastObject.lum1.toInt().toString() + " : " + contrastObject.lum2.toInt().toString() + ")"
-                    else "0"
+                        val contrastDescription = if (isContrastEnable) contrastObject!!.contrast.toInt().toString() + " (" +
+                                contrastObject.lum1.toInt().toString() + " : " + contrastObject.lum2.toInt().toString() + ")"
+                        else "0"
 
-                    val colorTemperatureDescription = if (isColorTemperatureEnable) "${colorTemperatureObject!!.cct}K" + " (" +
-                            colorTemperatureObject!!.cxcy[0].toString() + ", " + colorTemperatureObject!!.cxcy[1].toString() + ")"
-                    else ColorTemperature.None.name
+                        val colorTemperatureDescription = if (isColorTemperatureEnable) "${colorTemperatureObject!!.cct}K" + " (" +
+                                colorTemperatureObject!!.cxcy[0].toString() + ", " + colorTemperatureObject!!.cxcy[1].toString() + ")"
+                        else ColorTemperature.None.name
 
-                    val refreshDescription = if (isRefreshRateEnable && !isLEDScreen) "$refreshRate Hz"
-                    else if (isRefreshRateEnable && isLEDScreen) "over 5000 Hz"
-                    else "0"
+                        val refreshDescription = if (isRefreshRateEnable && !isLEDScreen) "$refreshRate Hz"
+                        else if (isRefreshRateEnable && isLEDScreen) "over 5000 Hz"
+                        else "0"
 
-                    historyViewModel.insert(History(currentDateTime, contrastDescription, refreshDescription, colorTemperatureDescription))
+                        historyViewModel.insert(History(currentDateTime, contrastDescription, refreshDescription, colorTemperatureDescription))
 
-                    Log.i(TAG, "Contrast: ${contrastObject!!.contrast}, Refresh Rate: $refreshRate, Color Temperature: ${colorTemperatureObject!!.colorTemperature}")
+                        Log.i(TAG, "Contrast: ${contrastObject!!.contrast}, Refresh Rate: $refreshRate, Color Temperature: ${colorTemperatureObject!!.colorTemperature}")
 
-                    cameraHandler.removeCallbacks(restoreButtonAction)
-                    cameraHandler.post(restoreButtonAction)
+                        cameraHandler.removeCallbacks(restoreButtonAction)
+                        cameraHandler.post(restoreButtonAction)
+                    }
                 }
 
             }
@@ -1214,8 +1429,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 readSettingData()
 
+                actionVibrate(context, 100, 1)
+
                 if(isContrastEnable){
-                    manual3A(Measurement.Contrast)
+                    manual3A()
 
                     view.post {
                         showToast(50.0f, "Contrast", Color.argb(0xAA, 0xAA, 0x00, 0x00))
@@ -1241,18 +1458,23 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     isAutoEnable = false
 //                    btnAuto.setImageResource(R.drawable.ic_auto)
 
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
-                            0, 0,
-                            Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
-                            Color.argb(0, 0, 0, 0),
-                            Color.argb(0, 0, 0, 0),
-                            Color.argb(0, 0, 0, 0))
-                        m_bluetoothSocket = sendToDevice(command)
-                        readCommandHandler.post(readCommandRunnable)
-                    }
+                    if (isPatternSyncEnable) {
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
+                                0, 0,
+                                Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
+                                Color.argb(0, 0, 0, 0),
+                                Color.argb(0, 0, 0, 0),
+                                Color.argb(0, 0, 0, 0))
+                            m_bluetoothSocket = sendToDevice(command)
+                            readCommandHandler.post(readCommandRunnable)
+                        }
 
-                    currentMeasurement = Measurement.Contrast
+                        textTips.visibility = View.INVISIBLE
+                    } else {
+                        textTips.visibility = View.VISIBLE
+                        textTips.text = "Shoot White Screen"
+                    }
                 }else{
                     automate3A()
 
@@ -1267,6 +1489,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                     isAutoEnable = true
 //                    btnAuto.setImageResource(R.drawable.ic_auto_selection)
+
+                    textTips.visibility = View.INVISIBLE
                 }
 
                 saveData()
@@ -1277,8 +1501,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 readSettingData()
 
+                actionVibrate(context, 100, 1)
+
                 if(isRefreshRateEnable){
-                    manual3A(Measurement.RefreshRate)
+                    manual3A()
 
                     view.post {
                         showToast(50.0f, "Refresh Rate", Color.argb(0xAA, 0xAA, 0x00, 0x00))
@@ -1304,18 +1530,23 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     isAutoEnable = false
 //                    btnAuto.setImageResource(R.drawable.ic_auto)
 
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
-                            0, 0,
-                            Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
-                            Color.argb(0, 0, 0, 0),
-                            Color.argb(0, 0, 0, 0),
-                            Color.argb(0, 0, 0, 0))
-                        m_bluetoothSocket = sendToDevice(command)
-                        readCommandHandler.post(readCommandRunnable)
-                    }
+                    if (isPatternSyncEnable) {
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
+                                0, 0,
+                                Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
+                                Color.argb(0, 0, 0, 0),
+                                Color.argb(0, 0, 0, 0),
+                                Color.argb(0, 0, 0, 0))
+                            m_bluetoothSocket = sendToDevice(command)
+                            readCommandHandler.post(readCommandRunnable)
+                        }
 
-                    currentMeasurement = Measurement.RefreshRate
+                        textTips.visibility = View.INVISIBLE
+                    } else {
+                        textTips.visibility = View.VISIBLE
+                        textTips.text = "Shoot White Screen"
+                    }
                 }else{
                     automate3A()
 
@@ -1329,6 +1560,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                     isAutoEnable = true
 //                    btnAuto.setImageResource(R.drawable.ic_auto_selection)
+                    textTips.visibility = View.INVISIBLE
                 }
 
                 saveData()
@@ -1339,8 +1571,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                 readSettingData()
 
+                actionVibrate(context, 100, 1)
+
                 if(isColorTemperatureEnable){
-                    manual3A(Measurement.ColorTemperature)
+                    manual3A()
 
                     view.post {
                         showToast(50.0f, "Color Temp.", Color.argb(0xAA, 0xAA, 0x00, 0x00))
@@ -1366,18 +1600,23 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                     isAutoEnable = false
 //                    btnAuto.setImageResource(R.drawable.ic_auto)
 
-                    lifecycleScope.launch(Dispatchers.IO) {
-                        val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
-                            0, 0,
-                            Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
-                            Color.argb(0, 0, 0, 0),
-                            Color.argb(0, 0, 0, 0),
-                            Color.argb(0, 0, 0, 0))
-                        m_bluetoothSocket = sendToDevice(command)
-                        readCommandHandler.post(readCommandRunnable)
-                    }
+                    if (isPatternSyncEnable) {
+                        lifecycleScope.launch(Dispatchers.IO) {
+                            val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
+                                0, 0,
+                                Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
+                                Color.argb(0, 0, 0, 0),
+                                Color.argb(0, 0, 0, 0),
+                                Color.argb(0, 0, 0, 0))
+                            m_bluetoothSocket = sendToDevice(command)
+                            readCommandHandler.post(readCommandRunnable)
+                        }
 
-                    currentMeasurement = Measurement.ColorTemperature
+                        textTips.visibility = View.INVISIBLE
+                    } else {
+                        textTips.visibility = View.VISIBLE
+                        textTips.text = "Shoot White Screen"
+                    }
                 }else{
                     automate3A()
 
@@ -1391,6 +1630,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                     isAutoEnable = true
 //                    btnAuto.setImageResource(R.drawable.ic_auto_selection)
+                    textTips.visibility = View.INVISIBLE
                 }
 
                 saveData()
@@ -1408,7 +1648,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 //                    btnManual.setImageResource(R.drawable.ic_manual)
 //                }
 //
-//                manual3A(Measurement.None)
+//                manual3A()
 //
 //                isAutoEnable = false
 //                btnAuto.setImageResource(R.drawable.ic_auto)
@@ -1564,11 +1804,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             }
         }
 
-        val focusIconFlag = FocusIconSize.ZOOM3_8
-        focusZoomScale = 2
-        setZoomArea(focusZoomScale)
-        focusCustomSeekBar.setValue(focusZoomScale.toFloat())
-        currentFocusIconFlag = focusIconFlag
+//        val focusIconFlag = FocusIconSize.ZOOM3_8             //20200824 change measurement not back to default zoom scale
+//        focusZoomScale = 2
+//        setZoomArea(focusZoomScale)
+//        focusCustomSeekBar.setValue(focusZoomScale.toFloat())
+//        currentFocusIconFlag = focusIconFlag
 
         btnExposure.background = resources.getDrawable(R.drawable.border_image)
         btnISO.setBackgroundResource(0)
@@ -1582,6 +1822,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
             if (progressbarShutter?.visibility == View.VISIBLE)
                 progressbarShutter?.visibility = View.INVISIBLE
+
+            if (textTips.visibility == View.VISIBLE)                //20200828 Craig
+                textTips.visibility = View.INVISIBLE
+
+            actionVibrate(context, 500, 1)
         }
     }
 
@@ -1923,7 +2168,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             if (isAutoEnable)
                                 automate3A()                //20200622 Craig
                             else
-                                manual3A(Measurement.None)
+                                manual3A()
 
                             Log.i(TAG, "CameraCaptureSession.StateCallback")
                         } catch (e: CameraAccessException) {
@@ -2425,6 +2670,29 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         }
     }
 
+    private fun getImageThumbnail(imagePath: String, width: Int, height: Int): Bitmap {         //20200810 for Hauwei phone
+        val options = BitmapFactory.Options()
+        options.inJustDecodeBounds = true
+        var bitmap = BitmapFactory.decodeFile(imagePath, options)
+        options.inJustDecodeBounds = false
+
+        val h = options.outHeight
+        val w = options.outWidth
+        val beWidth = w / width
+        val beHeight = h / height
+        var be = 1
+
+        be = if (beWidth < beHeight) beWidth
+        else beHeight
+
+        be = if (be < 0) 1
+        else be
+
+        options.inSampleSize = be
+        bitmap = BitmapFactory.decodeFile(imagePath, options)
+        bitmap = ThumbnailUtils.extractThumbnail(bitmap, width, height, ThumbnailUtils.OPTIONS_RECYCLE_INPUT)
+        return bitmap
+    }
 
     private fun saveExif(file: File, av: String, tv: String, iso: String) {
         val exif = ExifInterface(file.absolutePath)
@@ -3219,6 +3487,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         isGridEnable = settings.getBoolean(SettingFragment.GRID, false)
         isSoundEnable = settings.getBoolean(SettingFragment.SOUND, false)
         isCloudSyncEnable = settings.getBoolean(SettingFragment.CLOUD_SYNC, false)
+        isPatternSyncEnable = settings.getBoolean(SettingFragment.PATTERN_SYNC, false)
         whitePeakValue = settings.getInt(SettingFragment.WHITE_PEAK, 255)
         blackNadirValue = settings.getInt(SettingFragment.BLACK_NADIR, 0)
         darkNoiseValue = settings.getInt(SettingFragment.DARK_NOISE, 70)
@@ -3398,7 +3667,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         captureSession.setRepeatingRequest(previewRequestBuilder.build(), null, backgroundHandler)
     }
 
-    private fun manual3A(measurementItem: Measurement) {
+    private fun manual3A() {
         previewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_OFF)
         captureSession.setRepeatingRequest(previewRequestBuilder.build(), null, backgroundHandler)
 
@@ -3426,6 +3695,14 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         }
     }
 
+    private fun actionVibrate(c: Context?, milliSeconds: Long, times: Int) {
+        val vibrate = c?.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        val vibrationEffect = VibrationEffect.createOneShot(milliSeconds, VibrationEffect.DEFAULT_AMPLITUDE)
+
+        for (i in 0 .. times)
+            vibrate.vibrate(vibrationEffect)
+    }
+
     fun backToSendCommand() {
         val commandWhite = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0, 0, 0,
             Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
@@ -3436,29 +3713,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         lifecycleScope.launch(Dispatchers.IO) {
             m_bluetoothSocket = sendToDevice(commandWhite)
             readCommandHandler.post(readCommandRunnable)
-        }
-
-        when(currentMeasurement) {
-            Measurement.Contrast -> {
-                lifecycleScope.launch(Dispatchers.IO) {
-                    m_bluetoothSocket = sendToDevice(commandWhite)
-                    if (m_bluetoothSocket == null)
-                        m_bluetoothSocket = sendToDevice(commandWhite)
-                    readCommandHandler.post(readCommandRunnable)
-                }
-            }
-            Measurement.ColorTemperature -> {
-                lifecycleScope.launch(Dispatchers.IO) {
-                    m_bluetoothSocket = sendToDevice(commandWhite)
-                    readCommandHandler.post(readCommandRunnable)
-                }
-            }
-            Measurement.RefreshRate -> {
-
-            }
-            Measurement.None -> {
-
-            }
         }
     }
 
@@ -3606,6 +3860,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         /** Maximum time allowed to wait for the result of an image capture */
         private const val IMAGE_CAPTURE_TIMEOUT_MILLIS: Long = 2000
 
+        private const val PATTERN_DELAY_TIME: Long = 1500
+
         private const val PRIVATE_MODE = 0
         private const val PREF_NAME = "Camera2Fragment"
         private const val APERTURE = "APERTURE"
@@ -3659,9 +3915,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         }
 
         enum class Measurement {
-            RefreshRate,
-            ColorTemperature,
-            Contrast,
+            Contrast_White,
+            Contrast_Black,
             None
         }
 

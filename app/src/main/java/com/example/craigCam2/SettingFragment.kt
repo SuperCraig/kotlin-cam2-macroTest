@@ -21,6 +21,7 @@ class SettingFragment : Fragment(){
     private lateinit var settings: SharedPreferences
     private var isGridEnable: Boolean = false
     private var isSoundEnable: Boolean = false
+    private var isPatternEnable: Boolean = false
     private var isCloudSyncEnable: Boolean = false
     private var whitePeakValue: Int = 0
     private var blackNadirValue: Int = 0
@@ -52,6 +53,20 @@ class SettingFragment : Fragment(){
             toggleImmediately()
         }
 
+        with(toggle_btn_pattern) {
+            currentState = if (isPatternEnable) 1 else 0
+            reset()
+            toggleImmediately()
+
+            if (isPatternEnable) {
+                edtWhitePeak.setIsEditable(true)
+                edtBlackNadir.setIsEditable(true)
+            } else {
+                edtWhitePeak.setIsEditable(false)
+                edtBlackNadir.setIsEditable(false)
+            }
+        }
+
         with(toggle_btn_cloud){
             currentState = if(isCloudSyncEnable) 1 else 0
             reset()
@@ -62,6 +77,21 @@ class SettingFragment : Fragment(){
             isGridEnable = it
             saveData()
             clearEdtFocus()
+        }
+
+        toggle_btn_pattern.setOnToggledListener {
+            isPatternEnable = it
+            saveData()
+            clearEdtFocus()
+
+            if (isPatternEnable) {
+                edtWhitePeak.setIsEditable(true)
+                edtBlackNadir.setIsEditable(true)
+            } else {
+                edtWhitePeak.setIsEditable(false)
+                edtBlackNadir.setIsEditable(false)
+                Log.i(TAG, "toggle_btn_pattern clicked")
+            }
         }
 
         toggle_btn_cloud.setOnToggledListener {
@@ -81,6 +111,10 @@ class SettingFragment : Fragment(){
         }
 
         layout_sound.setOnClickListener {
+            clearEdtFocus()
+        }
+
+        layout_pattern.setOnClickListener {
             clearEdtFocus()
         }
 
@@ -111,6 +145,7 @@ class SettingFragment : Fragment(){
         layout_about.setOnClickListener{
             Log.i(TAG, "layout_about.setOnClickListener")
             clearEdtFocus()
+            showAbout()
         }
 
         layout_reset.setOnClickListener{
@@ -174,6 +209,30 @@ class SettingFragment : Fragment(){
         dialog.show()
     }
 
+    private fun showAbout() {
+        lateinit var dialog: AlertDialog
+
+        var builder = AlertDialog.Builder(this.context, AlertDialog.THEME_HOLO_DARK)
+
+        builder.setTitle("Macroblock Inc.")
+
+        val alert1: String = "Ver1.1"
+        val alert2: String = "S/N 20200824001"
+        builder.setMessage(alert1 + "\n" + alert2)
+
+        val dialogClickListener = DialogInterface.OnClickListener {_, which ->
+            when(which) {
+                DialogInterface.BUTTON_NEUTRAL -> {
+
+                }
+            }
+        }
+
+        builder.setNeutralButton("OK", dialogClickListener)
+        dialog = builder.create()
+        dialog.show()
+    }
+
     override fun onPause() {
         super.onPause()
         Log.i(TAG, "onPause")
@@ -216,6 +275,7 @@ class SettingFragment : Fragment(){
         isGridEnable = false
         isSoundEnable = false
         isCloudSyncEnable = false
+        isPatternEnable = false
 
         with(toggle_btn_grid){
             currentState = if(isGridEnable) 1 else 0
@@ -235,6 +295,12 @@ class SettingFragment : Fragment(){
             toggleImmediately()
             invalidate()
         }
+        with(toggle_btn_pattern) {
+            currentState = if (isPatternEnable) 1 else 0
+            reset()
+            toggleImmediately()
+            invalidate()
+        }
     }
 
     private fun readData(){
@@ -242,6 +308,7 @@ class SettingFragment : Fragment(){
         isGridEnable = settings.getBoolean(GRID, false)
         isSoundEnable = settings.getBoolean(SOUND, false)
         isCloudSyncEnable = settings.getBoolean(CLOUD_SYNC, false)
+        isPatternEnable = settings.getBoolean(PATTERN_SYNC, false)
         whitePeakValue = settings.getInt(WHITE_PEAK, 255)
         blackNadirValue = settings.getInt(BLACK_NADIR, 0)
         darkNoiseValue = settings.getInt(DARK_NOISE, 0)
@@ -256,6 +323,7 @@ class SettingFragment : Fragment(){
         editor.putBoolean(GRID, isGridEnable)
         editor.putBoolean(SOUND, isSoundEnable)
         editor.putBoolean(CLOUD_SYNC, isCloudSyncEnable)
+        editor.putBoolean(PATTERN_SYNC, isPatternEnable)
         editor.putInt(WHITE_PEAK, whitePeakValue)
         editor.putInt(BLACK_NADIR, blackNadirValue)
         editor.putInt(DARK_NOISE, darkNoiseValue)
@@ -290,6 +358,7 @@ class SettingFragment : Fragment(){
         const val GRID = "GRID"
         const val SOUND = "SOUND"
         const val CLOUD_SYNC = "CLOUD_SYNC"
+        const val PATTERN_SYNC = "PATTERN_SYNC"
         const val WHITE_PEAK = "WHITE_PEAK"
         const val BLACK_NADIR = "BLACK_NADIR"
         const val DARK_NOISE = "DARK_NOISE"

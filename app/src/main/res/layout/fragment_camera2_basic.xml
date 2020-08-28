@@ -18,6 +18,16 @@
             android:layout_centerInParent="true">
         </com.example.craigCam2.ui.AutoFitTextureView>
 
+        <TextView
+            android:id="@+id/textTips"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:layout_alignParentTop="true"
+            android:layout_centerHorizontal="true"
+            android:textSize="40dp"
+            android:textColor="#FF00FF00"
+            android:background="@color/transparent"/>
+
         <com.example.craigCam2.ui.GridLineView
             android:id="@+id/grid_line"
             android:layout_width="match_parent"

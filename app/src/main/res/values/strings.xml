@@ -22,6 +22,7 @@
     <string name="setting_repeatTimes">Repeat Times (0-5)</string>
     <string name="setting_grid">Grid</string>
     <string name="setting_sound">Sound</string>
+    <string name="setting_mbi_pattern_sync">MBI-Pattern sync</string>
     <string name="setting_mbi_cloud_sync">MBI-Cloud sync</string>
     <string name="setting_image_format">Image Format</string>
     <string name="setting_language">Language</string>

@@ -34,6 +34,7 @@ class SSCustomEdittextOutlinedBorder @JvmOverloads constructor(context: Context,
     private var borderWidth = 1
     private var maxValue = 0
     private var minValue = 0
+    private var isEditable = true
 
     private val changeNumberThread = HandlerThread("readCommandThread").apply { start() }
     private val changeNumberHandler = Handler(changeNumberThread.looper)
@@ -75,21 +76,24 @@ class SSCustomEdittextOutlinedBorder @JvmOverloads constructor(context: Context,
         }
 
         btnDown.setOnClickListener {
-            var number = editText.text.toString().toInt()
-            if (number > minValue) {
-                number -= 1
-                editText.setText(number.toString())
-                editText.setSelection(number.toString().count())
+            if (isEditable) {                      //20200824 Craig for disable custom edit text
+                var number = editText.text.toString().toInt()
+                if (number > minValue) {
+                    number -= 1
+                    editText.setText(number.toString())
+                    editText.setSelection(number.toString().count())
+                }
             }
         }
 
         btnUp.setOnClickListener {
-
-            var number = editText.text.toString().toInt()
-            if (number < maxValue) {
-                number += 1
-                editText.setText(number.toString())
-                editText.setSelection(number.toString().count())
+            if (isEditable) {                      //20200824 Craig for disable custom edit text
+                var number = editText.text.toString().toInt()
+                if (number < maxValue) {
+                    number += 1
+                    editText.setText(number.toString())
+                    editText.setSelection(number.toString().count())
+                }
             }
         }
 
@@ -97,24 +101,26 @@ class SSCustomEdittextOutlinedBorder @JvmOverloads constructor(context: Context,
 
         var beforeText = "0"
         editText.doAfterTextChanged {
-            if (it.isNullOrBlank()) {
-                modifyText("0")
-                return@doAfterTextChanged
-            }
-            val originalText = it.toString()
-            try {
-                val numberText = originalText.toInt().toString()
-                if (originalText != numberText) {
-                    modifyText(numberText)
+            if (isEditable) {                    //20200824 Craig for disable custom edit text
+                if (it.isNullOrBlank()) {
+                    modifyText("0")
+                    return@doAfterTextChanged
                 }
-                if (numberText.toInt() > maxValue) {
-                    modifyText(maxValue.toString())
-                }
+                val originalText = it.toString()
+                try {
+                    val numberText = originalText.toInt().toString()
+                    if (originalText != numberText) {
+                        modifyText(numberText)
+                    }
+                    if (numberText.toInt() > maxValue) {
+                        modifyText(maxValue.toString())
+                    }
 //                if (numberText.toInt() < minValue) {
 //                    modifyText(minValue.toString())
 //                }
-            } catch (e: Exception) {
-                modifyText("0")
+                } catch (e: Exception) {
+                    modifyText("0")
+                }
             }
         }
 
@@ -146,27 +152,31 @@ class SSCustomEdittextOutlinedBorder @JvmOverloads constructor(context: Context,
         })
 
         editText.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus) {
-                Log.i("onFocusChange", "lost focus")
+            if (isEditable) {           //20200824 Craig for disable custom edit text
+                if (!hasFocus) {
+                    Log.i("onFocusChange", "lost focus")
 
-                val inputManager = context.getSystemService(Activity.INPUT_METHOD_SERVICE) as InputMethodManager
-                inputManager.hideSoftInputFromWindow(windowToken, 0)
-                if (editText.text.toString().toInt() < minValue)
-                    modifyText(minValue.toString())
+                    val inputManager = context.getSystemService(Activity.INPUT_METHOD_SERVICE) as InputMethodManager
+                    inputManager.hideSoftInputFromWindow(windowToken, 0)
+                    if (editText.text.toString().toInt() < minValue)
+                        modifyText(minValue.toString())
 
-                editText.clearFocus()
+                    editText.clearFocus()
+                }
             }
         }
 
 
         editText.setOnEditorActionListener(object: TextView.OnEditorActionListener {
             override fun onEditorAction(v: TextView?, actionId: Int, event: KeyEvent?): Boolean {
-                when (actionId) {
-                    EditorInfo.IME_ACTION_DONE, EditorInfo.IME_ACTION_NEXT, EditorInfo.IME_ACTION_PREVIOUS -> {
-                        if (editText.text.toString().toInt() < minValue)
-                            modifyText(minValue.toString())
-                        Log.i("SSCustomEditText", "onEditorAction")
-                        return false
+                if (isEditable) {            //20200824 Craig for disable custom edit text
+                    when (actionId) {
+                        EditorInfo.IME_ACTION_DONE, EditorInfo.IME_ACTION_NEXT, EditorInfo.IME_ACTION_PREVIOUS -> {
+                            if (editText.text.toString().toInt() < minValue)
+                                modifyText(minValue.toString())
+                            Log.i("SSCustomEditText", "onEditorAction")
+                            return false
+                        }
                     }
                 }
                 return false
@@ -198,6 +208,12 @@ class SSCustomEdittextOutlinedBorder @JvmOverloads constructor(context: Context,
         } else {
             setBackgroundBorderErrorColor(borderColor)
         }
+    }
+
+    fun setIsEditable(editable: Boolean) {
+        isEditable = editable
+
+        editText.isEnabled = editable
     }
 
     fun setErrorTextBackGroundColor(@ColorInt colorID: Int) {
