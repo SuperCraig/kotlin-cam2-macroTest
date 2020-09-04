@@ -57,6 +57,7 @@ import kotlinx.android.synthetic.main.fragment_camera2_basic.view.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.opencv.core.*
+import org.opencv.imgcodecs.Imgcodecs
 import org.opencv.imgproc.Imgproc
 import java.io.Closeable
 import java.io.File
@@ -112,6 +113,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             val currentFingerSpacing: Float
 
             if (event.pointerCount > 1 && !isRefreshRateEnable){
+//            if (event.pointerCount > 1){
                 currentFingerSpacing = getFingerSpacing(event)
                 var delta: Float = 0.05f
                 if (fingerSpacing != 0f){
@@ -276,6 +278,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private var blackNadirValue: Int = 0
     private var darkNoiseValue: Int = 0
     private var repeatTimesValue: Int = 0
+
+    private var isDemoEnable: Boolean = false
+    private var parameter1: Int = 0
+    private var parameter2: Int = 0
+    private var parameter3: Int = 0
+
 
     private var isJPEGSavedEnable: Boolean = true
     private var isRAWSavedEnable: Boolean = true
@@ -721,6 +729,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                 var count = 0
                 // Disable click listener to prevent multiple requests simultaneously in flight
                 if (!isPatternSyncEnable && isContrastEnable) {                //Pattern sync disable and first time to do white pattern
+                    if (currentMeasurement != Measurement.Contrast_White)
+                        progressbarShutter?.progress = 0
+
                     progressbarShutter?.visibility = ProgressBar.VISIBLE
                 } else {
                     progressbarShutter?.max = 100
@@ -938,22 +949,22 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                             textTips.visibility = View.VISIBLE
 
                                         textTips.text = "Shoot White Screen"
+
+                                        progressbarShutter?.progress = scale
                                     }
 
                                     Thread.sleep(PATTERN_DELAY_TIME)
-
-                                    progressbarShutter?.progress = scale
                                 } else {
                                     view.post {
                                         if (textTips.visibility == View.INVISIBLE)
                                             textTips.visibility = View.VISIBLE
 
                                         textTips.text = "Shoot Black Screen"
+
+                                        progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
                                     }
 
                                     Thread.sleep(PATTERN_DELAY_TIME)
-
-                                    progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
                                 }
 
                                 takeRawPhoto(fileName).use { result ->
@@ -971,7 +982,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                         contrastObjectJPEG!!.lum1 += contrastObject.lum1
                                     }
 
-                                    progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
+                                    view.post {
+                                        progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
+                                    }
                                 }
                                 contrastObjectJPEG!!.lum1 /= repeatTimesValue + 1
 
@@ -979,7 +992,10 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                     currentContrastObject.lum1 = contrastObjectJPEG!!.lum1
                                     currentMeasurement = Measurement.Contrast_White
 
+                                    actionVibrate(context, 500, 1)
+
                                     view.post {
+                                        textTips.text = "Shoot Black Screen"
                                         btnPicture.isEnabled = true
                                     }
                                 } else {
@@ -1023,22 +1039,22 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                             textTips.visibility = View.VISIBLE
 
                                         textTips.text = "Shoot White Screen"
+
+                                        progressbarShutter?.progress = scale
                                     }
 
                                     Thread.sleep(PATTERN_DELAY_TIME)
-
-                                    progressbarShutter?.progress = scale
                                 } else {
                                     view.post {
                                         if (textTips.visibility == View.INVISIBLE)
                                             textTips.visibility = View.VISIBLE
 
                                         textTips.text = "Shoot Black Screen"
+
+                                        progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
                                     }
 
                                     Thread.sleep(PATTERN_DELAY_TIME)
-
-                                    progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
                                 }
 
                                 takeJPEGPhoto(fileName).use { result ->
@@ -1053,7 +1069,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                         contrastObjectJPEG!!.lum1 += contrastObject.lum1
                                     }
 
-                                    progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
+                                    view.post {
+                                        progressbarShutter?.progress = progressbarShutter?.progress!!.plus(scale)
+                                    }
                                 }
                                 contrastObjectJPEG!!.lum1 /= repeatTimesValue + 1
 
@@ -1064,6 +1082,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                     actionVibrate(context, 500, 1)
 
                                     view.post {
+                                        textTips.text = "Shoot Black Screen"
                                         btnPicture.isEnabled = true
                                     }
                                 } else {
@@ -1227,7 +1246,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             Thread.sleep(PATTERN_DELAY_TIME)
                         }
 
-                        val exposureTimeRange = intArrayOf(1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000)
+                        val exposureTimeRange = intArrayOf(750, 1000, 1250, 1500, 1750, 2000, 2250, 2500, 2750, 3000, 3250, 3500,
+                            3750, 4000, 4250, 4500, 4750, 5000, 5250, 5500, 5750, 6000, 6250, 6500, 6750, 7000)
+
                         var fixedISO = 800
                         setSensorSensitivity(fixedISO)
 
@@ -1280,6 +1301,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         if (!isHaveBlackLine) {
                             exposureTimeRange.forEach {
                                 if (!isHaveBlackLine) {
+                                    Thread.sleep(500)
+                                    progressbarShutter?.setProgress(0)
+
                                     val ae: Long = (10.0.pow(9) / it).roundToLong()
                                     setExposureTime(ae)
                                     Thread.sleep(50)
@@ -1330,15 +1354,17 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                                     Log.i(TAG, "isHaveBlackLineCount: $isHaveBlackLineCount")
                                     if (isHaveBlackLine) {
-                                        if (it in 500 .. 1000) refreshRate = 1000
-                                        if (it in 1001 .. 1500) refreshRate = 1500
-                                        if (it in 1501 .. 2000) refreshRate = 2000
-                                        if (it in 2001 .. 2500) refreshRate = 2500
-                                        if (it in 2501 .. 3000) refreshRate = 3000
-                                        if (it in 3001 .. 3500) refreshRate = 3000
-                                        if (it in 3501 .. 4000) refreshRate = 3500
+//                                        if (it in 500 .. 1000) refreshRate = 1000
+//                                        if (it in 1001 .. 1500) refreshRate = 1500
+//                                        if (it in 1501 .. 2000) refreshRate = 2000
+//                                        if (it in 2001 .. 2500) refreshRate = 2500
+//                                        if (it in 2501 .. 3000) refreshRate = 3000
+//                                        if (it in 3001 .. 3500) refreshRate = 3000
+//                                        if (it in 3501 .. 4000) refreshRate = 3500
+                                        refreshRate = it
                                         if (it in 4001 .. 4500) refreshRate = 3500
                                         if (it > 4500) refreshRate = 4000
+                                        if (it > 6500) refreshRate = it
                                         assigned = true
                                     }
                                 }
@@ -1367,36 +1393,68 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                         }
                     }
 
-                    if (!isPatternSyncEnable && isContrastEnable && contrastObject == null) {                //Pattern sync disable and first time to do white pattern
+                    if (isDemoEnable) {
+                        if (!isPatternSyncEnable && isContrastEnable && contrastObject == null) {                //Pattern sync disable and first time to do white pattern
 
-                    }
-                    else {
-                        if (!isContrastEnable) contrastObject = ContrastObject(0.0, 0.0, 0.0)
-                        if (!isColorTemperatureEnable) colorTemperatureObject = ColorTemperatureObject(
-                            doubleArrayOf(0.0, 0.0), 0, ColorTemperature.None
-                        )
-                        if (!isRefreshRateEnable) refreshRate = 0
+                        }
+                        else {
+                            if (!isContrastEnable) contrastObject = ContrastObject(0.0, 0.0, 0.0)
+                            if (!isColorTemperatureEnable) colorTemperatureObject = ColorTemperatureObject(
+                                doubleArrayOf(0.0, 0.0), 0, ColorTemperature.None
+                            )
+                            if (!isRefreshRateEnable) refreshRate = 0
 
-                        val historyViewModel = ViewModelProvider(this@Camera2BasicFragment).get(HistoryViewModel::class.java)
+                            val historyViewModel = ViewModelProvider(this@Camera2BasicFragment).get(HistoryViewModel::class.java)
 
-                        val contrastDescription = if (isContrastEnable) contrastObject!!.contrast.toInt().toString() + " (" +
-                                contrastObject.lum1.toInt().toString() + " : " + contrastObject.lum2.toInt().toString() + ")"
-                        else "0"
+                            val contrastDescription = if (isContrastEnable) "$parameter1"
+                            else "0"
 
-                        val colorTemperatureDescription = if (isColorTemperatureEnable) "${colorTemperatureObject!!.cct}K" + " (" +
-                                colorTemperatureObject!!.cxcy[0].toString() + ", " + colorTemperatureObject!!.cxcy[1].toString() + ")"
-                        else ColorTemperature.None.name
+                            val colorTemperatureDescription = if (isColorTemperatureEnable) "${parameter2}K" + " (" +
+                                    colorTemperatureObject!!.cxcy[0].toString() + ", " + colorTemperatureObject!!.cxcy[1].toString() + ")"
+                            else ColorTemperature.None.name
 
-                        val refreshDescription = if (isRefreshRateEnable && !isLEDScreen) "$refreshRate Hz"
-                        else if (isRefreshRateEnable && isLEDScreen) "over 5000 Hz"
-                        else "0"
+                            val refreshDescription = if (isRefreshRateEnable && !isLEDScreen) "$parameter3 Hz"
+                            else "0"
 
-                        historyViewModel.insert(History(currentDateTime, contrastDescription, refreshDescription, colorTemperatureDescription))
+                            historyViewModel.insert(History(currentDateTime, contrastDescription, refreshDescription, colorTemperatureDescription))
 
-                        Log.i(TAG, "Contrast: ${contrastObject!!.contrast}, Refresh Rate: $refreshRate, Color Temperature: ${colorTemperatureObject!!.colorTemperature}")
+                            Log.i(TAG, "Contrast: ${contrastObject!!.contrast}, Refresh Rate: $refreshRate, Color Temperature: ${colorTemperatureObject!!.colorTemperature}")
 
-                        cameraHandler.removeCallbacks(restoreButtonAction)
-                        cameraHandler.post(restoreButtonAction)
+                            cameraHandler.removeCallbacks(restoreButtonAction)
+                            cameraHandler.post(restoreButtonAction)
+                        }
+                    } else {
+                        if (!isPatternSyncEnable && isContrastEnable && contrastObject == null) {                //Pattern sync disable and first time to do white pattern
+
+                        }
+                        else {
+                            if (!isContrastEnable) contrastObject = ContrastObject(0.0, 0.0, 0.0)
+                            if (!isColorTemperatureEnable) colorTemperatureObject = ColorTemperatureObject(
+                                doubleArrayOf(0.0, 0.0), 0, ColorTemperature.None
+                            )
+                            if (!isRefreshRateEnable) refreshRate = 0
+
+                            val historyViewModel = ViewModelProvider(this@Camera2BasicFragment).get(HistoryViewModel::class.java)
+
+                            val contrastDescription = if (isContrastEnable) contrastObject!!.contrast.toInt().toString() + " (" +
+                                    contrastObject.lum1.toInt().toString() + " : " + contrastObject.lum2.toInt().toString() + ")"
+                            else "0"
+
+                            val colorTemperatureDescription = if (isColorTemperatureEnable) "${colorTemperatureObject!!.cct}K" + " (" +
+                                    colorTemperatureObject!!.cxcy[0].toString() + ", " + colorTemperatureObject!!.cxcy[1].toString() + ")"
+                            else ColorTemperature.None.name
+
+                            val refreshDescription = if (isRefreshRateEnable && !isLEDScreen) "$refreshRate Hz"
+                            else if (isRefreshRateEnable && isLEDScreen) "7000 Hz"
+                            else "0"
+
+                            historyViewModel.insert(History(currentDateTime, contrastDescription, refreshDescription, colorTemperatureDescription))
+
+                            Log.i(TAG, "Contrast: ${contrastObject!!.contrast}, Refresh Rate: $refreshRate, Color Temperature: ${colorTemperatureObject!!.colorTemperature}")
+
+                            cameraHandler.removeCallbacks(restoreButtonAction)
+                            cameraHandler.post(restoreButtonAction)
+                        }
                     }
                 }
 
@@ -1424,216 +1482,246 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 //                saveData()
 //            }
             R.id.btnContrast -> {
-                val btnContrast = view.findViewById<ImageView>(R.id.btnContrast)
-                isContrastEnable = !isContrastEnable
+                if (btnPicture.isEnabled) {
+                    val btnContrast = view.findViewById<ImageView>(R.id.btnContrast)
+                    isContrastEnable = !isContrastEnable
 
-                readSettingData()
+                    readSettingData()
 
-                actionVibrate(context, 100, 1)
+                    actionVibrate(context, 100, 1)
 
-                if(isContrastEnable){
-                    manual3A()
+                    if(isContrastEnable){
+                        manual3A()
 
-                    view.post {
-                        showToast(50.0f, "Contrast", Color.argb(0xAA, 0xAA, 0x00, 0x00))
-                    }
-
-                    setSeekBarDefaultValue(125, 50)
-
-                    btnContrast.setImageResource(R.drawable.ic_contrast_selection)
-//                    contrastTargetLayout.visibility = View.VISIBLE
-                    focusAreaLayout.visibility = View.VISIBLE
-                    frameLayout3A.visibility = View.VISIBLE
-                    frameLayout3AValue.visibility = View.VISIBLE
-                    tvCustomSeekBar.visibility = View.VISIBLE
-                    isoCustomSeekBar.visibility = View.INVISIBLE
-                    focusCustomSeekBar.visibility = View.INVISIBLE
-                    txt_3AValue.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / exposureTime)}s"
-
-                    isRefreshRateEnable = false
-                    btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate)
-                    isColorTemperatureEnable = false
-                    btnColorTemperature.setImageResource(R.drawable.ic_color_temperature)
-
-                    isAutoEnable = false
-//                    btnAuto.setImageResource(R.drawable.ic_auto)
-
-                    if (isPatternSyncEnable) {
-                        lifecycleScope.launch(Dispatchers.IO) {
-                            val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
-                                0, 0,
-                                Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
-                                Color.argb(0, 0, 0, 0),
-                                Color.argb(0, 0, 0, 0),
-                                Color.argb(0, 0, 0, 0))
-                            m_bluetoothSocket = sendToDevice(command)
-                            readCommandHandler.post(readCommandRunnable)
+                        view.post {
+                            showToast(50.0f, "Contrast", Color.argb(0xAA, 0xAA, 0x00, 0x00))
                         }
 
-                        textTips.visibility = View.INVISIBLE
-                    } else {
-                        textTips.visibility = View.VISIBLE
-                        textTips.text = "Shoot White Screen"
-                    }
-                }else{
-                    automate3A()
+                        setSeekBarDefaultValue(125, 50)
 
-                    btnContrast.setImageResource(R.drawable.ic_contrast)
+                        btnContrast.setImageResource(R.drawable.ic_contrast_selection)
+                        btnContrast.background = resources.getDrawable(R.drawable.border_image_bold)
+                        btnRefreshRate.setBackgroundResource(0)
+                        btnColorTemperature.setBackgroundResource(0)
+
+//                    contrastTargetLayout.visibility = View.VISIBLE
+                        focusAreaLayout.visibility = View.VISIBLE
+                        frameLayout3A.visibility = View.VISIBLE
+                        frameLayout3AValue.visibility = View.VISIBLE
+                        tvCustomSeekBar.visibility = View.VISIBLE
+                        isoCustomSeekBar.visibility = View.INVISIBLE
+                        focusCustomSeekBar.visibility = View.INVISIBLE
+                        txt_3AValue.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / exposureTime)}s"
+
+                        isRefreshRateEnable = false
+                        btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate)
+                        isColorTemperatureEnable = false
+                        btnColorTemperature.setImageResource(R.drawable.ic_color_temperature)
+
+                        isAutoEnable = false
+//                    btnAuto.setImageResource(R.drawable.ic_auto)
+
+                        if (isPatternSyncEnable) {
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
+                                    0, 0,
+                                    Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
+                                    Color.argb(0, 0, 0, 0),
+                                    Color.argb(0, 0, 0, 0),
+                                    Color.argb(0, 0, 0, 0))
+                                m_bluetoothSocket = sendToDevice(command)
+                                readCommandHandler.post(readCommandRunnable)
+                            }
+
+                            textTips.visibility = View.INVISIBLE
+                        } else {
+                            textTips.visibility = View.VISIBLE
+                            textTips.text = "Shoot White Screen"
+                        }
+                    }else{
+                        automate3A()
+
+                        btnContrast.setImageResource(R.drawable.ic_contrast)
+                        btnContrast.setBackgroundResource(0)
+                        btnRefreshRate.setBackgroundResource(0)
+                        btnColorTemperature.setBackgroundResource(0)
+
 //                    contrastTargetLayout.visibility = View.INVISIBLE
-                    focusAreaLayout.visibility = View.INVISIBLE
-                    frameLayout3A.visibility = View.INVISIBLE
-                    frameLayout3AValue.visibility = View.INVISIBLE
-                    tvCustomSeekBar.visibility = View.INVISIBLE
-                    isoCustomSeekBar.visibility = View.INVISIBLE
-                    focusCustomSeekBar.visibility = View.INVISIBLE
+                        focusAreaLayout.visibility = View.INVISIBLE
+                        frameLayout3A.visibility = View.INVISIBLE
+                        frameLayout3AValue.visibility = View.INVISIBLE
+                        tvCustomSeekBar.visibility = View.INVISIBLE
+                        isoCustomSeekBar.visibility = View.INVISIBLE
+                        focusCustomSeekBar.visibility = View.INVISIBLE
 
-                    isAutoEnable = true
+                        isAutoEnable = true
 //                    btnAuto.setImageResource(R.drawable.ic_auto_selection)
 
-                    textTips.visibility = View.INVISIBLE
-                }
+                        textTips.visibility = View.INVISIBLE
+                    }
 
-                saveData()
+                    saveData()
+                }
             }
             R.id.btnRefreshRate -> {
-                val btnRefreshRate = view.findViewById<ImageView>(R.id.btnRefreshRate)
-                isRefreshRateEnable = !isRefreshRateEnable
+                if (btnPicture.isEnabled) {
+                    val btnRefreshRate = view.findViewById<ImageView>(R.id.btnRefreshRate)
+                    isRefreshRateEnable = !isRefreshRateEnable
 
-                readSettingData()
+                    readSettingData()
 
-                actionVibrate(context, 100, 1)
+                    actionVibrate(context, 100, 1)
 
-                if(isRefreshRateEnable){
-                    manual3A()
+                    if(isRefreshRateEnable){
+                        manual3A()
 
-                    view.post {
-                        showToast(50.0f, "Refresh Rate", Color.argb(0xAA, 0xAA, 0x00, 0x00))
-                    }
-
-                    setSeekBarDefaultValue(500, 800)
-
-                    btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate_selection)
-//                    contrastTargetLayout.visibility = View.INVISIBLE
-                    focusAreaLayout.visibility = View.VISIBLE
-                    frameLayout3A.visibility = View.VISIBLE
-                    frameLayout3AValue.visibility = View.VISIBLE
-                    tvCustomSeekBar.visibility = View.VISIBLE
-                    isoCustomSeekBar.visibility = View.INVISIBLE
-                    focusCustomSeekBar.visibility = View.INVISIBLE
-                    txt_3AValue.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / exposureTime)}s"
-
-                    isContrastEnable = false
-                    btnContrast.setImageResource(R.drawable.ic_contrast)
-                    isColorTemperatureEnable = false
-                    btnColorTemperature.setImageResource(R.drawable.ic_color_temperature)
-
-                    isAutoEnable = false
-//                    btnAuto.setImageResource(R.drawable.ic_auto)
-
-                    if (isPatternSyncEnable) {
-                        lifecycleScope.launch(Dispatchers.IO) {
-                            val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
-                                0, 0,
-                                Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
-                                Color.argb(0, 0, 0, 0),
-                                Color.argb(0, 0, 0, 0),
-                                Color.argb(0, 0, 0, 0))
-                            m_bluetoothSocket = sendToDevice(command)
-                            readCommandHandler.post(readCommandRunnable)
+                        view.post {
+                            showToast(50.0f, "Refresh Rate", Color.argb(0xAA, 0xAA, 0x00, 0x00))
                         }
 
-                        textTips.visibility = View.INVISIBLE
-                    } else {
-                        textTips.visibility = View.VISIBLE
-                        textTips.text = "Shoot White Screen"
-                    }
-                }else{
-                    automate3A()
+                        setSeekBarDefaultValue(500, 800)
 
-                    btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate)
-                    focusAreaLayout.visibility = View.INVISIBLE
-                    frameLayout3A.visibility = View.INVISIBLE
-                    frameLayout3AValue.visibility = View.INVISIBLE
-                    tvCustomSeekBar.visibility = View.INVISIBLE
-                    isoCustomSeekBar.visibility = View.INVISIBLE
-                    focusCustomSeekBar.visibility = View.INVISIBLE
+                        btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate_selection)
+                        btnContrast.setBackgroundResource(0)
+                        btnRefreshRate.background = resources.getDrawable(R.drawable.border_image_bold)
+                        btnColorTemperature.setBackgroundResource(0)
 
-                    isAutoEnable = true
+//                    contrastTargetLayout.visibility = View.INVISIBLE
+                        focusAreaLayout.visibility = View.VISIBLE
+                        frameLayout3A.visibility = View.VISIBLE
+                        frameLayout3AValue.visibility = View.VISIBLE
+                        tvCustomSeekBar.visibility = View.VISIBLE
+                        isoCustomSeekBar.visibility = View.INVISIBLE
+                        focusCustomSeekBar.visibility = View.INVISIBLE
+                        txt_3AValue.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / exposureTime)}s"
+
+                        isContrastEnable = false
+                        btnContrast.setImageResource(R.drawable.ic_contrast)
+                        isColorTemperatureEnable = false
+                        btnColorTemperature.setImageResource(R.drawable.ic_color_temperature)
+
+                        isAutoEnable = false
+//                    btnAuto.setImageResource(R.drawable.ic_auto)
+
+                        if (isPatternSyncEnable) {
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
+                                    0, 0,
+                                    Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
+                                    Color.argb(0, 0, 0, 0),
+                                    Color.argb(0, 0, 0, 0),
+                                    Color.argb(0, 0, 0, 0))
+                                m_bluetoothSocket = sendToDevice(command)
+                                readCommandHandler.post(readCommandRunnable)
+                            }
+
+                            textTips.visibility = View.INVISIBLE
+                        } else {
+                            textTips.visibility = View.VISIBLE
+                            textTips.text = "Shoot White Screen"
+                        }
+                    }else{
+                        automate3A()
+
+                        btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate)
+                        btnContrast.setBackgroundResource(0)
+                        btnRefreshRate.setBackgroundResource(0)
+                        btnColorTemperature.setBackgroundResource(0)
+
+                        focusAreaLayout.visibility = View.INVISIBLE
+                        frameLayout3A.visibility = View.INVISIBLE
+                        frameLayout3AValue.visibility = View.INVISIBLE
+                        tvCustomSeekBar.visibility = View.INVISIBLE
+                        isoCustomSeekBar.visibility = View.INVISIBLE
+                        focusCustomSeekBar.visibility = View.INVISIBLE
+
+                        isAutoEnable = true
 //                    btnAuto.setImageResource(R.drawable.ic_auto_selection)
-                    textTips.visibility = View.INVISIBLE
-                }
+                        textTips.visibility = View.INVISIBLE
+                    }
 
-                saveData()
+                    saveData()
+                }
             }
             R.id.btnColorTemperature -> {
-                val btnColorTemperature = view.findViewById<ImageView>(R.id.btnColorTemperature)
-                isColorTemperatureEnable = !isColorTemperatureEnable
+                if (btnPicture.isEnabled) {
+                    val btnColorTemperature = view.findViewById<ImageView>(R.id.btnColorTemperature)
+                    isColorTemperatureEnable = !isColorTemperatureEnable
 
-                readSettingData()
+                    readSettingData()
 
-                actionVibrate(context, 100, 1)
+                    actionVibrate(context, 100, 1)
 
-                if(isColorTemperatureEnable){
-                    manual3A()
+                    if(isColorTemperatureEnable){
+                        manual3A()
 
-                    view.post {
-                        showToast(50.0f, "Color Temp.", Color.argb(0xAA, 0xAA, 0x00, 0x00))
-                    }
-
-                    setSeekBarDefaultValue(125, 100)
-
-                    btnColorTemperature.setImageResource(R.drawable.ic_color_temperature_selection)
-//                    contrastTargetLayout.visibility = View.INVISIBLE
-                    focusAreaLayout.visibility = View.VISIBLE
-                    frameLayout3A.visibility = View.VISIBLE
-                    frameLayout3AValue.visibility = View.VISIBLE
-                    tvCustomSeekBar.visibility = View.VISIBLE
-                    isoCustomSeekBar.visibility = View.INVISIBLE
-                    focusCustomSeekBar.visibility = View.INVISIBLE
-                    txt_3AValue.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / exposureTime)}s"
-
-                    isContrastEnable = false
-                    btnContrast.setImageResource(R.drawable.ic_contrast)
-                    isRefreshRateEnable = false
-                    btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate)
-
-                    isAutoEnable = false
-//                    btnAuto.setImageResource(R.drawable.ic_auto)
-
-                    if (isPatternSyncEnable) {
-                        lifecycleScope.launch(Dispatchers.IO) {
-                            val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
-                                0, 0,
-                                Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
-                                Color.argb(0, 0, 0, 0),
-                                Color.argb(0, 0, 0, 0),
-                                Color.argb(0, 0, 0, 0))
-                            m_bluetoothSocket = sendToDevice(command)
-                            readCommandHandler.post(readCommandRunnable)
+                        view.post {
+                            showToast(50.0f, "Color Temp.", Color.argb(0xAA, 0xAA, 0x00, 0x00))
                         }
 
-                        textTips.visibility = View.INVISIBLE
-                    } else {
-                        textTips.visibility = View.VISIBLE
-                        textTips.text = "Shoot White Screen"
-                    }
-                }else{
-                    automate3A()
+                        setSeekBarDefaultValue(125, 100)
 
-                    btnColorTemperature.setImageResource(R.drawable.ic_color_temperature)
-                    focusAreaLayout.visibility = View.INVISIBLE
-                    frameLayout3A.visibility = View.INVISIBLE
-                    frameLayout3AValue.visibility = View.INVISIBLE
-                    tvCustomSeekBar.visibility = View.INVISIBLE
-                    isoCustomSeekBar.visibility = View.INVISIBLE
-                    focusCustomSeekBar.visibility = View.INVISIBLE
+                        btnColorTemperature.setImageResource(R.drawable.ic_color_temperature_selection)
+                        btnContrast.setBackgroundResource(0)
+                        btnRefreshRate.setBackgroundResource(0)
+                        btnColorTemperature.background = resources.getDrawable(R.drawable.border_image_bold)
 
-                    isAutoEnable = true
+//                    contrastTargetLayout.visibility = View.INVISIBLE
+                        focusAreaLayout.visibility = View.VISIBLE
+                        frameLayout3A.visibility = View.VISIBLE
+                        frameLayout3AValue.visibility = View.VISIBLE
+                        tvCustomSeekBar.visibility = View.VISIBLE
+                        isoCustomSeekBar.visibility = View.INVISIBLE
+                        focusCustomSeekBar.visibility = View.INVISIBLE
+                        txt_3AValue.text = "1/${"%.1f".format(10.toDouble().pow(9.toDouble()) / exposureTime)}s"
+
+                        isContrastEnable = false
+                        btnContrast.setImageResource(R.drawable.ic_contrast)
+                        isRefreshRateEnable = false
+                        btnRefreshRate.setImageResource(R.drawable.ic_refresh_rate)
+
+                        isAutoEnable = false
+//                    btnAuto.setImageResource(R.drawable.ic_auto)
+
+                        if (isPatternSyncEnable) {
+                            lifecycleScope.launch(Dispatchers.IO) {
+                                val command = MBITSP2020().produceCommand(MBITSP2020.Mode.MODE2, 1920, 1080, 0, 0,
+                                    0, 0,
+                                    Color.argb(0, whitePeakValue, whitePeakValue, whitePeakValue),
+                                    Color.argb(0, 0, 0, 0),
+                                    Color.argb(0, 0, 0, 0),
+                                    Color.argb(0, 0, 0, 0))
+                                m_bluetoothSocket = sendToDevice(command)
+                                readCommandHandler.post(readCommandRunnable)
+                            }
+
+                            textTips.visibility = View.INVISIBLE
+                        } else {
+                            textTips.visibility = View.VISIBLE
+                            textTips.text = "Shoot White Screen"
+                        }
+                    }else{
+                        automate3A()
+
+                        btnColorTemperature.setImageResource(R.drawable.ic_color_temperature)
+                        btnContrast.setBackgroundResource(0)
+                        btnRefreshRate.setBackgroundResource(0)
+                        btnColorTemperature.setBackgroundResource(0)
+
+                        focusAreaLayout.visibility = View.INVISIBLE
+                        frameLayout3A.visibility = View.INVISIBLE
+                        frameLayout3AValue.visibility = View.INVISIBLE
+                        tvCustomSeekBar.visibility = View.INVISIBLE
+                        isoCustomSeekBar.visibility = View.INVISIBLE
+                        focusCustomSeekBar.visibility = View.INVISIBLE
+
+                        isAutoEnable = true
 //                    btnAuto.setImageResource(R.drawable.ic_auto_selection)
-                    textTips.visibility = View.INVISIBLE
-                }
+                        textTips.visibility = View.INVISIBLE
+                    }
 
-                saveData()
+                    saveData()
+                }
             }
 //            R.id.btnManual ->{
 //                val btnManual = view.findViewById<ImageButton>(R.id.btnManual)
@@ -2879,7 +2967,13 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
     private fun calculateCCT(cx: Double, cy: Double):Int {
         val n = (cx - 0.3320) / (0.1858 - cy)
-        val cct: Int =  (437 * n.pow(3.0) + 3601 * n.pow(2.0) + 6861 * n + 5517).roundToInt()
+        var cct: Int =  (437 * n.pow(3.0) + 3601 * n.pow(2.0) + 6861 * n + 5517).roundToInt()
+        val cctD: Double = (cct / 100.0).roundToInt() * 100.0
+        cct = when {
+            cctD > 10000 -> 10000
+            cctD < 2000 -> 2000
+            else -> cctD.toInt()
+        }
         return cct
     }
 
@@ -3197,7 +3291,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
             val blur = Mat()
             val edges = Mat()
-            var gray = Mat()
+            var orgGray = Mat()
+            val gray = Mat()
             val th1 = Mat()
             val lines = Mat()
 
@@ -3205,9 +3300,9 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
             Imgproc.blur(image, blur, Size(10.0, 10.0))
 
-            Imgproc.cvtColor(blur, gray, Imgproc.COLOR_BGR2GRAY)
+            Imgproc.cvtColor(blur, orgGray, Imgproc.COLOR_BGR2GRAY)
 
-            Imgproc.threshold(gray, gray, Core.mean(gray).`val`[0], 255.0, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU)
+            Imgproc.threshold(orgGray, gray, Core.mean(gray).`val`[0], 255.0, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU)
 
             Imgproc.blur(gray, gray, Size(40.0, 40.0))
 
@@ -3301,18 +3396,42 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             val brightUDRatio: Double = if (brightU > brightD) brightD.toDouble() / brightU.toDouble()
             else brightU.toDouble() / brightD.toDouble()
 
+            val invTh1 = Mat()
+            Core.bitwise_not(th1, invTh1)
+
+            val blackLineVolume = Mat()
+            val mask = Mat()
+            val mask2 = Mat()
+            val mask3 = Mat()
+            Core.bitwise_and(orgGray, invTh1, blackLineVolume)
+            Imgproc.threshold(blackLineVolume, mask, 0.0, 255.0, Imgproc.THRESH_BINARY)
+            Imgproc.threshold(blackLineVolume, mask2, 180.0, 255.0, Imgproc.THRESH_BINARY_INV)
+            Core.bitwise_and(mask, mask2, mask3)
+            val mean = Core.mean(blackLineVolume, mask3)
+            val blackLineVolumeRate = Core.countNonZero(blackLineVolume) / (blackLineVolume.size().width * blackLineVolume.size().height)
+
+            val blackLineVolume2 = Mat()
+            Core.bitwise_and(blackLineVolume, mask3, blackLineVolume2)
+
             if (isHaveBlackLine)
                 isHaveBlackLine = (brightRLRatio > 0.75 || brightUDRatio > 0.75) && abs(brightRLRatio - brightUDRatio) < 0.1
 
             if (isHaveBlackLine)
                 isHaveBlackLine = mapThetas.keys.isNotEmpty() && lines.rows() > 2
 
+            if (isHaveBlackLine)
+                isHaveBlackLine = (mean.`val`[0] > 0 && mean.`val`[0] < 180) && (blackLineVolumeRate < 0.5)
+
             Log.i(TAG, "brightRLRatio: $brightRLRatio, brightUDRatio: $brightUDRatio, isHaveBlackLine: $isHaveBlackLine")
+            Log.i(TAG, "blackLineVolume: $blackLineVolumeRate, Mean: ${mean.`val`[0]}")
 
             val array = ArrayList<Mat>()
             array.add(gray)
             array.add(th1)
             array.add(image)
+//            array.add(orgGray)
+//            array.add(invTh1)
+            array.add(blackLineVolume2)
             val lineObject = LineObject(array, thetas, angles, brightRLRatio, brightUDRatio, isHaveBlackLine)
 //            image.release()
 //            th1.release()
@@ -3324,6 +3443,12 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             edges.release()
             lines.release()
             blur.release()
+            orgGray.release()
+            invTh1.release()
+            mask.release()
+            mask2.release()
+            mask3.release()
+            blackLineVolume.release()
             return lineObject
         } catch (e: Exception) {
             e.printStackTrace()
@@ -3492,6 +3617,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
         blackNadirValue = settings.getInt(SettingFragment.BLACK_NADIR, 0)
         darkNoiseValue = settings.getInt(SettingFragment.DARK_NOISE, 70)
         repeatTimesValue = settings.getInt(SettingFragment.REPEAT_TIMES, 0)
+
+        isDemoEnable = settings.getBoolean(SettingFragment.DEMO, false)
+        parameter1 = settings.getInt(SettingFragment.PARAMETER1, 10000)
+        parameter2 = settings.getInt(SettingFragment.PARAMETER2, 1000)
+        parameter3 = settings.getInt(SettingFragment.PARAMETER3, 2000)
 
         gridLineView = view!!.findViewById(R.id.grid_line)
 

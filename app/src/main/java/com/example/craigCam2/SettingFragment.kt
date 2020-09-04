@@ -23,6 +23,12 @@ class SettingFragment : Fragment(){
     private var isSoundEnable: Boolean = false
     private var isPatternEnable: Boolean = false
     private var isCloudSyncEnable: Boolean = false
+
+    private var isDemoEnable: Boolean = false
+    private var parameter1: Int = 0
+    private var parameter2: Int = 0
+    private var parameter3: Int = 0
+
     private var whitePeakValue: Int = 0
     private var blackNadirValue: Int = 0
     private var darkNoiseValue: Int = 0
@@ -73,6 +79,12 @@ class SettingFragment : Fragment(){
             toggleImmediately()
         }
 
+        with(toggle_btn_demo) {
+            currentState = if (isDemoEnable) 1 else 0
+            reset()
+            toggleImmediately()
+        }
+
         toggle_btn_grid.setOnToggledListener {
             isGridEnable = it
             saveData()
@@ -106,6 +118,12 @@ class SettingFragment : Fragment(){
             clearEdtFocus()
         }
 
+        toggle_btn_demo.setOnToggledListener {
+            isDemoEnable = it
+            saveData()
+            clearEdtFocus()
+        }
+
         layout_grid.setOnClickListener {
             clearEdtFocus()
         }
@@ -119,6 +137,10 @@ class SettingFragment : Fragment(){
         }
 
         layout_cloud.setOnClickListener {
+            clearEdtFocus()
+        }
+
+        layout_demo.setOnClickListener {
             clearEdtFocus()
         }
 
@@ -166,6 +188,10 @@ class SettingFragment : Fragment(){
         edtBlackNadir.setTextValue(blackNadirValue.toString())
         edtDarkNoise.setTextValue(darkNoiseValue.toString())
         edtRepeatTimes.setTextValue(repeatTimesValue.toString())
+
+        edtParam1.setTextValue(parameter1.toString())
+        edtParam2.setTextValue(parameter2.toString())
+        edtParam3.setTextValue(parameter3.toString())
 
         view.viewTreeObserver.addOnGlobalLayoutListener {
             val r = Rect()
@@ -216,8 +242,8 @@ class SettingFragment : Fragment(){
 
         builder.setTitle("Macroblock Inc.")
 
-        val alert1: String = "Ver1.1"
-        val alert2: String = "S/N 20200824001"
+        val alert1: String = APP_VERSION
+        val alert2: String = APP_SERIAL_NO
         builder.setMessage(alert1 + "\n" + alert2)
 
         val dialogClickListener = DialogInterface.OnClickListener {_, which ->
@@ -266,16 +292,24 @@ class SettingFragment : Fragment(){
         whitePeakValue = 255
         blackNadirValue = 0
         darkNoiseValue = 0
-        repeatTimesValue = 3
-        edtWhitePeak.setTextValue("255")
-        edtDarkNoise.setTextValue("0")
-        edtBlackNadir.setTextValue("0")
-        edtRepeatTimes.setTextValue("2")
+        repeatTimesValue = 2
+        edtWhitePeak.setTextValue(whitePeakValue.toString())
+        edtDarkNoise.setTextValue(darkNoiseValue.toString())
+        edtBlackNadir.setTextValue(blackNadirValue.toString())
+        edtRepeatTimes.setTextValue(repeatTimesValue.toString())
 
         isGridEnable = false
         isSoundEnable = false
         isCloudSyncEnable = false
         isPatternEnable = false
+
+        isDemoEnable = false
+        parameter1 = 10000
+        parameter2 = 1000
+        parameter3 = 2000
+        edtParam1.setTextValue(parameter1.toString())
+        edtParam2.setTextValue(parameter2.toString())
+        edtParam3.setTextValue(parameter3.toString())
 
         with(toggle_btn_grid){
             currentState = if(isGridEnable) 1 else 0
@@ -301,6 +335,13 @@ class SettingFragment : Fragment(){
             toggleImmediately()
             invalidate()
         }
+
+        with(toggle_btn_demo) {
+            currentState = if (isDemoEnable) 1 else 0
+            reset()
+            toggleImmediately()
+            invalidate()
+        }
     }
 
     private fun readData(){
@@ -313,6 +354,11 @@ class SettingFragment : Fragment(){
         blackNadirValue = settings.getInt(BLACK_NADIR, 0)
         darkNoiseValue = settings.getInt(DARK_NOISE, 0)
         repeatTimesValue = settings.getInt(REPEAT_TIMES, 2)
+
+        isDemoEnable = settings.getBoolean(DEMO, false)
+        parameter1 = settings.getInt(PARAMETER1, 10000)
+        parameter2 = settings.getInt(PARAMETER2, 1000)
+        parameter3 = settings.getInt(PARAMETER3, 2000)
     }
 
     private fun saveData(){
@@ -328,6 +374,11 @@ class SettingFragment : Fragment(){
         editor.putInt(BLACK_NADIR, blackNadirValue)
         editor.putInt(DARK_NOISE, darkNoiseValue)
         editor.putInt(REPEAT_TIMES, repeatTimesValue)
+
+        editor.putBoolean(DEMO, isDemoEnable)
+        editor.putInt(PARAMETER1, parameter1)
+        editor.putInt(PARAMETER2, parameter2)
+        editor.putInt(PARAMETER3, parameter3)
         editor.apply()
     }
 
@@ -336,6 +387,10 @@ class SettingFragment : Fragment(){
         blackNadirValue = edtBlackNadir.getTextValue()!!.toInt0()
         darkNoiseValue = edtDarkNoise.getTextValue()!!.toInt0()
         repeatTimesValue = edtRepeatTimes.getTextValue()!!.toInt0()
+
+        parameter1 = edtParam1.getTextValue()!!.toInt0()
+        parameter2 = edtParam2.getTextValue()!!.toInt0()
+        parameter3 = edtParam3.getTextValue()!!.toInt0()
     }
 
     private fun String.toInt0() = try {
@@ -349,6 +404,10 @@ class SettingFragment : Fragment(){
         edtBlackNadir.clearFocus()
         edtDarkNoise.clearFocus()
         edtRepeatTimes.clearFocus()
+
+        edtParam1.clearFocus()
+        edtParam2.clearFocus()
+        edtParam3.clearFocus()
     }
 
     companion object{
@@ -363,5 +422,13 @@ class SettingFragment : Fragment(){
         const val BLACK_NADIR = "BLACK_NADIR"
         const val DARK_NOISE = "DARK_NOISE"
         const val REPEAT_TIMES = "REPEAT_TIMES"
+
+        const val DEMO = "DEMO"
+        const val PARAMETER1 = "PARAMETER1"
+        const val PARAMETER2 = "PARAMETER2"
+        const val PARAMETER3 = "PARAMETER3"
+
+        const val APP_VERSION = "Ver1.1"
+        const val APP_SERIAL_NO = "S/N 20200904001"
     }
 }
