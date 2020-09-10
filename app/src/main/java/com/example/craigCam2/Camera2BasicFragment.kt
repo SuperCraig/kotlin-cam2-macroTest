@@ -322,6 +322,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
     private var currentMeasurement: Measurement = Measurement.None
     private var currentContrastObject: ContrastObject = ContrastObject(0.0, 0.0, 0.0)
 
+    private var globalRefreshRate: Int = 0                  //20200909
+
     /**
      * [CameraDevice.StateCallback] is called when [CameraDevice] changes its state.
      */
@@ -1300,6 +1302,8 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
                         if (!isHaveBlackLine) {
                             exposureTimeRange.forEach {
+                                globalRefreshRate = it                  //20200909
+
                                 if (!isHaveBlackLine) {
                                     Thread.sleep(500)
                                     progressbarShutter?.setProgress(0)
@@ -1364,8 +1368,17 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                         refreshRate = it
                                         if (it in 4001 .. 4500) refreshRate = 3500
                                         if (it > 4500) refreshRate = 4000
-                                        if (it > 6500) refreshRate = it
+                                        if (it > 5500) refreshRate = it
                                         assigned = true
+                                    }
+
+                                    Log.i(TAG, "Current doing refresh rate: $it")
+
+                                    if (isDemoEnable) {                     //for demo mode
+                                        if (it >= parameter3) {
+                                            isHaveBlackLine = true
+                                            assigned = true
+                                        }
                                     }
                                 }
                             }
@@ -3290,54 +3303,57 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             image = Mat(image, roi)
 
             val blur = Mat()
+//            val hsv = Mat()             //20200904 Craig
+//            val inRange = Mat()         //20200904 Craig
             val edges = Mat()
             var orgGray = Mat()
             val gray = Mat()
             val th1 = Mat()
             val lines = Mat()
 
-            val hls = ArrayList<Mat>()
+            val eroded = Mat()
+            val dilated = Mat()
+            val opening = Mat()
+
+            val realBlack = Mat()               //20200907 Craig
 
             Imgproc.blur(image, blur, Size(10.0, 10.0))
 
+//            Imgproc.cvtColor(blur, hsv, Imgproc.COLOR_BGR2HSV)             //20200904 Craig
+
+//            Core.inRange(hsv, Scalar(0.0,0.0,0.0), Scalar(70.0,255.0,235.0), inRange)             //20200904 Craig
+
             Imgproc.cvtColor(blur, orgGray, Imgproc.COLOR_BGR2GRAY)
 
-            Imgproc.threshold(orgGray, gray, Core.mean(gray).`val`[0], 255.0, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU)
+            val avgOrgGray =  Core.mean(orgGray).`val`[0]
+            Log.i(TAG, "avgOrgGray: $avgOrgGray")
+
+            Imgproc.threshold(orgGray, realBlack, 30.0, avgOrgGray * 1.2, Imgproc.THRESH_BINARY_INV)               //20200907 Craig for removing blanking
+            Core.add(realBlack, orgGray, orgGray)               //20200907 Craig
+
+            Imgproc.threshold(orgGray, gray, avgOrgGray, 255.0, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU)
+
+//            Imgproc.threshold(orgGray, realBlack, 30.0, 255.0, Imgproc.THRESH_BINARY_INV)               //20200907 Craig for removing blanking
+//            Core.add(realBlack, gray, gray)               //20200907 Craig
 
             Imgproc.blur(gray, gray, Size(40.0, 40.0))
 
-            Imgproc.threshold(gray, th1, Core.mean(gray).`val`[0], 255.0, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU)
+            Imgproc.threshold(gray, th1, avgOrgGray, 255.0, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU)
 
-            val roiR = org.opencv.core.Rect(
-                0, 0, (targetSizeWidth / 2).toInt(), targetSizeHeight.toInt()
-            )
-            val left = Mat(th1, roiR)
+//            Imgproc.blur(inRange, inRange, Size(10.0, 10.0))
+//            Core.bitwise_and(th1, inRange, th1)             //20200904 Craig
 
-            val roiL = org.opencv.core.Rect(
-                (targetSizeWidth/2).toInt(), 0, (targetSizeWidth/2).toInt(), targetSizeHeight.toInt()
-            )
-            val right = Mat(th1, roiL)
+            Imgproc.erode(th1, eroded, Mat(), org.opencv.core.Point(-1.0, -1.0), 3)
 
-            val roiU = org.opencv.core.Rect(
-                0, 0, targetSizeWidth.toInt(), (targetSizeHeight / 2).toInt()
-            )
-            val up = Mat(th1, roiU)
+            Imgproc.dilate(eroded, dilated, Mat(), org.opencv.core.Point(-1.0, -1.0), 3)
 
-            val roiD = org.opencv.core.Rect(
-                0, (targetSizeHeight / 2).toInt(), targetSizeWidth.toInt(), (targetSizeHeight / 2).toInt()
-            )
-            val down = Mat(th1, roiD)
+            Imgproc.morphologyEx(dilated, opening, Imgproc.MORPH_OPEN, Mat())
 
-            val brightR = Core.countNonZero(right)
-            val brightL = Core.countNonZero(left)
-            val brightU = Core.countNonZero(up)
-            val brightD = Core.countNonZero(down)
-
-            Imgproc.Canny(th1, edges, Core.mean(gray).`val`[0] * 0.75, Core.mean(gray).`val`[0] * 1.25, 3)
+            Imgproc.Canny(opening, edges, Core.mean(gray).`val`[0] * 0.75, Core.mean(gray).`val`[0] * 1.25, 3)
 
             val threshold = 50
-            val minLineSize = (targetSizeWidth + targetSizeHeight) / 2 * 0.5        //pixels
-            val lineGap = targetSizeWidth / 20      //pixles
+            val minLineSize = (targetSizeWidth + targetSizeHeight) / 2 * 0.3        //pixels
+            val lineGap = targetSizeWidth / 40      //pixles
 
             Imgproc.HoughLinesP(edges, lines, 1.0, Math.PI / 180, threshold, minLineSize, lineGap)
 
@@ -3386,9 +3402,30 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
 
             val mapThetas = thetas.groupingBy { it }.eachCount().filter { it.value > 0 }
 
-            Log.i(TAG, "Thetas: $mapThetas")
+            val roiR = org.opencv.core.Rect(
+                0, 0, (targetSizeWidth / 2).toInt(), targetSizeHeight.toInt()
+            )
+            val left = Mat(opening, roiR)
 
-            var isHaveBlackLine = mapAngles.keys.size < 3
+            val roiL = org.opencv.core.Rect(
+                (targetSizeWidth/2).toInt(), 0, (targetSizeWidth/2).toInt(), targetSizeHeight.toInt()
+            )
+            val right = Mat(opening, roiL)
+
+            val roiU = org.opencv.core.Rect(
+                0, 0, targetSizeWidth.toInt(), (targetSizeHeight / 2).toInt()
+            )
+            val up = Mat(opening, roiU)
+
+            val roiD = org.opencv.core.Rect(
+                0, (targetSizeHeight / 2).toInt(), targetSizeWidth.toInt(), (targetSizeHeight / 2).toInt()
+            )
+            val down = Mat(opening, roiD)
+
+            val brightR = Core.countNonZero(right)
+            val brightL = Core.countNonZero(left)
+            val brightU = Core.countNonZero(up)
+            val brightD = Core.countNonZero(down)
 
             val brightRLRatio: Double = if (brightR > brightL) brightL.toDouble() / brightR.toDouble()
             else brightR.toDouble() / brightL.toDouble()
@@ -3396,16 +3433,20 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             val brightUDRatio: Double = if (brightU > brightD) brightD.toDouble() / brightU.toDouble()
             else brightU.toDouble() / brightD.toDouble()
 
+            val nonZeroRate = (Core.countNonZero(opening)) / (opening.size().width * opening.size().height)
+            Log.i(TAG, "nonZeroRate: $nonZeroRate")
+
             val invTh1 = Mat()
-            Core.bitwise_not(th1, invTh1)
+//            Core.bitwise_not(th1, invTh1)
+            Core.bitwise_not(opening, invTh1)
 
             val blackLineVolume = Mat()
             val mask = Mat()
             val mask2 = Mat()
             val mask3 = Mat()
             Core.bitwise_and(orgGray, invTh1, blackLineVolume)
-            Imgproc.threshold(blackLineVolume, mask, 0.0, 255.0, Imgproc.THRESH_BINARY)
-            Imgproc.threshold(blackLineVolume, mask2, 180.0, 255.0, Imgproc.THRESH_BINARY_INV)
+            Imgproc.threshold(blackLineVolume, mask, 10.0, 255.0, Imgproc.THRESH_BINARY)
+            Imgproc.threshold(blackLineVolume, mask2, 100.0, 255.0, Imgproc.THRESH_BINARY_INV)
             Core.bitwise_and(mask, mask2, mask3)
             val mean = Core.mean(blackLineVolume, mask3)
             val blackLineVolumeRate = Core.countNonZero(blackLineVolume) / (blackLineVolume.size().width * blackLineVolume.size().height)
@@ -3413,25 +3454,62 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             val blackLineVolume2 = Mat()
             Core.bitwise_and(blackLineVolume, mask3, blackLineVolume2)
 
-            if (isHaveBlackLine)
-                isHaveBlackLine = (brightRLRatio > 0.75 || brightUDRatio > 0.75) && abs(brightRLRatio - brightUDRatio) < 0.1
 
-            if (isHaveBlackLine)
-                isHaveBlackLine = mapThetas.keys.isNotEmpty() && lines.rows() > 2
+            Log.i(TAG, "Thetas: $mapThetas")
 
-            if (isHaveBlackLine)
-                isHaveBlackLine = (mean.`val`[0] > 0 && mean.`val`[0] < 180) && (blackLineVolumeRate < 0.5)
+            var isHaveBlackLine = false
 
-            Log.i(TAG, "brightRLRatio: $brightRLRatio, brightUDRatio: $brightUDRatio, isHaveBlackLine: $isHaveBlackLine")
+            var clearedItem = 0.0
+            var testItem = 0
+
+            if (mapAngles.keys.size < 3)
+                clearedItem += 1
+
+            if(nonZeroRate < 0.8 && nonZeroRate > 0.2)
+                clearedItem += 1
+
+            if ((brightRLRatio > 0.6 || brightUDRatio > 0.6) && abs(brightRLRatio - brightUDRatio) < 0.5)
+                clearedItem += 1
+
+            if (mapThetas.keys.isNotEmpty() && mapThetas.keys.size > 1 && lines.rows() > 2)
+                clearedItem += 1
+
+            if (mean.`val`[0] > 64)
+                clearedItem += 1
+
+//            isHaveBlackLine = nonZeroRate < 0.8 && nonZeroRate > 0.2
+
+//            if (isHaveBlackLine)
+//                isHaveBlackLine = (brightRLRatio > 0.75 || brightUDRatio > 0.75) && abs(brightRLRatio - brightUDRatio) < 0.1
+//                isHaveBlackLine = (brightRLRatio > 0.5 || brightUDRatio > 0.5) && abs(brightRLRatio - brightUDRatio) < 0.5
+
+//            if (isHaveBlackLine)
+//                isHaveBlackLine = mapThetas.keys.isNotEmpty() && mapThetas.keys.size > 1 && lines.rows() > 2
+
+//            if (isHaveBlackLine)
+//                isHaveBlackLine = (mean.`val`[0] > 0 && mean.`val`[0] < 128) && (blackLineVolumeRate < 0.5)
+//                isHaveBlackLine = mean.`val`[0] > 32 && mean.`val`[0] < 128       // inverse bright area can not be too dark or too bright
+//                isHaveBlackLine = mean.`val`[0] > 64
+
+            testItem = 5
+            val clearRate = clearedItem / testItem
+
+            if (globalRefreshRate <= 3500)
+                isHaveBlackLine = clearRate > 0.9
+            else
+                isHaveBlackLine = clearRate > 0.7
+
             Log.i(TAG, "blackLineVolume: $blackLineVolumeRate, Mean: ${mean.`val`[0]}")
+            Log.i(TAG, "brightRLRatio: $brightRLRatio, brightUDRatio: $brightUDRatio, isHaveBlackLine: $isHaveBlackLine")
+            Log.i(TAG, "globalRefreshRate: $globalRefreshRate, clearRate: $clearRate")
 
             val array = ArrayList<Mat>()
-            array.add(gray)
-            array.add(th1)
+//            array.add(gray)
+//            array.add(realBlack)
             array.add(image)
-//            array.add(orgGray)
-//            array.add(invTh1)
-            array.add(blackLineVolume2)
+//            array.add(dilated)
+            array.add(orgGray)
+            array.add(opening)
             val lineObject = LineObject(array, thetas, angles, brightRLRatio, brightUDRatio, isHaveBlackLine)
 //            image.release()
 //            th1.release()
@@ -3442,12 +3520,15 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             down.release()
             edges.release()
             lines.release()
-            blur.release()
-            orgGray.release()
-            invTh1.release()
+//            blur.release()
+//            orgGray.release()
+//            invTh1.release()
             mask.release()
             mask2.release()
             mask3.release()
+//            realBlack.release()
+            eroded.release()
+            dilated.release()
             blackLineVolume.release()
             return lineObject
         } catch (e: Exception) {

@@ -83,6 +83,9 @@ class SettingFragment : Fragment(){
             currentState = if (isDemoEnable) 1 else 0
             reset()
             toggleImmediately()
+
+            layout_parameter3.visibility = if (isDemoEnable) View.VISIBLE
+            else View.GONE
         }
 
         toggle_btn_grid.setOnToggledListener {
@@ -122,6 +125,9 @@ class SettingFragment : Fragment(){
             isDemoEnable = it
             saveData()
             clearEdtFocus()
+
+            layout_parameter3.visibility = if (isDemoEnable) View.VISIBLE
+            else View.GONE
         }
 
         layout_grid.setOnClickListener {
