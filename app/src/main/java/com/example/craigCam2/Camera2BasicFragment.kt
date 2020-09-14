@@ -1375,7 +1375,7 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                                     Log.i(TAG, "Current doing refresh rate: $it")
 
                                     if (isDemoEnable) {                     //for demo mode
-                                        if (it >= parameter3) {
+                                        if (it >= parameter2) {
                                             isHaveBlackLine = true
                                             assigned = true
                                         }
@@ -1422,11 +1422,11 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
                             val contrastDescription = if (isContrastEnable) "$parameter1"
                             else "0"
 
-                            val colorTemperatureDescription = if (isColorTemperatureEnable) "${parameter2}K" + " (" +
+                            val colorTemperatureDescription = if (isColorTemperatureEnable) "${parameter3}K" + " (" +
                                     colorTemperatureObject!!.cxcy[0].toString() + ", " + colorTemperatureObject!!.cxcy[1].toString() + ")"
                             else ColorTemperature.None.name
 
-                            val refreshDescription = if (isRefreshRateEnable && !isLEDScreen) "$parameter3 Hz"
+                            val refreshDescription = if (isRefreshRateEnable && !isLEDScreen) "$parameter2 Hz"
                             else "0"
 
                             historyViewModel.insert(History(currentDateTime, contrastDescription, refreshDescription, colorTemperatureDescription))
@@ -3303,8 +3303,6 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             image = Mat(image, roi)
 
             val blur = Mat()
-//            val hsv = Mat()             //20200904 Craig
-//            val inRange = Mat()         //20200904 Craig
             val edges = Mat()
             var orgGray = Mat()
             val gray = Mat()
@@ -3318,30 +3316,31 @@ class Camera2BasicFragment : Fragment(), View.OnClickListener,
             val realBlack = Mat()               //20200907 Craig
 
             Imgproc.blur(image, blur, Size(10.0, 10.0))
-
-//            Imgproc.cvtColor(blur, hsv, Imgproc.COLOR_BGR2HSV)             //20200904 Craig
-
-//            Core.inRange(hsv, Scalar(0.0,0.0,0.0), Scalar(70.0,255.0,235.0), inRange)             //20200904 Craig
-
             Imgproc.cvtColor(blur, orgGray, Imgproc.COLOR_BGR2GRAY)
 
             val avgOrgGray =  Core.mean(orgGray).`val`[0]
             Log.i(TAG, "avgOrgGray: $avgOrgGray")
 
-            Imgproc.threshold(orgGray, realBlack, 30.0, avgOrgGray * 1.2, Imgproc.THRESH_BINARY_INV)               //20200907 Craig for removing blanking
+            val minBlackThresh = 30.0
+            Imgproc.threshold(orgGray, realBlack, minBlackThresh, avgOrgGray * 1.2, Imgproc.THRESH_BINARY_INV)               //20200907 Craig for removing blanking
             Core.add(realBlack, orgGray, orgGray)               //20200907 Craig
 
-            Imgproc.threshold(orgGray, gray, avgOrgGray, 255.0, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU)
+            val poleRatio = 0.5                                                                       //20200911
+            val minMaxResult = Core.minMaxLoc(orgGray)                                                //20200911
+            Log.i(TAG, "Max: ${minMaxResult.maxVal}, Min: ${minMaxResult.minVal}")
+
+            var thresh = (minMaxResult.minVal * poleRatio) + (avgOrgGray * (1 - poleRatio))           //20200911
+            thresh = if (thresh > minBlackThresh) thresh
+            else minBlackThresh * 1.2
+
+            Imgproc.threshold(orgGray, gray, thresh, 255.0, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU)
 
 //            Imgproc.threshold(orgGray, realBlack, 30.0, 255.0, Imgproc.THRESH_BINARY_INV)               //20200907 Craig for removing blanking
 //            Core.add(realBlack, gray, gray)               //20200907 Craig
 
             Imgproc.blur(gray, gray, Size(40.0, 40.0))
 
-            Imgproc.threshold(gray, th1, avgOrgGray, 255.0, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU)
-
-//            Imgproc.blur(inRange, inRange, Size(10.0, 10.0))
-//            Core.bitwise_and(th1, inRange, th1)             //20200904 Craig
+            Imgproc.threshold(gray, th1, thresh, 255.0, Imgproc.THRESH_BINARY + Imgproc.THRESH_OTSU)
 
             Imgproc.erode(th1, eroded, Mat(), org.opencv.core.Point(-1.0, -1.0), 3)
 

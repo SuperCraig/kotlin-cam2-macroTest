@@ -378,7 +378,8 @@
                     android:layout_height="@dimen/setting_button_size"
                     android:layout_alignParentStart="true"
                     android:layout_marginStart="8dp"
-                    android:layout_marginTop="8dp" />
+                    android:layout_marginTop="8dp"
+                    android:src="@drawable/ic_demo"/>
 
                 <TextView
                     android:id="@+id/txt_demo"
@@ -464,7 +465,7 @@
                             app:custom_component_editText_hint="@string/edt_hint_number"
                             app:custom_component_error_text_bg_color="@android:color/white"
                             app:custom_component_maxValue="10000"
-                            app:custom_component_minValue="500"
+                            app:custom_component_minValue="2000"
                             app:custom_component_title_color="@color/color_brownish_grey_two"
                             app:custom_component_title_error_color="@color/color_error" />
                     </RelativeLayout>
